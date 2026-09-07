@@ -1,0 +1,15 @@
+node_modules/
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/backups/
+*.log
+.DS_Store
+Thumbs.db
+uploads/
+
+# Datos con informacion personal (RUT, nombres, correos, telefonos). NO subir al repo.
+*.xlsx
+*.xls
+*.csv
+

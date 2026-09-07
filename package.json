@@ -1,0 +1,20 @@
+{
+  "name": "agenda-de-practicos",
+  "version": "1.0.0",
+  "description": "Dashboard operativo para agenda de examenes practicos de licencia de conducir",
+  "type": "commonjs",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "migrar": "node server/migrate.js",
+    "backup": "node server/backup.js"
+  },
+  "engines": {
+    "node": ">=22.5"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "multer": "^2.3.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  }
+}

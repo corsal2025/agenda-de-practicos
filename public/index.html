@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agenda de Practicos</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <span class="marca">AGENDA DE PRACTICOS</span>
+    <nav id="nav">
+      <button data-tab="agenda" class="activo">Agenda</button>
+      <button data-tab="disponibles">Citas disponibles</button>
+      <button data-tab="reagendar">Reagendar</button>
+      <button data-tab="errores">Reporte de errores</button>
+      <button data-tab="dia">Agenda del dia</button>
+      <button data-tab="analitica">Analitica</button>
+      <button data-tab="datos">Datos</button>
+    </nav>
+    <span class="estado" id="estado"></span>
+  </header>
+
+  <main id="view"></main>
+
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
