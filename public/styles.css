@@ -128,9 +128,13 @@ tbody tr:hover { background: #f8fafc; }
 
 /* --- impresion --- */
 @media print {
-  header.top, .no-print { display: none !important; }
-  main { max-width: none; padding: 0; }
-  .panel { box-shadow: none; border: 0; }
-  .imprimible { display: block !important; }
-  .col-print { break-inside: avoid; }
+  header.top, .no-print, #toast-root, #modal-root { display: none !important; }
+  main { max-width: none; padding: 0; margin: 0; }
+  .panel { box-shadow: none; border: 0; padding: 0; margin: 0 0 6mm; }
+  th { position: static; background: #eee; }
+  table { font-size: 11pt; }
+  #dd-cont .col-print { break-after: page; page-break-after: always; }
+  #dd-cont .col-print:last-child { break-after: auto; page-break-after: auto; }
+  #dd-cont h3 { font-size: 14pt; margin: 0 0 3mm; }
+  @page { margin: 12mm; }
 }

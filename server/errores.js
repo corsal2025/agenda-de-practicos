@@ -1,14 +1,21 @@
 'use strict';
 const { db } = require('./db');
 const { HORA_D_A5, CLASES_PESADAS } = require('./config');
-const { hoyISO } = require('./fechas');
+const { hoyISO, esHabil } = require('./fechas');
+const feriados = require('./feriados');
 const rut = require('./rut');
 
 // Recalcula el reporte de errores sobre el estado actual de la agenda.
 // Devuelve una lista de hallazgos { tipo, severidad, fecha, hora, examinador, rut, nombre, mensaje }.
+//
+// NOTA: la hoja "REPORTE DE ERRORES" del Excel original venia de ARRAYFORMULA/FILTER de
+// Google Sheets y no pudo leerse programaticamente. Estas reglas reconstruyen las 3 familias
+// visibles en los mensajes ("Cita Incompleta", "CONFLICTO TERRENO", "DUPLICADO FUTURO") y
+// agregan validaciones utiles (RUT modulo 11, clase en bloque, sin contacto, en feriado).
 function reporte() {
   const hoy = hoyISO();
   const hace30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const fset = feriados.set();
   const filas = db.prepare(`
     SELECT a.*, e.nombre AS examinador
     FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
@@ -29,6 +36,8 @@ function reporte() {
 
   // Indice: rut valido -> citas futuras
   const futurasPorRut = new Map();
+  // Indice: rut|fecha -> conteo (para duplicado el mismo dia)
+  const mismoDiaPorRut = new Map();
   // Indice: examinador+fecha -> tipos presentes
   const terrenoPorDia = new Map();
 
@@ -63,12 +72,34 @@ function reporte() {
         mensaje: 'Cita ya realizada sin resultado registrado' });
     }
 
+    // 5) Cita futura sin ningun medio de contacto
+    if (ocupada && f.fecha >= hoy && !f.contacto && !f.correo) {
+      hallazgos.push({ ...base(f), tipo: 'SIN_CONTACTO', severidad: 'warning',
+        mensaje: 'Cita futura sin telefono ni correo: no se puede avisar ni confirmar' });
+    }
+
+    // 6) Cita en un dia que hoy es feriado o fin de semana
+    if (ocupada && !esHabil(f.fecha, fset)) {
+      hallazgos.push({ ...base(f), tipo: 'DIA_INHABIL', severidad: 'warning',
+        mensaje: 'Cita en fin de semana o feriado' });
+    }
+
+    // 7) Cita marcada como pendiente de reagendar
+    if (ocupada && f.pendiente_reagendar) {
+      hallazgos.push({ ...base(f), tipo: 'PENDIENTE_REAGENDAR', severidad: 'info',
+        mensaje: `Pendiente de reagendar${f.pendiente_nota ? ': ' + f.pendiente_nota : ''}` });
+    }
 
     // acumular indices
-    if (f.rut && rut.esValido(f.rut) && f.fecha >= hoy) {
+    if (f.rut && rut.esValido(f.rut)) {
       const k = rut.limpiar(f.rut);
-      if (!futurasPorRut.has(k)) futurasPorRut.set(k, []);
-      futurasPorRut.get(k).push(f);
+      if (f.fecha >= hoy) {
+        if (!futurasPorRut.has(k)) futurasPorRut.set(k, []);
+        futurasPorRut.get(k).push(f);
+      }
+      const kf = `${k}|${f.fecha}`;
+      if (!mismoDiaPorRut.has(kf)) mismoDiaPorRut.set(kf, []);
+      mismoDiaPorRut.get(kf).push(f);
     }
     const kd = `${f.examinador}|${f.fecha}`;
     if (!terrenoPorDia.has(kd)) terrenoPorDia.set(kd, { terreno: 0, normales: 0, ausenciaDia: false, filas: [] });
@@ -79,13 +110,22 @@ function reporte() {
     slot.filas.push(f);
   }
 
-  // 6) Duplicado futuro: mismo RUT con 2+ citas desde hoy
+  // 8) Duplicado futuro: mismo RUT con 2+ citas desde hoy
   for (const [, citas] of futurasPorRut) {
     if (citas.length < 2) continue;
     const detalle = citas.map((c) => `${c.fecha} ${c.hora} (${c.examinador})`).join(', ');
     for (const c of citas) {
       hallazgos.push({ ...base(c), tipo: 'DUPLICADO_FUTURO', severidad: 'error',
         mensaje: `El contribuyente ya tiene ${citas.length} citas futuras: ${detalle}` });
+    }
+  }
+
+  // 9) Duplicado el mismo dia: mismo RUT con 2+ bloques la misma fecha
+  for (const [, citas] of mismoDiaPorRut) {
+    if (citas.length < 2) continue;
+    for (const c of citas) {
+      hallazgos.push({ ...base(c), tipo: 'DUPLICADO_DIA', severidad: 'error',
+        mensaje: `Mismo RUT en ${citas.length} bloques el ${c.fecha}` });
     }
   }
 

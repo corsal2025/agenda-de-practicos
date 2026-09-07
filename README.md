@@ -43,13 +43,21 @@ También se puede importar desde la pestaña **Datos** de la aplicación.
 
 ## Uso diario
 
+Doble clic en **`iniciar.bat`** (Windows), o:
+
 ```bash
 npm start
 ```
 
-Abre el navegador en **http://localhost:4173**
+Abre el navegador en **http://localhost:4173**. Para detener: cerrar la ventana / `Ctrl + C`.
 
-Para detener el servidor: `Ctrl + C` en la terminal.
+Instalación en el PC de la agenda, login, arranque automático y acceso por red:
+ver **[INSTALACION.md](INSTALACION.md)**.
+
+## Login
+
+Por defecto pide un PIN compartido (`1234`, cambiable con `AGENDA_PIN`). Cada acción
+queda registrada con el nombre de quien la hizo. Para desactivarlo: `AGENDA_SIN_LOGIN=1`.
 
 ---
 
@@ -59,11 +67,15 @@ Para detener el servidor: `Ctrl + C` en la terminal.
 |---|---|
 | **Agenda** | Grilla del día por examinador. Clic en un bloque para agendar, editar, reagendar o liberar. El bloque de las **12:30** admite clases D y A5; el resto no. |
 | **Citas disponibles** | Bloques libres en un rango de fechas. Si se filtra por clase D o A5, solo muestra las 12:30. |
-| **Reagendar** | Busca una cita por RUT, nombre o teléfono y la mueve a un bloque libre. Marca la nueva como `REAGENDADO` y deja rastro en ambos bloques. |
-| **Reporte de errores** | Se recalcula sobre el estado actual. Detecta: cita incompleta (falta RUT o nombre), RUT con dígito verificador inválido, clase pesada en bloque incorrecto, duplicado futuro (mismo RUT con 2+ citas próximas), conflicto de terreno (examinador ausente con citas en oficina), cita reciente sin resultado. |
-| **Agenda del día** | Vista imprimible, una columna por examinador. Botón **Imprimir**. |
-| **Analítica** | KPIs y gráficos: resultado de exámenes, citas por examinador / clase / funcionario, tipo de cita, tendencia diaria. Filtrable por rango de fechas. |
-| **Datos** | Importar / exportar Excel, backup de la base, generar bloques para nuevas fechas, editar listas desplegables, examinadores y funcionarios, ver últimos movimientos. |
+| **Reagendar** | Lista las citas marcadas "pendiente de reagendar". Busca una cita por RUT, nombre o teléfono y la mueve a un bloque libre. Marca la nueva como `REAGENDADO` y deja rastro en ambos bloques. |
+| **Buscar** | Historial completo de un contribuyente por RUT: todas sus citas, resultados y reagendamientos. |
+| **Reporte de errores** | Se recalcula sobre el estado actual. Detecta: cita incompleta, RUT con dígito verificador inválido, clase pesada en bloque incorrecto, duplicado futuro, duplicado el mismo día, conflicto de terreno, cita reciente sin resultado, cita futura sin contacto, cita en día inhábil, pendientes de reagendar. |
+| **Agenda del día** | Vista imprimible: una hoja por examinador. Botón **Imprimir**. |
+| **Analítica** | KPIs y gráficos: resultado de exámenes, citas por examinador / clase / funcionario, tipo de cita, citas por día y agendados por día. Filtrable por rango de fechas. |
+| **Datos** | Importar / exportar Excel (formato dashboard o formato Excel original), backup de la base, generar bloques, editar feriados, listas desplegables, examinadores y funcionarios, **papelera** (recuperar citas liberadas o pisadas), últimos movimientos. |
+
+Además, en **Agenda** → "Bloquear día..." se bloquea un día completo (o el de un examinador)
+de un clic, y las citas que ya estaban van a la papelera.
 
 ## Reglas de negocio
 
@@ -77,16 +89,26 @@ Para detener el servidor: `Ctrl + C` en la terminal.
 
 ## Feriados
 
-Los días feriados están en `server/fechas.js` (constante `FERIADOS`). Es una lista
-best-effort para 2026–2027. Si un feriado cambia o falta, editar ese arreglo y volver a
-generar los bloques desde la pestaña Datos.
+Los días feriados viven en la base de datos y se editan desde la pestaña **Datos**
+(la lista inicial es best-effort para 2026–2027, sembrada desde `server/fechas.js`).
+Tras cambiar feriados, volver a generar los bloques del período afectado.
 
 ## Backups
 
-- Cada importación que **no** usa "reemplazar todo" hace un backup automático en
-  `data/backups/`.
+- Automático: uno al arrancar el servidor (si el último tiene +20 h) y luego cada 24 h,
+  en `data/backups/`. Se conservan los últimos 30 (`AGENDA_BACKUPS` para cambiarlo).
+- Cada importación que **no** usa "reemplazar todo" hace un backup antes.
 - Backup manual: botón en la pestaña Datos, o `npm run backup`.
 - Para restaurar: detener el servidor y copiar el archivo `.db` deseado sobre `data/agenda.db`.
+
+## Tests
+
+```bash
+npm test
+```
+
+Cubre validación de RUT (módulo 11), normalización de datos del Excel, conversión de
+fechas/horas y la importación completa con detección de bloqueos.
 
 ## Privacidad de datos
 
@@ -98,19 +120,24 @@ correos y teléfonos. Los archivos `.xlsx` / `.csv` en la raíz también están 
 ```
 server/
   index.js       servidor Express y rutas de la API
-  db.js          conexión SQLite y semillas
+  auth.js        login por PIN (cookie de sesión)
+  db.js          conexión SQLite, semillas y migración de columnas
   schema.sql     esquema de la base
   config.js      horarios, clases, semillas
-  fechas.js      feriados y conversión de fechas/horas
+  fechas.js      conversión de fechas/horas, feriados semilla
+  feriados.js    feriados en base de datos
   normalizar.js  limpieza de datos del Excel
   slots.js       generación de bloques
   migrate.js     importación desde Excel
   errores.js     reglas del reporte de errores
   analitica.js   KPIs y datos de gráficos
-  export.js      exportación a Excel
-  backup.js      copia de la base
+  export.js      exportación a Excel (formato dashboard u original)
+  papelera.js    respaldo/recuperación de citas borradas
+  backup.js      copia de la base + backup automático diario
 public/          interfaz (HTML + JS sin framework + Chart.js)
+test/            tests (node:test)
 data/            base de datos y backups (no versionado)
+iniciar.bat      arranque en Windows
 ```
 
 ## Notas técnicas

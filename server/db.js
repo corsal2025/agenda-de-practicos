@@ -11,9 +11,15 @@ db.exec('PRAGMA foreign_keys = ON;');
 db.exec(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
 
 // Migracion ligera para bases creadas antes de agregar columnas.
-const colsAgenda = db.prepare('PRAGMA table_info(agenda)').all().map((c) => c.name);
-if (!colsAgenda.includes('bloqueado')) db.exec('ALTER TABLE agenda ADD COLUMN bloqueado INTEGER NOT NULL DEFAULT 0');
-if (!colsAgenda.includes('bloqueo_motivo')) db.exec('ALTER TABLE agenda ADD COLUMN bloqueo_motivo TEXT');
+function asegurarColumna(tabla, col, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${tabla})`).all().map((c) => c.name);
+  if (!cols.includes(col)) db.exec(`ALTER TABLE ${tabla} ADD COLUMN ${ddl}`);
+}
+asegurarColumna('agenda', 'bloqueado', 'bloqueado INTEGER NOT NULL DEFAULT 0');
+asegurarColumna('agenda', 'bloqueo_motivo', 'bloqueo_motivo TEXT');
+asegurarColumna('agenda', 'pendiente_reagendar', 'pendiente_reagendar INTEGER NOT NULL DEFAULT 0');
+asegurarColumna('agenda', 'pendiente_nota', 'pendiente_nota TEXT');
+asegurarColumna('movimientos', 'actor', 'actor TEXT');
 
 // --- Semillas (solo si faltan) ---
 function seed() {
@@ -64,9 +70,9 @@ function tx(fn) {
   }
 }
 
-function log(agendaId, accion, detalle) {
-  db.prepare('INSERT INTO movimientos (agenda_id, accion, detalle) VALUES (?, ?, ?)')
-    .run(agendaId ?? null, accion, detalle ? String(detalle) : null);
+function log(agendaId, accion, detalle, actor) {
+  db.prepare('INSERT INTO movimientos (agenda_id, accion, detalle, actor) VALUES (?, ?, ?, ?)')
+    .run(agendaId ?? null, accion, detalle ? String(detalle) : null, actor || null);
 }
 
 module.exports = { db, tx, examinadorId, funcionarioId, upsertFuncionario, upsertExaminador, log };

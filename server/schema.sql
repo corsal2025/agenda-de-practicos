@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS agenda (
   comentarios           TEXT,
   bloqueado             INTEGER NOT NULL DEFAULT 0, -- 1 = bloque no disponible (terreno, feriado, dia admin...)
   bloqueo_motivo        TEXT,
+  pendiente_reagendar   INTEGER NOT NULL DEFAULT 0, -- 1 = cita marcada para reagendar
+  pendiente_nota        TEXT,
   agendado_en           TEXT,                      -- timestamp de la primera vez que se ocupo
   creado_en             TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   actualizado_en        TEXT NOT NULL DEFAULT (datetime('now','localtime')),
@@ -56,6 +58,7 @@ CREATE TABLE IF NOT EXISTS agenda (
 CREATE INDEX IF NOT EXISTS idx_agenda_fecha ON agenda(fecha);
 CREATE INDEX IF NOT EXISTS idx_agenda_rut   ON agenda(rut);
 CREATE INDEX IF NOT EXISTS idx_agenda_exam  ON agenda(examinador_id);
+CREATE INDEX IF NOT EXISTS idx_agenda_agend ON agenda(agendado_en);
 
 -- Bitacora de cambios operativos.
 CREATE TABLE IF NOT EXISTS movimientos (
@@ -63,5 +66,22 @@ CREATE TABLE IF NOT EXISTS movimientos (
   agenda_id INTEGER,
   accion    TEXT NOT NULL,   -- agendar | editar | reagendar | liberar | generar | importar
   detalle   TEXT,
+  actor     TEXT,            -- funcionario/a que hizo el cambio (de la sesion)
   ts        TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
+-- Feriados / dias inhabiles. Editables desde la pestana Datos.
+CREATE TABLE IF NOT EXISTS feriados (
+  fecha  TEXT PRIMARY KEY,  -- YYYY-MM-DD
+  nombre TEXT
+);
+
+-- Papelera: guarda el contenido de un bloque justo antes de liberarlo o pisarlo.
+CREATE TABLE IF NOT EXISTS papelera (
+  id         INTEGER PRIMARY KEY,
+  agenda_id  INTEGER NOT NULL,
+  datos      TEXT NOT NULL,   -- JSON con los campos de la cita
+  motivo     TEXT,            -- liberar | reagendar | sobrescribir
+  actor      TEXT,
+  ts         TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );

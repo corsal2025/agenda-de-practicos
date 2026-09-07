@@ -2,12 +2,13 @@
 const { db, tx, log } = require('./db');
 const { HORAS } = require('./config');
 const { diasHabiles } = require('./fechas');
+const feriados = require('./feriados');
 
 // Crea los bloques (fecha, hora, examinador) que falten en el rango dado,
 // para todos los examinadores activos. No toca los bloques existentes.
 function generar(desde, hasta) {
   const examinadores = db.prepare('SELECT id FROM examinadores WHERE activo = 1').all();
-  const dias = diasHabiles(desde, hasta);
+  const dias = diasHabiles(desde, hasta, feriados.set());
   const ins = db.prepare(
     `INSERT OR IGNORE INTO agenda (fecha, hora, examinador_id) VALUES (?, ?, ?)`
   );

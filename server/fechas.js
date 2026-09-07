@@ -1,9 +1,10 @@
 'use strict';
 
-// Feriados de Chile con exameness inhabiles. Lista best-effort y EDITABLE:
-// si un feriado cambia o falta, agregalo/quitalo aca (formato YYYY-MM-DD).
-// El generador de bloques omite sabados, domingos y estas fechas.
-const FERIADOS = new Set([
+// Semilla de feriados de Chile (dias inhabiles). Best-effort 2026-2027.
+// En runtime los feriados viven en la tabla `feriados` (editable desde la pestana Datos);
+// esta lista solo se usa para poblarla la primera vez. El generador de bloques omite
+// sabados, domingos y los feriados vigentes.
+const FERIADOS_SEMILLA = [
   // 2026
   '2026-01-01', '2026-04-03', '2026-04-04', '2026-05-01', '2026-05-21',
   '2026-06-20', '2026-06-29', '2026-07-16', '2026-08-15', '2026-09-18',
@@ -14,7 +15,7 @@ const FERIADOS = new Set([
   '2027-06-21', '2027-06-28', '2027-07-16', '2027-08-15', '2027-09-18',
   '2027-09-19', '2027-10-11', '2027-10-31', '2027-11-01', '2027-12-08',
   '2027-12-25',
-]);
+];
 
 function iso(d) {
   return d.toISOString().slice(0, 10);
@@ -58,22 +59,24 @@ function aHora(valor) {
   return null;
 }
 
-function esHabil(isoFecha) {
+function esHabil(isoFecha, feriados) {
+  const set = feriados || new Set(FERIADOS_SEMILLA);
   const d = new Date(`${isoFecha}T12:00:00`);
   const dow = d.getDay(); // 0 dom .. 6 sab
   if (dow === 0 || dow === 6) return false;
-  if (FERIADOS.has(isoFecha)) return false;
+  if (set.has(isoFecha)) return false;
   return true;
 }
 
-// Lista de dias habiles entre dos ISO (inclusive).
-function diasHabiles(desde, hasta) {
+// Lista de dias habiles entre dos ISO (inclusive). `feriados` es un Set opcional de ISO.
+function diasHabiles(desde, hasta, feriados) {
+  const set = feriados || new Set(FERIADOS_SEMILLA);
   const out = [];
   const d = new Date(`${desde}T12:00:00`);
   const fin = new Date(`${hasta}T12:00:00`);
   while (d <= fin) {
     const s = iso(d);
-    if (esHabil(s)) out.push(s);
+    if (esHabil(s, set)) out.push(s);
     d.setDate(d.getDate() + 1);
   }
   return out;
@@ -84,4 +87,4 @@ function hoyISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-module.exports = { FERIADOS, aISO, aHora, esHabil, diasHabiles, hoyISO };
+module.exports = { FERIADOS_SEMILLA, aISO, aHora, esHabil, diasHabiles, hoyISO };

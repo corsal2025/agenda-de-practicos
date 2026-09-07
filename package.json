@@ -7,12 +7,14 @@
   "scripts": {
     "start": "node server/index.js",
     "migrar": "node server/migrate.js",
-    "backup": "node server/backup.js"
+    "backup": "node server/backup.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=22.5"
   },
   "dependencies": {
+    "cookie-session": "^2.1.1",
     "express": "^5.2.1",
     "multer": "^2.3.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"

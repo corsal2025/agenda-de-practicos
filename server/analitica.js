@@ -40,6 +40,15 @@ function resumen(desde, hasta) {
     GROUP BY a.fecha ORDER BY a.fecha
   `).all(desde, hasta);
 
+  // Citas segun el dia en que se AGENDARON (equivale a la hoja "AGENDADOS AL DIA" del Excel).
+  // Para citas migradas el dato es aproximado (se asumio la fecha de la cita).
+  const tendenciaAgendamiento = db.prepare(`
+    SELECT substr(a.agendado_en, 1, 10) AS dia, COUNT(*) AS n
+    FROM agenda a
+    WHERE a.agendado_en IS NOT NULL AND substr(a.agendado_en, 1, 10) BETWEEN ? AND ?
+    GROUP BY dia ORDER BY dia
+  `).all(desde, hasta);
+
   return {
     rango: [desde === '2000-01-01' ? null : desde, hasta === '2100-01-01' ? null : hasta],
     kpis: {
@@ -64,6 +73,7 @@ function resumen(desde, hasta) {
     por_tipo: porGrupo('a.tipo_cita', desde, hasta, `AND a.tipo_cita IS NOT NULL`),
     por_intento: porGrupo('a.intento', desde, hasta, `AND a.intento IS NOT NULL`),
     tendencia,
+    tendencia_agendamiento: tendenciaAgendamiento,
   };
 }
 

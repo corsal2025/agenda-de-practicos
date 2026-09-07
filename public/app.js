@@ -6,14 +6,20 @@ const view = $('#view');
 let META = null;
 
 async function api(path, opts = {}) {
+  const esForm = opts.body instanceof FormData;
   const res = await fetch(`/api${path}`, {
-    headers: opts.body && !(opts.body instanceof FormData) ? { 'Content-Type': 'application/json' } : undefined,
+    headers: opts.body && !esForm ? { 'Content-Type': 'application/json' } : undefined,
     ...opts,
-    body: opts.body && !(opts.body instanceof FormData) ? JSON.stringify(opts.body) : opts.body,
+    body: opts.body && !esForm ? JSON.stringify(opts.body) : opts.body,
   });
   const txt = await res.text();
   const data = txt ? JSON.parse(txt) : null;
-  if (!res.ok) throw new Error(data && data.error ? data.error : `Error ${res.status}`);
+  if (res.status === 401 && data && data.login) { pantallaLogin(); throw new Error('Sesion requerida'); }
+  if (!res.ok) {
+    const e = new Error(data && data.error ? data.error : `Error ${res.status}`);
+    e.data = data; e.status = res.status;
+    throw e;
+  }
   return data;
 }
 
@@ -58,10 +64,40 @@ function modal(titulo, cuerpoHtml, pieHtml) {
 }
 const cerrarModal = () => { $('#modal-root').innerHTML = ''; };
 
+/* ================= login ================= */
+async function pantallaLogin() {
+  let ses;
+  try { ses = await (await fetch('/api/sesion')).json(); } catch (_) { ses = {}; }
+  const root = $('#modal-root');
+  root.innerHTML = '';
+  const ov = h(`<div class="overlay">
+    <div class="modal" style="width:min(400px,100%)">
+      <header><h3>Ingreso</h3></header>
+      <div class="cuerpo" style="grid-template-columns:1fr">
+        <div class="campo"><label>Tu nombre</label><input id="lg-nombre" list="lg-lista" autocomplete="off"></div>
+        <datalist id="lg-lista"></datalist>
+        <div class="campo"><label>PIN</label><input id="lg-pin" type="password" autocomplete="off"></div>
+        <p class="muted" style="font-size:.8rem">El PIN lo define quien instala la aplicacion (variable AGENDA_PIN).</p>
+      </div>
+      <footer><button class="btn" id="lg-ok">Entrar</button></footer>
+    </div></div>`);
+  root.appendChild(ov);
+  const entrar = async () => {
+    try {
+      await api('/login', { method: 'POST', body: { funcionario: $('#lg-nombre').value, pin: $('#lg-pin').value } });
+      cerrarModal();
+      init();
+    } catch (e) { toast(e.message, 'err'); }
+  };
+  $('#lg-ok').onclick = entrar;
+  $('#lg-pin').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
+  $('#lg-nombre').focus();
+}
+
 /* ================= router ================= */
 const tabs = {
   agenda: renderAgenda, disponibles: renderDisponibles, reagendar: renderReagendar,
-  errores: renderErrores, dia: renderDia, analitica: renderAnalitica, datos: renderDatos,
+  buscar: renderBuscar, errores: renderErrores, dia: renderDia, analitica: renderAnalitica, datos: renderDatos,
 };
 function irA(tab) {
   if (location.hash !== `#${tab}`) { location.hash = tab; return; }
@@ -73,7 +109,6 @@ function ruta() {
   (tabs[tab] || renderAgenda)();
 }
 window.addEventListener('hashchange', ruta);
-document.querySelectorAll('#nav button').forEach((b) => { b.onclick = () => irA(b.dataset.tab); });
 
 /* ================= editor de bloque ================= */
 function editorSlot(b, alGuardar) {
@@ -107,6 +142,10 @@ function editorSlot(b, alGuardar) {
         <option value="0" ${b.confirmo_asistencia === 0 ? 'selected' : ''}>NO</option></select></div>
     <div class="campo"><label>Resultado</label><select id="f-res">${opt(c.resultado, b.resultado)}</select></div>
     <div class="campo ancho"><label>Comentarios</label><textarea id="f-com" rows="2">${esc(b.comentarios)}</textarea></div>
+    <div class="campo ancho">
+      <label><input type="checkbox" id="f-pend" ${b.pendiente_reagendar ? 'checked' : ''}> Marcar como pendiente de reagendar</label>
+      <input id="f-pend-nota" placeholder="Nota (opcional)" value="${esc(b.pendiente_nota)}" ${b.pendiente_reagendar ? '' : 'hidden'}>
+    </div>
     <div class="campo ancho" id="zona-forzar" ${esPesadaFuera ? '' : 'hidden'}>
       <label><input type="checkbox" id="f-forzar"> Forzar: clase pesada fuera del bloque ${esc(META.hora_d_a5)}</label></div>
     `,
@@ -128,8 +167,8 @@ function editorSlot(b, alGuardar) {
     s.insertAdjacentHTML('beforeend', `<option value="${r.id}">${esc(nombre.toUpperCase())}</option>`);
     s.value = r.id;
   };
-  const bloqChk = $('#f-bloq');
-  bloqChk.onchange = () => { $('#f-bloq-motivo').hidden = !bloqChk.checked; };
+  $('#f-bloq').onchange = (e) => { $('#f-bloq-motivo').hidden = !e.target.checked; };
+  $('#f-pend').onchange = (e) => { $('#f-pend-nota').hidden = !e.target.checked; };
   const claseSel = $('#f-clase');
   claseSel.onchange = () => {
     const pesadaFuera = META.clases_pesadas.includes(claseSel.value) && b.hora !== META.hora_d_a5;
@@ -137,60 +176,64 @@ function editorSlot(b, alGuardar) {
   };
   $('#btn-cancel').onclick = cerrarModal;
   if ($('#btn-liberar')) $('#btn-liberar').onclick = async () => {
-    if (!confirm('Liberar el bloque y borrar los datos de la cita?')) return;
+    if (!confirm('Liberar el bloque? Los datos quedan en la papelera (pestana Datos) por si hay que recuperarlos.')) return;
     await api(`/agenda/${b.id}/liberar`, { method: 'POST' });
     toast('Bloque liberado');
     cerrarModal(); alGuardar && alGuardar();
   };
   $('#btn-guardar').onclick = async () => {
-    if ($('#f-bloq').checked) {
-      try {
-        await api(`/agenda/${b.id}`, { method: 'PUT', body: { bloqueado: true, bloqueo_motivo: $('#f-bloq-motivo').value, comentarios: $('#f-com').value } });
-        toast('Bloque marcado como no disponible');
-        cerrarModal(); alGuardar && alGuardar();
-      } catch (e) { toast(e.message, 'err'); }
-      return;
-    }
-    const body = {
-      rut: $('#f-rut').value, nombre: $('#f-nombre').value, clase: $('#f-clase').value,
-      contacto: $('#f-contacto').value, correo: $('#f-correo').value, tipo_cita: $('#f-tipo').value,
-      motivo_reagendamiento: $('#f-motivo').value, lista_espera: $('#f-lista').value,
-      intento: $('#f-intento').value,
-      funcionario_id: $('#f-func').value && $('#f-func').value !== '__nuevo' ? Number($('#f-func').value) : null,
-      fecha_inicio_tramite: $('#f-fit').value,
-      confirmo_asistencia: $('#f-conf').value === '' ? null : Number($('#f-conf').value),
-      resultado: $('#f-res').value, comentarios: $('#f-com').value,
-      forzar: $('#f-forzar') && $('#f-forzar').checked,
-    };
+    const comun = { visto_en: b.actualizado_en, comentarios: $('#f-com').value };
     try {
-      const r = await api(`/agenda/${b.id}`, { method: 'PUT', body });
-      (r.avisos || []).forEach((a) => toast(a, 'err'));
-      toast('Guardado');
+      if ($('#f-bloq').checked) {
+        await api(`/agenda/${b.id}`, { method: 'PUT', body: { ...comun, bloqueado: true, bloqueo_motivo: $('#f-bloq-motivo').value } });
+        toast('Bloque marcado como no disponible');
+      } else {
+        const body = {
+          ...comun,
+          rut: $('#f-rut').value, nombre: $('#f-nombre').value, clase: $('#f-clase').value,
+          contacto: $('#f-contacto').value, correo: $('#f-correo').value, tipo_cita: $('#f-tipo').value,
+          motivo_reagendamiento: $('#f-motivo').value, lista_espera: $('#f-lista').value,
+          intento: $('#f-intento').value,
+          funcionario_id: $('#f-func').value && $('#f-func').value !== '__nuevo' ? Number($('#f-func').value) : null,
+          fecha_inicio_tramite: $('#f-fit').value,
+          confirmo_asistencia: $('#f-conf').value === '' ? null : Number($('#f-conf').value),
+          resultado: $('#f-res').value,
+          pendiente_reagendar: $('#f-pend').checked,
+          pendiente_nota: $('#f-pend-nota').value,
+          forzar: $('#f-forzar') && $('#f-forzar').checked,
+        };
+        const r = await api(`/agenda/${b.id}`, { method: 'PUT', body });
+        (r.avisos || []).forEach((a) => toast(a, 'err'));
+        toast('Guardado');
+      }
       cerrarModal(); alGuardar && alGuardar();
-    } catch (e) { toast(e.message, 'err'); }
+    } catch (e) {
+      toast(e.message, 'err');
+      if (e.status === 409 && e.data && e.data.bloque) { editorSlot(e.data.bloque, alGuardar); }
+    }
   };
 }
-
 async function abrirSlotPorId(id, alGuardar) {
-  const b = await api(`/agenda/${id}`);
-  editorSlot(b, alGuardar);
+  editorSlot(await api(`/agenda/${id}`), alGuardar);
 }
 
 /* ================= tab: AGENDA ================= */
-let estadoAgenda = { fecha: null, examinador_id: '' };
+let estadoAgenda = { fecha: null, examinador_id: '', filtro: '' };
 async function renderAgenda() {
   if (!estadoAgenda.fecha) estadoAgenda.fecha = hoy();
   view.innerHTML = `
     <div class="panel no-print">
       <div class="fila">
-        <button class="btn sec" id="dia-prev">&#8592; Dia anterior</button>
+        <button class="btn sec" id="dia-prev">&#8592;</button>
         <div class="campo"><label>Fecha</label><input type="date" id="a-fecha" value="${estadoAgenda.fecha}"></div>
-        <button class="btn sec" id="dia-next">Dia siguiente &#8594;</button>
+        <button class="btn sec" id="dia-next">&#8594;</button>
+        <button class="btn sec" id="a-hoy">Hoy</button>
         <div class="campo"><label>Examinador</label>
           <select id="a-exam"><option value="">Todos</option>
             ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}" ${String(e.id) === String(estadoAgenda.examinador_id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
           </select></div>
-        <button class="btn sec" id="a-hoy">Hoy</button>
+        <button class="btn sec" id="a-porconfirmar">Por confirmar...</button>
+        <button class="btn sec" id="a-bloqdia">Bloquear dia...</button>
       </div>
     </div>
     <div class="panel"><div id="a-grid">Cargando...</div></div>`;
@@ -200,11 +243,71 @@ async function renderAgenda() {
   $('#dia-prev').onclick = () => { estadoAgenda.fecha = sumarDias(estadoAgenda.fecha, -1); renderAgenda(); };
   $('#dia-next').onclick = () => { estadoAgenda.fecha = sumarDias(estadoAgenda.fecha, 1); renderAgenda(); };
   $('#a-hoy').onclick = () => { estadoAgenda.fecha = hoy(); renderAgenda(); };
+  $('#a-bloqdia').onclick = () => dialogoBloquearDia();
+  $('#a-porconfirmar').onclick = () => dialogoPorConfirmar();
 
   const q = new URLSearchParams({ fecha: estadoAgenda.fecha });
   if (estadoAgenda.examinador_id) q.set('examinador_id', estadoAgenda.examinador_id);
-  const filas = await api(`/agenda?${q}`);
-  pintarGrilla($('#a-grid'), filas, estadoAgenda.fecha);
+  pintarGrilla($('#a-grid'), await api(`/agenda?${q}`), estadoAgenda.fecha);
+}
+
+async function dialogoPorConfirmar() {
+  const hasta = sumarDias(hoy(), 7);
+  const rows = (await api('/agenda?estado=porconfirmar'))
+    .filter((r) => r.fecha <= hasta);
+  modal('Citas por confirmar (proximos 7 dias)', `
+    <div class="ancho tabla-scroll"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Nombre</th><th>Telefono</th><th>Correo</th><th></th></tr></thead>
+    <tbody id="pc-body">${rows.length ? rows.map((r) => `<tr data-id="${r.id}">
+      <td>${esc(r.fecha)}</td><td>${esc(r.hora)}</td><td>${esc(r.nombre)}</td>
+      <td>${esc(r.contacto)}</td><td>${esc(r.correo)}</td>
+      <td><button class="btn chico" data-si="${r.id}">Confirmo</button>
+          <button class="btn chico sec" data-no="${r.id}">No</button></td></tr>`).join('')
+      : '<tr><td colspan="6" class="muted">Nada por confirmar.</td></tr>'}</tbody></table></div>
+  `, `<button class="btn sec" id="pc-cerrar">Cerrar</button>`);
+  $('#pc-cerrar').onclick = () => { cerrarModal(); renderAgenda(); };
+  const marcar = async (id, val) => {
+    const b = await api(`/agenda/${id}`);
+    await api(`/agenda/${id}`, { method: 'PUT', body: {
+      visto_en: b.actualizado_en, rut: b.rut, nombre: b.nombre, clase: b.clase,
+      contacto: b.contacto, correo: b.correo, tipo_cita: b.tipo_cita,
+      motivo_reagendamiento: b.motivo_reagendamiento, lista_espera: b.lista_espera,
+      intento: b.intento, funcionario_id: b.funcionario_id, fecha_inicio_tramite: b.fecha_inicio_tramite,
+      resultado: b.resultado, comentarios: b.comentarios, confirmo_asistencia: val,
+    } });
+    const tr = $(`#pc-body tr[data-id="${id}"]`);
+    if (tr) tr.remove();
+    toast(val ? 'Confirmada' : 'Marcada como no confirma');
+  };
+  $('#pc-body').querySelectorAll('button[data-si]').forEach((el) => { el.onclick = () => marcar(Number(el.dataset.si), 1); });
+  $('#pc-body').querySelectorAll('button[data-no]').forEach((el) => { el.onclick = () => marcar(Number(el.dataset.no), 0); });
+}
+
+function dialogoBloquearDia() {
+  modal('Bloquear un dia completo', `
+    <div class="campo"><label>Fecha</label><input type="date" id="bd-fecha" value="${estadoAgenda.fecha}"></div>
+    <div class="campo"><label>Examinador</label><select id="bd-exam"><option value="">Todos</option>
+      ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')}</select></div>
+    <div class="campo ancho"><label>Motivo</label><input id="bd-motivo" placeholder="DIA ADMINISTRATIVO, FERIADO, CAPACITACION..."></div>
+    <div class="campo ancho"><label><input type="checkbox" id="bd-ocupados"> Incluir bloques que ya tienen cita (van a la papelera)</label></div>
+  `, `<button class="btn sec" id="bd-cancel">Cancelar</button>
+      <button class="btn sec" id="bd-des">Desbloquear ese dia</button>
+      <button class="btn" id="bd-ok">Bloquear</button>`);
+  $('#bd-cancel').onclick = cerrarModal;
+  $('#bd-ok').onclick = async () => {
+    try {
+      const r = await api('/bloquear-dia', { method: 'POST', body: {
+        fecha: $('#bd-fecha').value, examinador_id: $('#bd-exam').value || null,
+        motivo: $('#bd-motivo').value, incluir_ocupados: $('#bd-ocupados').checked,
+      } });
+      toast(`${r.bloqueados} bloques bloqueados`);
+      cerrarModal(); renderAgenda();
+    } catch (e) { toast(e.message, 'err'); }
+  };
+  $('#bd-des').onclick = async () => {
+    const r = await api('/desbloquear-dia', { method: 'POST', body: { fecha: $('#bd-fecha').value, examinador_id: $('#bd-exam').value || null } });
+    toast(`${r.desbloqueados} bloques desbloqueados`);
+    cerrarModal(); renderAgenda();
+  };
 }
 
 function slotCard(b) {
@@ -220,6 +323,8 @@ function slotCard(b) {
   const badges = [];
   if (b.hora === META.hora_d_a5) badges.push('<span class="badge dpesada">D/A5</span>');
   if (b.tipo_cita === 'REAGENDADO') badges.push('<span class="badge reag">REAG</span>');
+  if (b.pendiente_reagendar) badges.push('<span class="badge reag">PEND</span>');
+  if (b.confirmo_asistencia === 1) badges.push('<span class="badge aprob">CONF</span>');
   if (b.resultado === 'APROBADO') badges.push('<span class="badge aprob">APROB</span>');
   else if (b.resultado === 'REPROBADO') badges.push('<span class="badge reprob">REPROB</span>');
   else if (b.resultado) badges.push('<span class="badge noasiste">' + esc(b.resultado) + '</span>');
@@ -238,15 +343,15 @@ function pintarGrilla(cont, filas, fecha) {
     ? META.examinadores.filter((e) => String(e.id) === String(estadoAgenda.examinador_id))
     : META.examinadores.filter((e) => e.activo);
   if (!filas.length) {
-    cont.innerHTML = `<p class="muted">No hay bloques para ${esc(fecha)}.
-      Puede ser fin de semana o feriado, o falta generar la grilla (pestana Datos).</p>`;
+    cont.className = '';
+    cont.innerHTML = `<p class="muted">No hay bloques para ${esc(fecha)}. Puede ser fin de semana o feriado,
+      o falta generar la grilla (pestana Datos).</p>`;
     return;
   }
   const porKey = {};
   filas.forEach((f) => { porKey[`${f.hora}|${f.examinador_id}`] = f; });
-  const cols = exs.length;
   cont.className = 'grilla';
-  cont.style.gridTemplateColumns = `70px repeat(${cols}, 1fr)`;
+  cont.style.gridTemplateColumns = `70px repeat(${exs.length}, 1fr)`;
   let html = `<div class="cab"></div>` + exs.map((e) => `<div class="cab">${esc(e.nombre)}</div>`).join('');
   for (const hora of META.horas) {
     html += `<div class="cab" style="align-self:center">${esc(hora)}</div>`;
@@ -270,23 +375,16 @@ async function renderDisponibles() {
       <div class="campo"><label>Examinador</label><select id="d-exam"><option value="">Todos</option>
         ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')}</select></div>
       <button class="btn" id="d-buscar">Buscar</button>
-    </div>
-    <p class="muted" id="d-regla"></p></div>
+    </div><p class="muted" id="d-regla"></p></div>
     <div class="panel tabla-scroll"><table><thead><tr>
       <th>Fecha</th><th>Hora</th><th>Examinador</th><th>Regla del bloque</th><th></th>
     </tr></thead><tbody id="d-body"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div>`;
-
   $('#d-clase').value = filtDisp.clase;
   $('#d-exam').value = filtDisp.examinador_id;
   const buscar = async () => {
-    filtDisp = {
-      desde: $('#d-desde').value, hasta: $('#d-hasta').value,
-      clase: $('#d-clase').value, examinador_id: $('#d-exam').value,
-    };
+    filtDisp = { desde: $('#d-desde').value, hasta: $('#d-hasta').value, clase: $('#d-clase').value, examinador_id: $('#d-exam').value };
     const pesada = META.clases_pesadas.includes(filtDisp.clase);
-    $('#d-regla').textContent = pesada
-      ? `Clase ${filtDisp.clase}: solo se muestran bloques de las ${META.hora_d_a5} (unico horario permitido).`
-      : '';
+    $('#d-regla').textContent = pesada ? `Clase ${filtDisp.clase}: solo bloques de las ${META.hora_d_a5}.` : '';
     const q = new URLSearchParams(Object.fromEntries(Object.entries(filtDisp).filter(([, v]) => v)));
     const rows = await api(`/disponibles?${q}`);
     $('#d-body').innerHTML = rows.length ? rows.map((r) => `<tr>
@@ -305,14 +403,28 @@ async function renderDisponibles() {
 /* ================= tab: REAGENDAR ================= */
 async function renderReagendar() {
   view.innerHTML = `
+    <div class="panel"><h2>Pendientes de reagendar</h2>
+      <div class="tabla-scroll"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Examinador</th><th>Nombre</th><th>RUT</th><th>Nota</th><th></th></tr></thead>
+      <tbody id="rp-body"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div></div>
     <div class="panel"><h2>Reagendar una cita</h2>
-      <div class="fila">
-        <div class="campo" style="flex:1"><label>Buscar por RUT, nombre o telefono</label>
-          <input id="r-q" placeholder="minimo 3 caracteres"></div>
-      </div>
+      <div class="campo" style="max-width:420px"><label>Buscar por RUT, nombre o telefono</label><input id="r-q" placeholder="minimo 3 caracteres"></div>
       <div id="r-res" class="chips" style="margin-top:.5rem"></div>
     </div>
     <div id="r-detalle"></div>`;
+
+  const cargarPend = async () => {
+    const rows = await api('/agenda?estado=pendiente');
+    $('#rp-body').innerHTML = rows.length ? rows.map((r) => `<tr>
+      <td>${esc(r.fecha)}</td><td>${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
+      <td>${esc(r.nombre)}</td><td>${esc(r.rut)}</td><td>${esc(r.pendiente_nota)}</td>
+      <td><button class="btn chico" data-id="${r.id}">Reagendar</button></td></tr>`).join('')
+      : '<tr><td colspan="7" class="muted">Nada pendiente.</td></tr>';
+    $('#rp-body').querySelectorAll('button[data-id]').forEach((el) => {
+      el.onclick = () => detalleReagendar(Number(el.dataset.id));
+    });
+  };
+  cargarPend();
+
   const qi = $('#r-q');
   let tmr;
   qi.oninput = () => {
@@ -342,7 +454,7 @@ async function detalleReagendar(id) {
       <p><b>${esc(cita.nombre || '(sin nombre)')}</b> · ${esc(cita.rut || 'sin RUT')} · Clase ${esc(cita.clase || '-')}
         <br>Actual: ${esc(cita.fecha)} ${esc(cita.hora)} — ${esc(cita.examinador)}</p>
       <div class="fila">
-        <div class="campo"><label>Buscar destino desde</label><input type="date" id="rd-desde" value="${sumarDias(hoy(), 1)}"></div>
+        <div class="campo"><label>Destino desde</label><input type="date" id="rd-desde" value="${sumarDias(hoy(), 1)}"></div>
         <div class="campo"><label>hasta</label><input type="date" id="rd-hasta" value="${sumarDias(hoy(), 30)}"></div>
         <div class="campo"><label>Examinador</label><select id="rd-exam"><option value="">Cualquiera</option>
           ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')}</select></div>
@@ -364,25 +476,72 @@ async function detalleReagendar(id) {
       : '<tr><td colspan="4" class="muted">Sin bloques libres.</td></tr>';
     $('#rd-body').querySelectorAll('button[data-id]').forEach((el) => {
       el.onclick = async () => {
-        if (!confirm(`Mover la cita a ${el.closest('tr').children[0].textContent} ${el.closest('tr').children[1].textContent}?`)) return;
+        if (!confirm('Confirmar el reagendamiento?')) return;
         try {
           await api(`/agenda/${id}/reagendar`, { method: 'POST', body: { destino_id: Number(el.dataset.id), motivo: $('#rd-motivo').value } });
           toast('Cita reagendada');
-          cont.innerHTML = '';
-          $('#r-q').value = ''; $('#r-res').innerHTML = '';
+          cont.innerHTML = ''; $('#r-q').value = ''; $('#r-res').innerHTML = '';
+          renderReagendar();
         } catch (e) { toast(e.message, 'err'); }
       };
     });
   };
 }
 
+/* ================= tab: BUSCAR (historial) ================= */
+async function renderBuscar() {
+  view.innerHTML = `
+    <div class="panel"><h2>Buscar contribuyente</h2>
+      <div class="campo" style="max-width:420px"><label>RUT, nombre o telefono</label><input id="bx-q" placeholder="minimo 3 caracteres" autofocus></div>
+      <div id="bx-res" class="chips" style="margin-top:.5rem"></div>
+    </div>
+    <div id="bx-hist"></div>`;
+  const qi = $('#bx-q');
+  let tmr;
+  qi.oninput = () => {
+    clearTimeout(tmr);
+    tmr = setTimeout(async () => {
+      const q = qi.value.trim();
+      if (q.length < 3) { $('#bx-res').innerHTML = ''; return; }
+      const rows = await api(`/buscar?q=${encodeURIComponent(q)}`);
+      const rutsVistos = new Set();
+      const chips = [];
+      for (const r of rows) {
+        const k = r.rut || r.nombre;
+        if (rutsVistos.has(k)) continue;
+        rutsVistos.add(k);
+        chips.push(`<button class="chip" data-rut="${esc(r.rut || '')}" data-nom="${esc(r.nombre || '')}" style="cursor:pointer">${esc(r.nombre || r.rut)} · ${esc(r.rut || 's/RUT')}</button>`);
+      }
+      $('#bx-res').innerHTML = chips.join('') || '<span class="muted">Sin resultados</span>';
+      $('#bx-res').querySelectorAll('button').forEach((el) => {
+        el.onclick = () => historial(el.dataset.rut, el.dataset.nom);
+      });
+    }, 250);
+  };
+}
+async function historial(rutv, nombre) {
+  const rows = rutv ? await api(`/historial?rut=${encodeURIComponent(rutv)}`) : [];
+  $('#bx-hist').innerHTML = `<div class="panel"><h3>${esc(nombre || rutv)}</h3>
+    ${rutv ? '' : '<p class="muted">Sin RUT registrado; no se puede armar historial.</p>'}
+    <div class="tabla-scroll"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Examinador</th><th>Clase</th><th>Tipo</th><th>Resultado</th><th></th></tr></thead>
+    <tbody>${rows.map((r) => `<tr>
+      <td>${esc(r.fecha)}</td><td>${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
+      <td>${esc(r.clase)}</td><td>${esc(r.tipo_cita)}</td><td>${esc(r.resultado)}</td>
+      <td><button class="btn chico" data-id="${r.id}">Abrir</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">Sin citas.</td></tr>'}
+    </tbody></table></div></div>`;
+  $('#bx-hist').querySelectorAll('button[data-id]').forEach((el) => {
+    el.onclick = () => abrirSlotPorId(Number(el.dataset.id), () => historial(rutv, nombre));
+  });
+}
+
 /* ================= tab: ERRORES ================= */
 const ETIQUETA = {
   INCOMPLETA: 'Cita incompleta', RUT_INVALIDO: 'RUT invalido', CLASE_BLOQUE: 'Clase en bloque incorrecto',
-  DUPLICADO_FUTURO: 'Duplicado futuro', CONFLICTO_TERRENO: 'Conflicto terreno',
-  SIN_RESULTADO: 'Sin resultado', SIN_FUNCIONARIO: 'Sin funcionario',
+  DUPLICADO_FUTURO: 'Duplicado futuro', DUPLICADO_DIA: 'Duplicado el mismo dia', CONFLICTO_TERRENO: 'Conflicto terreno',
+  SIN_RESULTADO: 'Sin resultado', SIN_CONTACTO: 'Sin contacto', DIA_INHABIL: 'Cita en dia inhabil',
+  PENDIENTE_REAGENDAR: 'Pendiente de reagendar',
 };
-let filtErr = { tipo: '', sev: '' };
+let filtErr = { tipo: '' };
 async function renderErrores() {
   view.innerHTML = `<div class="panel"><div class="fila">
       <h2 style="margin:0;flex:1">Reporte de errores</h2>
@@ -393,10 +552,9 @@ async function renderErrores() {
     </tr></thead><tbody id="e-body"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div>`;
   const cargar = async () => {
     const rep = await api('/errores');
-    const chips = [`<button class="chip" data-t="">Todos (${rep.total})</button>`]
+    $('#e-chips').innerHTML = [`<button class="chip" data-t="">Todos (${rep.total})</button>`]
       .concat(Object.entries(rep.resumen).sort((a, b) => b[1] - a[1])
-        .map(([t, n]) => `<button class="chip" data-t="${t}">${esc(ETIQUETA[t] || t)} (${n})</button>`));
-    $('#e-chips').innerHTML = chips.join('');
+        .map(([t, n]) => `<button class="chip" data-t="${t}">${esc(ETIQUETA[t] || t)} (${n})</button>`)).join('');
     $('#e-chips').querySelectorAll('button').forEach((el) => {
       el.onclick = () => { filtErr.tipo = el.dataset.t; pintar(rep); };
     });
@@ -404,7 +562,7 @@ async function renderErrores() {
   };
   const pintar = (rep) => {
     const rows = rep.hallazgos.filter((x) => (!filtErr.tipo || x.tipo === filtErr.tipo));
-    $('#e-body').innerHTML = rows.length ? rows.slice(0, 500).map((x) => `<tr>
+    $('#e-body').innerHTML = rows.length ? rows.slice(0, 600).map((x) => `<tr>
       <td><span class="sev ${x.severidad}">${x.severidad}</span></td>
       <td>${esc(ETIQUETA[x.tipo] || x.tipo)}</td>
       <td>${esc(x.fecha)}</td><td>${esc(x.hora)}</td><td>${esc(x.examinador)}</td>
@@ -426,6 +584,7 @@ async function renderDia() {
     <div class="panel no-print"><div class="fila">
       <div class="campo"><label>Fecha</label><input type="date" id="dd-fecha" value="${fecha}"></div>
       <button class="btn" id="dd-print">Imprimir</button>
+      <span class="muted">Se imprime una hoja por examinador.</span>
     </div></div>
     <div id="dd-cont">Cargando...</div>`;
   $('#dd-fecha').onchange = (e) => { estadoAgenda.fecha = e.target.value; renderDia(); };
@@ -433,16 +592,16 @@ async function renderDia() {
   const data = await api(`/dia?fecha=${fecha}`);
   const exs = Object.keys(data.examinadores);
   if (!exs.length) { $('#dd-cont').innerHTML = `<div class="panel">Sin bloques para ${esc(fecha)}.</div>`; return; }
-  $('#dd-cont').innerHTML = `<div class="grid2 imprimible">` + exs.map((ex) => `
+  $('#dd-cont').innerHTML = exs.map((ex) => `
     <div class="panel col-print">
       <h3>${esc(ex)} — ${esc(fecha)}</h3>
-      <table><thead><tr><th>Hora</th><th>RUT</th><th>Nombre</th><th>Clase</th><th>Tel.</th></tr></thead>
+      <table><thead><tr><th>Hora</th><th>RUT</th><th>Nombre</th><th>Clase</th><th>Tel.</th><th>Tipo</th></tr></thead>
       <tbody>${data.examinadores[ex].map((r) => (r.bloqueado
-        ? `<tr class="muted"><td>${esc(r.hora)}</td><td colspan="4">&#128274; ${esc(r.bloqueo_motivo || 'BLOQUEADO')}</td></tr>`
+        ? `<tr class="muted"><td>${esc(r.hora)}</td><td colspan="5">&#128274; ${esc(r.bloqueo_motivo || 'BLOQUEADO')}</td></tr>`
         : `<tr>
         <td>${esc(r.hora)}</td><td>${esc(r.rut)}</td><td>${esc(r.nombre)}</td>
-        <td>${esc(r.clase)}</td><td>${esc(r.contacto)}</td></tr>`)).join('')}</tbody></table>
-    </div>`).join('') + `</div>`;
+        <td>${esc(r.clase)}</td><td>${esc(r.contacto)}</td><td>${esc(r.tipo_cita)}</td></tr>`)).join('')}</tbody></table>
+    </div>`).join('');
 }
 
 /* ================= tab: ANALITICA ================= */
@@ -453,21 +612,14 @@ function grafico(id, tipo, labels, datos, label) {
   if (!ctx) return;
   charts.push(new Chart(ctx, {
     type: tipo,
-    data: {
-      labels,
-      datasets: [{
-        label: label || '',
-        data: datos,
-        backgroundColor: ['#1d4ed8', '#0ea5e9', '#15803d', '#b45309', '#7c3aed', '#be123c', '#64748b', '#0891b2', '#ca8a04'],
-        borderColor: '#1d4ed8',
-        tension: .25,
-      }],
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
+    data: { labels, datasets: [{
+      label: label || '', data: datos,
+      backgroundColor: ['#1d4ed8', '#0ea5e9', '#15803d', '#b45309', '#7c3aed', '#be123c', '#64748b', '#0891b2', '#ca8a04'],
+      borderColor: '#1d4ed8', tension: .25,
+    }] },
+    options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: tipo === 'doughnut' } },
-      scales: tipo === 'doughnut' ? {} : { y: { beginAtZero: true } },
-    },
+      scales: tipo === 'doughnut' ? {} : { y: { beginAtZero: true } } },
   }));
 }
 async function renderAnalitica() {
@@ -485,7 +637,9 @@ async function renderAnalitica() {
       <div class="panel"><h3>Citas por clase</h3><div class="grafico"><canvas id="g-clase"></canvas></div></div>
       <div class="panel"><h3>Citas por funcionario/a</h3><div class="grafico"><canvas id="g-func"></canvas></div></div>
       <div class="panel"><h3>Tipo de cita</h3><div class="grafico"><canvas id="g-tipo"></canvas></div></div>
-      <div class="panel"><h3>Tendencia de citas por dia</h3><div class="grafico"><canvas id="g-tend"></canvas></div></div>
+      <div class="panel"><h3>Citas por dia (fecha de la cita)</h3><div class="grafico"><canvas id="g-tend"></canvas></div></div>
+      <div class="panel"><h3>Agendados por dia (fecha de agendamiento)</h3><div class="grafico"><canvas id="g-agend"></canvas></div>
+        <p class="muted" style="font-size:.8rem">Para citas migradas del Excel el dato es aproximado.</p></div>
     </div>`;
   const cargar = async () => {
     limpiarCharts();
@@ -495,7 +649,7 @@ async function renderAnalitica() {
     const a = await api(`/analitica?${q}`);
     const k = a.kpis;
     $('#an-kpis').innerHTML = [
-      ['Bloques', k.bloques], ['Citas agendadas', k.ocupadas], ['Ocupacion', k.ocupacion + '%'],
+      ['Bloques', k.bloques], ['Bloqueados', k.bloqueadas], ['Citas agendadas', k.ocupadas], ['Ocupacion', k.ocupacion + '%'],
       ['Con resultado', k.con_resultado], ['Aprobacion', k.aprobacion + '%'], ['Inasistencia', k.inasistencia + '%'],
       ['Reagendadas', k.reagendadas], ['Tasa reagend.', k.tasa_reagendamiento + '%'],
       ['En lista espera', k.lista_espera], ['Agendadas hoy', k.agendadas_hoy],
@@ -507,6 +661,7 @@ async function renderAnalitica() {
     grafico('g-func', 'bar', ...pares(a.por_funcionario), 'Citas');
     grafico('g-tipo', 'bar', ...pares(a.por_tipo), 'Citas');
     grafico('g-tend', 'line', a.tendencia.map((x) => x.dia), a.tendencia.map((x) => x.n), 'Citas');
+    grafico('g-agend', 'line', a.tendencia_agendamiento.map((x) => x.dia), a.tendencia_agendamiento.map((x) => x.n), 'Agendados');
   };
   $('#an-ok').onclick = cargar;
   cargar();
@@ -523,7 +678,8 @@ async function renderDatos() {
       </div>
       <p class="muted">Sin "reemplazar" se hace un backup antes y se fusionan las citas por (fecha, hora, examinador).</p>
       <div class="fila">
-        <a class="btn sec" href="/api/export">Exportar a Excel</a>
+        <a class="btn sec" href="/api/export">Exportar (formato dashboard)</a>
+        <a class="btn sec" href="/api/export?formato=original">Exportar (formato Excel original)</a>
         <button class="btn sec" id="bk-btn">Crear backup de la base</button>
       </div>
       <div id="im-res"></div>
@@ -538,6 +694,16 @@ async function renderDatos() {
       <p class="muted">Crea los bloques faltantes (dias habiles, 11 horarios, por examinador activo). No pisa lo existente.</p>
     </div>
 
+    <div class="panel"><h2>Feriados / dias inhabiles</h2>
+      <div class="chips" id="fe-cont" style="margin:.4rem 0"></div>
+      <div class="fila"><input type="date" id="fe-fecha"><input id="fe-nombre" placeholder="Nombre (opcional)"><button class="btn chico" id="fe-add">Agregar</button></div>
+      <p class="muted">Tras cambiar feriados, volve a generar los bloques del periodo afectado.</p>
+    </div>
+
+    <div class="panel"><h2>Papelera <span class="muted" style="font-weight:400">(citas liberadas o pisadas, ultimas 80)</span></h2>
+      <div class="tabla-scroll"><table><thead><tr><th>Cuando</th><th>Motivo</th><th>Fecha/Hora</th><th>Nombre</th><th>RUT</th><th>Por</th><th></th></tr></thead>
+      <tbody id="pap-body"></tbody></table></div></div>
+
     <div class="panel"><h2>Listas desplegables</h2><div id="cat-cont"></div></div>
 
     <div class="grid2">
@@ -548,7 +714,7 @@ async function renderDatos() {
     </div>
 
     <div class="panel"><h2>Ultimos movimientos</h2><div class="tabla-scroll"><table>
-      <thead><tr><th>Fecha</th><th>Accion</th><th>Detalle</th></tr></thead><tbody id="mov-body"></tbody></table></div></div>`;
+      <thead><tr><th>Fecha</th><th>Accion</th><th>Por</th><th>Detalle</th></tr></thead><tbody id="mov-body"></tbody></table></div></div>`;
 
   $('#im-btn').onclick = async () => {
     const f = $('#im-file').files[0];
@@ -576,6 +742,32 @@ async function renderDatos() {
     META = await api('/meta');
   };
 
+  // feriados
+  const fe = $('#fe-cont');
+  fe.innerHTML = (META.feriados || []).map((f) => `<span class="chip">${esc(f.fecha)}${f.nombre ? ' · ' + esc(f.nombre) : ''}<button data-f="${esc(f.fecha)}">&times;</button></span>`).join('') || '<span class="muted">Sin feriados</span>';
+  fe.querySelectorAll('button[data-f]').forEach((b) => {
+    b.onclick = async () => { await api(`/feriados?fecha=${b.dataset.f}`, { method: 'DELETE' }); META = await api('/meta'); renderDatos(); };
+  });
+  $('#fe-add').onclick = async () => {
+    if (!$('#fe-fecha').value) return;
+    await api('/feriados', { method: 'POST', body: { fecha: $('#fe-fecha').value, nombre: $('#fe-nombre').value } });
+    META = await api('/meta'); renderDatos();
+  };
+
+  // papelera
+  const pap = await api('/papelera');
+  $('#pap-body').innerHTML = pap.length ? pap.map((p) => `<tr>
+    <td>${esc(p.ts)}</td><td>${esc(p.motivo)}</td><td>${esc(p.fecha)} ${esc(p.hora)}</td>
+    <td>${esc(p.nombre || p.bloqueo_motivo)}</td><td>${esc(p.rut)}</td><td>${esc(p.actor)}</td>
+    <td><button class="btn chico" data-id="${p.id}">Restaurar</button></td></tr>`).join('')
+    : '<tr><td colspan="7" class="muted">Vacia.</td></tr>';
+  $('#pap-body').querySelectorAll('button[data-id]').forEach((el) => {
+    el.onclick = async () => {
+      try { await api(`/papelera/${el.dataset.id}/restaurar`, { method: 'POST' }); toast('Restaurado'); renderDatos(); }
+      catch (e) { toast(e.message, 'err'); }
+    };
+  });
+
   // catalogos
   const cc = $('#cat-cont');
   cc.innerHTML = Object.keys(META.catalogos).map((tipo) => `
@@ -593,7 +785,6 @@ async function renderDatos() {
         META = await api('/meta'); renderDatos();
       };
     });
-    const inp = div.nextElementSibling;
   });
   cc.querySelectorAll('.fila').forEach((fila) => {
     const tipo = fila.previousElementSibling.dataset.tipo;
@@ -631,18 +822,24 @@ async function renderDatos() {
   };
 
   const mov = await api('/movimientos');
-  $('#mov-body').innerHTML = mov.map((m) => `<tr><td>${esc(m.ts)}</td><td>${esc(m.accion)}</td><td>${esc(m.detalle)}</td></tr>`).join('');
+  $('#mov-body').innerHTML = mov.map((m) => `<tr><td>${esc(m.ts)}</td><td>${esc(m.accion)}</td><td>${esc(m.actor)}</td><td>${esc(m.detalle)}</td></tr>`).join('');
 }
 
 /* ================= arranque ================= */
-(async function init() {
+async function init() {
   try {
     META = await api('/meta');
     const r = META.rango_agenda || {};
-    $('#estado').textContent = r.desde ? `Agenda ${r.desde} a ${r.hasta} · hoy ${META.hoy}` : 'Base vacia — importa el Excel en Datos';
+    $('#estado').innerHTML = `${r.desde ? `Agenda ${r.desde} a ${r.hasta} · ` : ''}hoy ${META.hoy}
+      ${META.usuario ? `· <b>${esc(META.usuario)}</b> <button id="salir" class="btn chico sec" style="padding:.1rem .4rem">salir</button>` : ''}`;
+    const salir = $('#salir');
+    if (salir) salir.onclick = async () => { await api('/logout', { method: 'POST' }); pantallaLogin(); };
     if (!location.hash) location.hash = 'agenda';
     ruta();
   } catch (e) {
+    if (e.message === 'Sesion requerida') return;
     view.innerHTML = `<div class="panel"><h2>No se pudo conectar</h2><p>${esc(e.message)}</p></div>`;
   }
-})();
+}
+document.querySelectorAll('#nav button').forEach((b) => { b.onclick = () => irA(b.dataset.tab); });
+init();
