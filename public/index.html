@@ -8,18 +8,26 @@
 </head>
 <body>
   <header class="top">
-    <span class="marca">AGENDA DE PRACTICOS</span>
-    <nav id="nav">
-      <button data-tab="agenda" class="activo">Agenda</button>
-      <button data-tab="disponibles">Citas disponibles</button>
-      <button data-tab="reagendar">Reagendar</button>
-      <button data-tab="buscar">Buscar</button>
-      <button data-tab="errores">Reporte de errores</button>
-      <button data-tab="dia">Agenda del dia</button>
-      <button data-tab="analitica">Analitica</button>
-      <button data-tab="datos">Datos</button>
-    </nav>
-    <span class="estado" id="estado"></span>
+    <div class="top-inner">
+      <span class="marca">
+        <span class="marca-icono">AP</span>
+        Agenda de Prácticos
+      </span>
+      <nav id="nav">
+        <button data-tab="agenda" class="activo">Agenda</button>
+        <button data-tab="disponibles">Citas disponibles</button>
+        <button data-tab="reagendar">Reagendar</button>
+        <button data-tab="buscar">Buscar</button>
+        <button data-tab="errores">Reporte de errores</button>
+        <button data-tab="dia">Agenda del día</button>
+        <button data-tab="analitica">Analítica</button>
+        <button data-tab="datos">Datos</button>
+      </nav>
+      <div class="top-right">
+        <button id="tema" class="icono-btn" title="Cambiar tema" aria-label="Cambiar tema">☾</button>
+        <span class="estado" id="estado"></span>
+      </div>
+    </div>
   </header>
 
   <main id="view"></main>

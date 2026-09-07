@@ -311,30 +311,36 @@ function dialogoBloquearDia() {
 }
 
 function slotCard(b) {
-  if (!b) return '<div class="slot libre muted">sin bloque</div>';
+  if (!b) return '<div class="slot libre">—</div>';
   if (b.bloqueado) {
     return `<button class="slot bloqueado" data-id="${b.id}">
-      <span class="hora">${esc(b.hora)}${estadoAgenda.examinador_id ? '' : ' · ' + esc(b.examinador)}</span>
-      <span class="nom">&#128274; ${esc(b.bloqueo_motivo || 'BLOQUEADO')}</span>
-      <span class="meta">Bloque no disponible</span></button>`;
+      <span class="nombre">&#128274; ${esc(b.bloqueo_motivo || 'BLOQUEADO')}</span>
+      <span class="sub">No disponible</span></button>`;
   }
   const ocupada = b.rut || b.nombre;
-  const cls = ['slot', ocupada ? 'ocupada' : 'libre', b.hora === META.hora_d_a5 ? 'pesada' : ''].join(' ');
+  const res = b.resultado === 'APROBADO' ? 'res-aprob'
+    : (b.resultado === 'REPROBADO' || b.resultado === 'REPROBADO INASISTENCIA') ? 'res-reprob' : '';
+  const cls = ['slot', ocupada ? 'ocupada' : 'libre', b.hora === META.hora_d_a5 ? 'pesada' : '', res]
+    .filter(Boolean).join(' ');
+
+  if (!ocupada) {
+    return `<button class="${cls}" data-id="${b.id}">
+      <span class="mas">+</span><span>Agendar</span>
+      ${b.hora === META.hora_d_a5 ? '<span class="badges"><span class="badge dpesada">D/A5</span></span>' : ''}
+    </button>`;
+  }
+
   const badges = [];
   if (b.hora === META.hora_d_a5) badges.push('<span class="badge dpesada">D/A5</span>');
   if (b.tipo_cita === 'REAGENDADO') badges.push('<span class="badge reag">REAG</span>');
   if (b.pendiente_reagendar) badges.push('<span class="badge reag">PEND</span>');
   if (b.confirmo_asistencia === 1) badges.push('<span class="badge aprob">CONF</span>');
-  if (b.resultado === 'APROBADO') badges.push('<span class="badge aprob">APROB</span>');
-  else if (b.resultado === 'REPROBADO') badges.push('<span class="badge reprob">REPROB</span>');
-  else if (b.resultado) badges.push('<span class="badge noasiste">' + esc(b.resultado) + '</span>');
+  if (b.resultado === 'APROBADO') badges.push('<span class="badge aprob">APROBO</span>');
+  else if (b.resultado) badges.push('<span class="badge reprob">' + esc(b.resultado) + '</span>');
   return `<button class="${cls}" data-id="${b.id}">
-    <span class="hora">${esc(b.hora)}${estadoAgenda.examinador_id ? '' : ' · ' + esc(b.examinador)}</span>
-    ${ocupada
-      ? `<span class="nom">${esc(b.nombre || '(sin nombre)')}</span>
-         <span class="meta">${esc(b.rut || 'sin RUT')} · ${esc(b.clase || 's/clase')}</span>
-         <span class="chips">${badges.join('')}</span>`
-      : `<span class="meta">Libre · clic para agendar</span><span class="chips">${badges.join('')}</span>`}
+    <span class="nombre">${esc(b.nombre || '(sin nombre)')}</span>
+    <span class="sub">${esc(b.rut || 'sin RUT')} &middot; ${esc(b.clase || 's/clase')}</span>
+    ${badges.length ? `<span class="badges">${badges.join('')}</span>` : ''}
   </button>`;
 }
 
@@ -344,6 +350,7 @@ function pintarGrilla(cont, filas, fecha) {
     : META.examinadores.filter((e) => e.activo);
   if (!filas.length) {
     cont.className = '';
+    cont.style.gridTemplateColumns = '';
     cont.innerHTML = `<p class="muted">No hay bloques para ${esc(fecha)}. Puede ser fin de semana o feriado,
       o falta generar la grilla (pestana Datos).</p>`;
     return;
@@ -351,10 +358,10 @@ function pintarGrilla(cont, filas, fecha) {
   const porKey = {};
   filas.forEach((f) => { porKey[`${f.hora}|${f.examinador_id}`] = f; });
   cont.className = 'grilla';
-  cont.style.gridTemplateColumns = `70px repeat(${exs.length}, 1fr)`;
-  let html = `<div class="cab"></div>` + exs.map((e) => `<div class="cab">${esc(e.nombre)}</div>`).join('');
+  cont.style.gridTemplateColumns = `56px repeat(${exs.length}, minmax(0, 1fr))`;
+  let html = `<div></div>` + exs.map((e) => `<div class="g-head">${esc(e.nombre)}</div>`).join('');
   for (const hora of META.horas) {
-    html += `<div class="cab" style="align-self:center">${esc(hora)}</div>`;
+    html += `<div class="g-hora">${esc(hora)}</div>`;
     for (const e of exs) html += `<div>${slotCard(porKey[`${hora}|${e.id}`])}</div>`;
   }
   cont.innerHTML = html;
@@ -366,7 +373,7 @@ function pintarGrilla(cont, filas, fecha) {
 /* ================= tab: DISPONIBLES ================= */
 let filtDisp = { desde: null, hasta: null, clase: '', examinador_id: '' };
 async function renderDisponibles() {
-  if (!filtDisp.desde) { filtDisp.desde = hoy(); filtDisp.hasta = sumarDias(hoy(), 21); }
+  if (!filtDisp.desde) { filtDisp.desde = hoy(); filtDisp.hasta = sumarDias(hoy(), 60); }
   view.innerHTML = `
     <div class="panel no-print"><div class="fila">
       <div class="campo"><label>Desde</label><input type="date" id="d-desde" value="${filtDisp.desde}"></div>
@@ -391,7 +398,9 @@ async function renderDisponibles() {
       <td>${esc(r.fecha)}</td><td>${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
       <td>${r.apto_pesada ? '&#9989; ' : '&#128663; '}${esc(r.regla)}</td>
       <td><button class="btn chico" data-id="${r.id}">Agendar</button></td></tr>`).join('')
-      : '<tr><td colspan="5" class="muted">Sin bloques libres con esos filtros.</td></tr>';
+      : `<tr><td colspan="5" class="muted">No hay bloques libres entre ${esc(filtDisp.desde)} y ${esc(filtDisp.hasta)}.
+         Los primeros meses suelen estar llenos: ampliá la fecha "Hasta" o probá un mes mas adelante.</td></tr>`;
+    $('#d-regla').textContent += rows.length ? ` — ${rows.length} bloque(s) libre(s).` : '';
     $('#d-body').querySelectorAll('button[data-id]').forEach((el) => {
       el.onclick = () => abrirSlotPorId(Number(el.dataset.id), buscar);
     });
@@ -842,4 +851,22 @@ async function init() {
   }
 }
 document.querySelectorAll('#nav button').forEach((b) => { b.onclick = () => irA(b.dataset.tab); });
+
+/* tema claro / oscuro */
+(function tema() {
+  const btn = document.getElementById('tema');
+  try {
+    const g = localStorage.getItem('agenda-tema');
+    if (g) document.documentElement.dataset.tema = g;
+  } catch (_) { /* ignore */ }
+  const pinta = () => { btn.textContent = document.documentElement.dataset.tema === 'oscuro' ? '☀' : '☾'; };
+  pinta();
+  btn.onclick = () => {
+    const nuevo = document.documentElement.dataset.tema === 'oscuro' ? 'claro' : 'oscuro';
+    document.documentElement.dataset.tema = nuevo;
+    try { localStorage.setItem('agenda-tema', nuevo); } catch (_) { /* ignore */ }
+    pinta();
+  };
+})();
+
 init();
