@@ -49,7 +49,7 @@ Doble clic en **`iniciar.bat`** (Windows), o:
 npm start
 ```
 
-Abre el navegador en **http://localhost:4173**. Para detener: cerrar la ventana / `Ctrl + C`.
+Abre el navegador en **http://localhost:4900**. Para detener: cerrar la ventana / `Ctrl + C`.
 
 Instalación en el PC de la agenda, login, arranque automático y acceso por red:
 ver **[INSTALACION.md](INSTALACION.md)**.

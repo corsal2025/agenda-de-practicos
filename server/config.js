@@ -26,7 +26,8 @@ const CATALOGOS = {
 
 const RAIZ = path.join(__dirname, '..');
 const DB_PATH = process.env.AGENDA_DB || path.join(RAIZ, 'data', 'agenda.db');
-const PUERTO = Number(process.env.PORT) || 4173;
+// 4900: puerto propio de la agenda. Se evita 4173/5173 (los usa la app de estetica / Vite).
+const PUERTO = Number(process.env.PORT) || 4900;
 
 module.exports = {
   HORAS, HORA_D_A5, CLASES_PESADAS,

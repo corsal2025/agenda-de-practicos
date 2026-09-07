@@ -12,7 +12,7 @@ Copiar toda la carpeta `agenda de practicos` al PC (por ejemplo a `C:\agenda-pra
 ## 3. Primera vez
 
 Doble clic en **`iniciar.bat`**. La primera vez instala dependencias solo
-(tarda 1–2 minutos) y luego abre el navegador en <http://localhost:4173>.
+(tarda 1–2 minutos) y luego abre el navegador en <http://localhost:4900>.
 
 Si preferís la terminal:
 
@@ -73,14 +73,14 @@ nssm start AgendaPracticos
 ```
 
 El servicio queda corriendo aunque nadie inicie sesión. El navegador se abre a
-mano en <http://localhost:4173>.
+mano en <http://localhost:4900>.
 
 ## 8. Acceso desde otros PC de la misma red (opcional)
 
 El servidor ya escucha en todas las interfaces de red. Para que otros PC entren:
 
-1. Abrir el puerto **4173** en el Firewall de Windows (entrada, TCP).
-2. Los demás entran a `http://IP-DEL-PC:4173` (ver la IP con `ipconfig`).
+1. Abrir el puerto **4900** en el Firewall de Windows (entrada, TCP).
+2. Los demás entran a `http://IP-DEL-PC:4900` (ver la IP con `ipconfig`).
 
 **Dejar el login activo (con PIN) en este caso.**
 
