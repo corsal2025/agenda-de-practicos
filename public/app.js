@@ -231,8 +231,11 @@ function editorSlot(b, alGuardar) {
     const comun = { visto_en: b.actualizado_en, comentarios: $('#f-com').value };
     try {
       if ($('#f-bloq').checked) {
+        if ((b.rut || b.nombre) && !b.bloqueado) {
+          if (!confirm(`Este bloque tiene la cita de ${nom(b.nombre) || b.rut}.\n\nAl bloquearlo, la cita se retira y queda guardada en la papelera (Datos → Papelera).\n\n¿Bloquear igual?`)) return;
+        }
         await api(`/agenda/${b.id}`, { method: 'PUT', body: { ...comun, bloqueado: true, bloqueo_motivo: $('#f-bloq-motivo').value } });
-        toast('Bloque marcado como no disponible');
+        toast((b.rut || b.nombre) ? 'Bloque bloqueado — la cita fue a la papelera' : 'Bloque marcado como no disponible');
       } else {
         const body = {
           ...comun,
