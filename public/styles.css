@@ -226,7 +226,7 @@ input:focus, select:focus, textarea:focus {
 :root[data-tema="oscuro"] .clase-tag { color: #0d1526; }
 
 /* Marcado rapido de resultado en la tarjeta */
-.slot-res { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; padding-top: 5px; border-top: 1px dashed var(--linea); }
+.slot-res { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--linea); }
 .slot-res .sr {
   font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; cursor: pointer;
   border: 1px solid var(--linea); background: var(--papel); color: var(--tinta-2); user-select: none;
