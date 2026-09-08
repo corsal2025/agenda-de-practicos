@@ -38,6 +38,21 @@ function h(html) {
 }
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const hoy = () => (META ? META.hoy : new Date().toISOString().slice(0, 10));
+
+// Fecha en formato dia/mes/año para MOSTRAR. Los <input type="date"> siguen usando ISO.
+function fFecha(v) {
+  if (!v) return '';
+  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(v);
+}
+function fFechaHora(v) {
+  if (!v) return '';
+  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]} ${m[4]}`;
+  return fFecha(v);
+}
+// Nombres siempre en mayuscula al mostrar.
+const nom = (v) => String(v ?? '').toUpperCase();
 function sumarDias(iso, n) {
   const d = new Date(`${iso}T12:00:00`);
   d.setDate(d.getDate() + n);
@@ -139,14 +154,14 @@ function editorSlot(b, alGuardar) {
   const funcs = META.funcionarios.filter((f) => f.activo);
   const esPesadaFuera = b.clase && META.clases_pesadas.includes(b.clase) && b.hora !== META.hora_d_a5;
   modal(
-    `${b.fecha}  ${b.hora}  ·  ${b.examinador}`,
+    `${fFecha(b.fecha)}  ·  ${b.hora}  ·  ${b.examinador}`,
     `
     <div class="campo ancho" style="background:#f8fafc;padding:.5rem;border-radius:6px">
       <label><input type="checkbox" id="f-bloq" ${b.bloqueado ? 'checked' : ''}> Bloquear este bloque (no disponible: terreno, feriado, dia administrativo...)</label>
       <input id="f-bloq-motivo" placeholder="Motivo del bloqueo" value="${esc(b.bloqueo_motivo)}" ${b.bloqueado ? '' : 'hidden'}>
     </div>
     <div class="campo"><label>RUT</label><input id="f-rut" value="${esc(b.rut)}" placeholder="12.345.678-9"></div>
-    <div class="campo"><label>Nombre</label><input id="f-nombre" value="${esc(b.nombre)}"></div>
+    <div class="campo"><label>Nombre</label><input id="f-nombre" value="${esc(nom(b.nombre))}" style="text-transform:uppercase"></div>
     <div class="campo"><label>Clase</label><select id="f-clase">${opt(c.clase, b.clase)}</select></div>
     <div class="campo"><label>Telefono</label><input id="f-contacto" value="${esc(b.contacto)}"></div>
     <div class="campo"><label>Correo</label><input id="f-correo" value="${esc(b.correo)}"></div>
@@ -285,7 +300,7 @@ async function dialogoPorConfirmar() {
   modal('Citas por confirmar (proximos 7 dias)', `
     <div class="ancho tabla-scroll"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Nombre</th><th>Telefono</th><th>Correo</th><th></th></tr></thead>
     <tbody id="pc-body">${rows.length ? rows.map((r) => `<tr data-id="${r.id}">
-      <td>${esc(r.fecha)}</td><td>${esc(r.hora)}</td><td>${esc(r.nombre)}</td>
+      <td>${esc(fFecha(r.fecha))}</td><td>${esc(r.hora)}</td><td>${esc(nom(r.nombre))}</td>
       <td>${esc(r.contacto)}</td><td>${esc(r.correo)}</td>
       <td><button class="btn chico" data-si="${r.id}">Confirmo</button>
           <button class="btn chico sec" data-no="${r.id}">No</button></td></tr>`).join('')
@@ -358,9 +373,9 @@ function slotCard(b) {
   }
 
   const badges = [];
-  if (b.hora === META.hora_d_a5) badges.push('<span class="badge dpesada">D/A5</span>');
-  if (b.tipo_cita === 'REAGENDADO') badges.push('<span class="badge reag">Reag.</span>');
-  if (b.pendiente_reagendar) badges.push('<span class="badge reag">Pend.</span>');
+  if (b.hora === META.hora_d_a5) badges.push('<span class="badge dpesada">D · A5</span>');
+  if (b.tipo_cita === 'REAGENDADO') badges.push('<span class="badge reag">Reagendada</span>');
+  if (b.pendiente_reagendar) badges.push('<span class="badge reag">Pendiente</span>');
   if (b.confirmo_asistencia === 1) badges.push('<span class="badge aprob">Confirmó</span>');
   if (b.resultado === 'APROBADO') badges.push('<span class="badge aprob">Aprobó</span>');
   else if (b.resultado === 'REPROBADO') badges.push('<span class="badge reprob">Reprobó</span>');
@@ -379,7 +394,7 @@ function pintarGrilla(cont, filas, fecha) {
   if (!filas.length) {
     cont.className = '';
     cont.style.gridTemplateColumns = '';
-    cont.innerHTML = `<p class="muted">No hay bloques para ${esc(fecha)}. Puede ser fin de semana o feriado,
+    cont.innerHTML = `<p class="muted">No hay bloques para ${esc(fFecha(fecha))}. Puede ser fin de semana o feriado,
       o falta generar la grilla (pestana Datos).</p>`;
     return;
   }
@@ -429,7 +444,7 @@ async function renderDisponibles() {
     const q = new URLSearchParams(Object.fromEntries(Object.entries(filtDisp).filter(([, v]) => v)));
     const rows = await api(`/disponibles?${q}`);
     $('#d-body').innerHTML = rows.length ? rows.map((r) => `<tr>
-      <td class="num">${esc(r.fecha)}</td><td class="num">${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
+      <td class="num">${esc(fFecha(r.fecha))}</td><td class="num">${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
       <td><span class="regla ${r.apto_pesada ? 'ok' : ''}">${r.apto_pesada ? 'D · A5 permitidas' : 'B, C, A1-A4 · sin D/A5'}</span></td>
       <td style="text-align:right"><button class="btn chico" data-id="${r.id}">Agendar</button></td></tr>`).join('')
       : `<tr><td colspan="5" class="muted">No hay bloques libres entre ${esc(filtDisp.desde)} y ${esc(filtDisp.hasta)}.
@@ -458,8 +473,8 @@ async function renderReagendar() {
   const cargarPend = async () => {
     const rows = await api('/agenda?estado=pendiente');
     $('#rp-body').innerHTML = rows.length ? rows.map((r) => `<tr>
-      <td>${esc(r.fecha)}</td><td>${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
-      <td>${esc(r.nombre)}</td><td>${esc(r.rut)}</td><td>${esc(r.pendiente_nota)}</td>
+      <td>${esc(fFecha(r.fecha))}</td><td>${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
+      <td>${esc(nom(r.nombre))}</td><td>${esc(r.rut)}</td><td>${esc(r.pendiente_nota)}</td>
       <td><button class="btn chico" data-id="${r.id}">Reagendar</button></td></tr>`).join('')
       : '<tr><td colspan="7" class="muted">Nada pendiente.</td></tr>';
     $('#rp-body').querySelectorAll('button[data-id]').forEach((el) => {
@@ -478,7 +493,7 @@ async function renderReagendar() {
       const rows = await api(`/buscar?q=${encodeURIComponent(q)}`);
       $('#r-res').innerHTML = rows.length
         ? rows.map((r) => `<button class="chip" data-id="${r.id}" style="cursor:pointer">
-            ${esc(r.nombre || r.rut)} — ${esc(r.fecha)} ${esc(r.hora)} (${esc(r.examinador)})</button>`).join('')
+            ${esc(nom(r.nombre) || r.rut)} — ${esc(fFecha(r.fecha))} ${esc(r.hora)} (${esc(r.examinador)})</button>`).join('')
         : '<span class="muted">Sin resultados</span>';
       $('#r-res').querySelectorAll('button[data-id]').forEach((el) => {
         el.onclick = () => detalleReagendar(Number(el.dataset.id));
@@ -494,8 +509,8 @@ async function detalleReagendar(id) {
   cont.innerHTML = `
     <div class="panel">
       <h3>Cita seleccionada</h3>
-      <p><b>${esc(cita.nombre || '(sin nombre)')}</b> · ${esc(cita.rut || 'sin RUT')} · Clase ${esc(cita.clase || '-')}
-        <br>Actual: ${esc(cita.fecha)} ${esc(cita.hora)} — ${esc(cita.examinador)}</p>
+      <p><b>${esc(nom(cita.nombre) || '(SIN NOMBRE)')}</b> · ${esc(cita.rut || 'sin RUT')} · Clase ${esc(cita.clase || '-')}
+        <br>Actual: ${esc(fFecha(cita.fecha))} ${esc(cita.hora)} — ${esc(cita.examinador)}</p>
       <div class="fila">
         <div class="campo"><label>Destino desde</label><input type="date" id="rd-desde" value="${sumarDias(hoy(), 1)}"></div>
         <div class="campo"><label>hasta</label><input type="date" id="rd-hasta" value="${sumarDias(hoy(), 30)}"></div>
@@ -514,7 +529,7 @@ async function detalleReagendar(id) {
     if (pesada) q.set('clase', cita.clase);
     const libres = await api(`/disponibles?${q}`);
     $('#rd-body').innerHTML = libres.length ? libres.map((l) => `<tr>
-      <td>${esc(l.fecha)}</td><td>${esc(l.hora)}</td><td>${esc(l.examinador)}</td>
+      <td>${esc(fFecha(l.fecha))}</td><td>${esc(l.hora)}</td><td>${esc(l.examinador)}</td>
       <td><button class="btn chico" data-id="${l.id}">Mover aqui</button></td></tr>`).join('')
       : '<tr><td colspan="4" class="muted">Sin bloques libres.</td></tr>';
     $('#rd-body').querySelectorAll('button[data-id]').forEach((el) => {
@@ -553,7 +568,7 @@ async function renderBuscar() {
         const k = r.rut || r.nombre;
         if (rutsVistos.has(k)) continue;
         rutsVistos.add(k);
-        chips.push(`<button class="chip" data-rut="${esc(r.rut || '')}" data-nom="${esc(r.nombre || '')}" style="cursor:pointer">${esc(r.nombre || r.rut)} · ${esc(r.rut || 's/RUT')}</button>`);
+        chips.push(`<button class="chip" data-rut="${esc(r.rut || '')}" data-nom="${esc(r.nombre || '')}" style="cursor:pointer">${esc(nom(r.nombre) || r.rut)} · ${esc(r.rut || 's/RUT')}</button>`);
       }
       $('#bx-res').innerHTML = chips.join('') || '<span class="muted">Sin resultados</span>';
       $('#bx-res').querySelectorAll('button').forEach((el) => {
@@ -564,11 +579,11 @@ async function renderBuscar() {
 }
 async function historial(rutv, nombre) {
   const rows = rutv ? await api(`/historial?rut=${encodeURIComponent(rutv)}`) : [];
-  $('#bx-hist').innerHTML = `<div class="panel"><h3>${esc(nombre || rutv)}</h3>
+  $('#bx-hist').innerHTML = `<div class="panel"><h3>${esc(nom(nombre) || rutv)}</h3>
     ${rutv ? '' : '<p class="muted">Sin RUT registrado; no se puede armar historial.</p>'}
     <div class="tabla-scroll"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Examinador</th><th>Clase</th><th>Tipo</th><th>Resultado</th><th></th></tr></thead>
     <tbody>${rows.map((r) => `<tr>
-      <td>${esc(r.fecha)}</td><td>${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
+      <td>${esc(fFecha(r.fecha))}</td><td>${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
       <td>${esc(r.clase)}</td><td>${esc(r.tipo_cita)}</td><td>${esc(r.resultado)}</td>
       <td><button class="btn chico" data-id="${r.id}">Abrir</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">Sin citas.</td></tr>'}
     </tbody></table></div></div>`;
@@ -608,8 +623,8 @@ async function renderErrores() {
     $('#e-body').innerHTML = rows.length ? rows.slice(0, 600).map((x) => `<tr>
       <td><span class="sev ${x.severidad}">${x.severidad}</span></td>
       <td>${esc(ETIQUETA[x.tipo] || x.tipo)}</td>
-      <td>${esc(x.fecha)}</td><td>${esc(x.hora)}</td><td>${esc(x.examinador)}</td>
-      <td>${esc(x.rut)}</td><td>${esc(x.nombre)}</td><td>${esc(x.mensaje)}</td>
+      <td>${esc(fFecha(x.fecha))}</td><td>${esc(x.hora)}</td><td>${esc(x.examinador)}</td>
+      <td>${esc(x.rut)}</td><td>${esc(nom(x.nombre))}</td><td>${esc(x.mensaje)}</td>
       <td>${x.agenda_id ? `<button class="btn chico" data-id="${x.agenda_id}">Abrir</button>` : ''}</td></tr>`).join('')
       : '<tr><td colspan="9" class="muted">Nada que mostrar.</td></tr>';
     $('#e-body').querySelectorAll('button[data-id]').forEach((el) => {
@@ -634,15 +649,15 @@ async function renderDia() {
   $('#dd-print').onclick = () => window.print();
   const data = await api(`/dia?fecha=${fecha}`);
   const exs = Object.keys(data.examinadores);
-  if (!exs.length) { $('#dd-cont').innerHTML = `<div class="panel">Sin bloques para ${esc(fecha)}.</div>`; return; }
+  if (!exs.length) { $('#dd-cont').innerHTML = `<div class="panel">Sin bloques para ${esc(fFecha(fecha))}.</div>`; return; }
   $('#dd-cont').innerHTML = exs.map((ex) => `
     <div class="panel col-print">
-      <h3>${esc(ex)} — ${esc(fecha)}</h3>
+      <h3>${esc(ex)} — ${esc(fFecha(fecha))}</h3>
       <table><thead><tr><th>Hora</th><th>RUT</th><th>Nombre</th><th>Clase</th><th>Tel.</th><th>Tipo</th></tr></thead>
       <tbody>${data.examinadores[ex].map((r) => (r.bloqueado
         ? `<tr class="muted"><td>${esc(r.hora)}</td><td colspan="5">&#128274; ${esc(r.bloqueo_motivo || 'BLOQUEADO')}</td></tr>`
         : `<tr>
-        <td>${esc(r.hora)}</td><td>${esc(r.rut)}</td><td>${esc(r.nombre)}</td>
+        <td>${esc(r.hora)}</td><td>${esc(r.rut)}</td><td>${esc(nom(r.nombre))}</td>
         <td>${esc(r.clase)}</td><td>${esc(r.contacto)}</td><td>${esc(r.tipo_cita)}</td></tr>`)).join('')}</tbody></table>
     </div>`).join('');
 }
@@ -787,7 +802,7 @@ async function renderDatos() {
     try {
       const r = await api('/import', { method: 'POST', body: fd });
       $('#im-res').innerHTML = `<div class="aviso">Listo. Leidas ${r.resumen.leidas}, citas ${r.resumen.ocupadas},
-        bloques nuevos ${r.resumen.bloques_generados}, rango ${r.resumen.rango.join(' a ')}.</div>`;
+        bloques nuevos ${r.resumen.bloques_generados}, rango ${r.resumen.rango.map(fFecha).join(' a ')}.</div>`;
       META = await api('/meta');
       toast('Importacion completada');
     } catch (e) { $('#im-res').innerHTML = `<div class="aviso">${esc(e.message)}</div>`; }
@@ -805,7 +820,7 @@ async function renderDatos() {
 
   // feriados
   const fe = $('#fe-cont');
-  fe.innerHTML = (META.feriados || []).map((f) => `<span class="chip">${esc(f.fecha)}${f.nombre ? ' · ' + esc(f.nombre) : ''}<button data-f="${esc(f.fecha)}">&times;</button></span>`).join('') || '<span class="muted">Sin feriados</span>';
+  fe.innerHTML = (META.feriados || []).map((f) => `<span class="chip">${esc(fFecha(f.fecha))}${f.nombre ? ' · ' + esc(f.nombre) : ''}<button data-f="${esc(f.fecha)}">&times;</button></span>`).join('') || '<span class="muted">Sin feriados</span>';
   fe.querySelectorAll('button[data-f]').forEach((b) => {
     b.onclick = async () => { await api(`/feriados?fecha=${b.dataset.f}`, { method: 'DELETE' }); META = await api('/meta'); renderDatos(); };
   });
@@ -818,8 +833,8 @@ async function renderDatos() {
   // papelera
   const pap = await api('/papelera');
   $('#pap-body').innerHTML = pap.length ? pap.map((p) => `<tr>
-    <td>${esc(p.ts)}</td><td>${esc(p.motivo)}</td><td>${esc(p.fecha)} ${esc(p.hora)}</td>
-    <td>${esc(p.nombre || p.bloqueo_motivo)}</td><td>${esc(p.rut)}</td><td>${esc(p.actor)}</td>
+    <td class="num">${esc(fFechaHora(p.ts))}</td><td>${esc(p.motivo)}</td><td class="num">${esc(fFecha(p.fecha))} ${esc(p.hora)}</td>
+    <td>${esc(nom(p.nombre) || p.bloqueo_motivo)}</td><td>${esc(p.rut)}</td><td>${esc(p.actor)}</td>
     <td><button class="btn chico" data-id="${p.id}">Restaurar</button></td></tr>`).join('')
     : '<tr><td colspan="7" class="muted">Vacia.</td></tr>';
   $('#pap-body').querySelectorAll('button[data-id]').forEach((el) => {
@@ -883,7 +898,7 @@ async function renderDatos() {
   };
 
   const mov = await api('/movimientos');
-  $('#mov-body').innerHTML = mov.map((m) => `<tr><td>${esc(m.ts)}</td><td>${esc(m.accion)}</td><td>${esc(m.actor)}</td><td>${esc(m.detalle)}</td></tr>`).join('');
+  $('#mov-body').innerHTML = mov.map((m) => `<tr><td class="num">${esc(fFechaHora(m.ts))}</td><td>${esc(m.accion)}</td><td>${esc(m.actor)}</td><td>${esc(m.detalle)}</td></tr>`).join('');
 }
 
 /* ================= arranque ================= */
@@ -891,7 +906,7 @@ async function init() {
   try {
     META = await api('/meta');
     const r = META.rango_agenda || {};
-    $('#estado').innerHTML = `${r.desde ? `Agenda ${r.desde} a ${r.hasta} · ` : ''}hoy ${META.hoy}
+    $('#estado').innerHTML = `${r.desde ? `Agenda ${fFecha(r.desde)} – ${fFecha(r.hasta)} · ` : ''}hoy ${fFecha(META.hoy)}
       ${META.usuario ? `· <b>${esc(META.usuario)}</b> <button id="salir" class="btn chico sec" style="padding:.1rem .4rem">salir</button>` : ''}`;
     const salir = $('#salir');
     if (salir) salir.onclick = async () => { await api('/logout', { method: 'POST' }); pantallaLogin(); };

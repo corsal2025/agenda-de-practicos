@@ -176,7 +176,7 @@ app.put('/api/agenda/:id', wrap((req, res) => {
   let funcionario_id = body.funcionario_id ? Number(body.funcionario_id) : null;
   if (!funcionario_id && body.funcionario_nombre) funcionario_id = upsertFuncionario(String(body.funcionario_nombre).trim().toUpperCase());
 
-  const nombre = body.nombre ? String(body.nombre).trim().replace(/\s+/g, ' ') : null;
+  const nombre = body.nombre ? String(body.nombre).trim().replace(/\s+/g, ' ').toUpperCase() : null;
   const estabaOcupada = Boolean(bloque.rut || bloque.nombre);
   const quedaOcupada = Boolean(rutFmt || nombre);
 
