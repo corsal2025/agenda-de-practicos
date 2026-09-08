@@ -16,3 +16,10 @@ uploads/
 # Lienzo de diseño ya ensamblado (~2 MB, se regenera desde diseno/*.dc.html)
 diseno/rediseno-agenda-practicos.html
 
+
+# Logo del organismo (lo agrega quien instala; ver INSTALACION.md)
+public/logo.png
+public/logo.svg
+public/logo.jpg
+public/logo.jpeg
+public/logo.webp

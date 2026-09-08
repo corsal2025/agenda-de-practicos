@@ -59,7 +59,21 @@ npm start
 Copiar `AGENDA PRÁCTICOS.xlsx` a `data\origen.xlsx` y correr `npm run migrar`
 (o importar desde la pestaña **Datos**). Esto solo se hace una vez.
 
-### 5. PIN de acceso
+### 5. Logo del organismo (opcional)
+
+Copiar el archivo del logo a `public\` con el nombre **`logo`**:
+`public\logo.svg` (preferido) o `public\logo.png` / `.jpg` / `.webp`.
+Aparece automáticamente en la cabecera, el ingreso y el membrete del informe.
+Si no hay archivo, se muestra un escudo genérico.
+
+El nombre del organismo y la unidad se ajustan en `iniciar.bat`:
+
+```bat
+set AGENDA_ORGANISMO=Municipalidad de Valparaíso
+set AGENDA_UNIDAD=Departamento de Licencias de Conducir
+```
+
+### 6. PIN de acceso
 
 Por defecto el PIN es `1234`. Para cambiarlo, editar `iniciar.bat` y agregar
 antes de `node server\index.js`:
@@ -71,7 +85,7 @@ set AGENDA_PIN=elpin-que-quieras
 Cada acción queda registrada con el nombre que la persona escribe al entrar
 (pestaña **Datos → Últimos movimientos**).
 
-### 6. Que arranque solo con Windows (recomendado para el servidor)
+### 7. Que arranque solo con Windows (recomendado para el servidor)
 
 **Opción simple** — carpeta de Inicio:
 1. `Win + R` → `shell:startup` → Enter
