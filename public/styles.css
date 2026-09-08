@@ -96,6 +96,7 @@ header.top {
 }
 .marca { display: flex; align-items: center; gap: 13px; }
 .escudo { width: 40px; height: 40px; flex: none; }
+.marca img.es-img { width: auto; height: 42px; max-width: 220px; flex: none; }
 .marca-txt { display: flex; flex-direction: column; gap: 1px; }
 .marca-org { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--tinta-2); }
 .marca-titulo { font-family: var(--serif); font-size: 20px; font-weight: 700; color: var(--azul-900); line-height: 1.1; }
@@ -367,7 +368,9 @@ tbody tr:first-child td { border-top: 0; }
 }
 .login-marca::after { right: -120px; bottom: -150px; width: 420px; height: 420px; }
 .login-marca::before { right: -50px; bottom: -80px; width: 280px; height: 280px; }
+.login-marca .lm-cab { display: flex; align-items: center; gap: 12px; }
 .login-marca .lm-org { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: rgba(255, 255, 255, .7); }
+.login-marca .lm-logo { height: 58px; width: auto; max-width: 260px; background: #fff; padding: 8px 12px; border-radius: 8px; }
 .login-marca h1 { font-family: var(--serif); font-size: 2rem; font-weight: 700; color: #fff; margin: 0; line-height: 1.15; max-width: 12ch; }
 .login-marca p { font-size: 14.5px; line-height: 1.6; color: rgba(255, 255, 255, .78); max-width: 40ch; margin: 0; }
 .login-marca .lm-lista { display: flex; flex-direction: column; gap: .8rem; font-size: 13.5px; color: rgba(255, 255, 255, .85); }
@@ -405,6 +408,7 @@ tbody tr:first-child td { border-top: 0; }
 }
 .hd-cab { display: flex; align-items: center; gap: 12px; padding-bottom: 10px; border-bottom: 2px solid var(--azul); }
 .hd-cab svg { flex: none; }
+.hd-cab .hd-logo { flex: none; height: 42px; width: auto; max-width: 200px; }
 .hd-org { display: flex; flex-direction: column; line-height: 1.25; }
 .hd-org span { font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: #55606f; }
 .hd-org b { font-family: var(--serif); font-size: 16px; color: var(--azul-900); }

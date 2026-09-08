@@ -87,6 +87,17 @@ function modal(titulo, cuerpoHtml, pieHtml) {
 }
 const cerrarModal = () => { $('#modal-root').innerHTML = ''; };
 
+/* ================= marca / logo ================= */
+const ESCUDO_FALLBACK = `<svg class="escudo" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <path d="M20 2l15 5v11c0 9.5-6.2 16.8-15 20-8.8-3.2-15-10.5-15-20V7l15-5z" fill="#1b3a75"></path>
+  <path d="M13 21l4.5 4.5L27 15" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+let MARCA = { logo: null, organismo: 'Municipalidad de Valparaíso', unidad: 'Departamento de Licencias de Conducir' };
+function logoHtml(cls) {
+  return MARCA.logo
+    ? `<img src="${MARCA.logo}" alt="${esc(MARCA.organismo)}" class="${cls} es-img">`
+    : ESCUDO_FALLBACK.replace('class="escudo"', `class="${cls}"`);
+}
+
 /* ================= login ================= */
 const ICO = {
   cal: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="14" height="13" rx="1.5"/><path d="M3 8h14M7 2v4M13 2v4"/></svg>',
@@ -94,16 +105,21 @@ const ICO = {
   reloj: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3v7l4 2M17 10A7 7 0 113 10a7 7 0 0114 0z"/></svg>',
 };
 async function pantallaLogin() {
+  try {
+    const s = await (await fetch('/api/sesion')).json();
+    MARCA = { logo: s.logo, organismo: s.organismo || MARCA.organismo, unidad: s.unidad || MARCA.unidad };
+  } catch (_) { /* usa los valores por defecto */ }
   const root = $('#modal-root');
   root.innerHTML = '';
   const ov = h(`<div class="login-split">
     <div class="login-marca">
-      <div style="display:flex;align-items:center;gap:12px">
-        <svg width="42" height="42" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M20 2l15 5v11c0 9.5-6.2 16.8-15 20-8.8-3.2-15-10.5-15-20V7l15-5z" fill="#fff" opacity=".14"></path>
-          <path d="M13 21l4.5 4.5L27 15" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path>
-        </svg>
-        <span class="lm-org">Departamento de Licencias de Conducir</span>
+      <div class="lm-cab">
+        ${MARCA.logo
+          ? `<img src="${MARCA.logo}" alt="${esc(MARCA.organismo)}" class="lm-logo">`
+          : `<svg width="42" height="42" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+               <path d="M20 2l15 5v11c0 9.5-6.2 16.8-15 20-8.8-3.2-15-10.5-15-20V7l15-5z" fill="#fff" opacity=".14"></path>
+               <path d="M13 21l4.5 4.5L27 15" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+             <span class="lm-org">${esc(MARCA.organismo)} · ${esc(MARCA.unidad)}</span>`}
       </div>
       <h1>Agenda de Prácticos</h1>
       <p>Gestión de la agenda de exámenes prácticos: reserva de citas, reagendamiento, control de asistencia y reportes.</p>
@@ -778,9 +794,9 @@ async function renderDia() {
 
     return `<article class="hoja-dia">
       <header class="hd-cab">
-        ${ESCUDO_SVG}
+        ${MARCA.logo ? `<img src="${MARCA.logo}" alt="${esc(MARCA.organismo)}" class="hd-logo">` : ESCUDO_SVG}
         <div class="hd-org">
-          <span>Departamento de Licencias de Conducir</span>
+          <span>${esc(MARCA.organismo)} · ${esc(MARCA.unidad)}</span>
           <b>Agenda de Prácticos</b>
         </div>
         <div class="hd-folio">Hoja ${i + 1} de ${exs.length}</div>
@@ -1134,6 +1150,12 @@ async function renderDatos() {
 async function init() {
   try {
     META = await api('/meta');
+    MARCA = { logo: META.logo, organismo: META.organismo || MARCA.organismo, unidad: META.unidad || MARCA.unidad };
+    $('#marca').innerHTML = MARCA.logo
+      ? `${logoHtml('escudo')}<span class="marca-txt"><span class="marca-titulo">Agenda de Prácticos</span></span>`
+      : `${ESCUDO_FALLBACK}<span class="marca-txt">
+          <span class="marca-org">${esc(MARCA.organismo)} · ${esc(MARCA.unidad)}</span>
+          <span class="marca-titulo">Agenda de Prácticos</span></span>`;
     const r = META.rango_agenda || {};
     $('#estado').innerHTML = `${r.desde ? `Agenda ${fFecha(r.desde)} – ${fFecha(r.hasta)} · ` : ''}hoy ${fFecha(META.hoy)}
       ${META.usuario ? `· <b>${esc(META.usuario)}</b> <button id="salir" class="btn chico sec" style="padding:.1rem .4rem">salir</button>` : ''}`;

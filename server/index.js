@@ -35,7 +35,15 @@ const subir = multer({ dest: path.join(os.tmpdir(), 'agenda-uploads'), limits: {
 
 // ---------- login (antes del guard) ----------
 app.post('/api/login', (req, res) => auth.login(req, res));
-app.get('/api/sesion', (req, res) => auth.sesion(req, res));
+app.get('/api/sesion', (req, res) => {
+  res.json({
+    funcionario: (req.session && req.session.funcionario) || null,
+    sin_login: auth.SIN_LOGIN,
+    logo: logoDisponible(),
+    organismo: process.env.AGENDA_ORGANISMO || 'Municipalidad de Valparaíso',
+    unidad: process.env.AGENDA_UNIDAD || 'Departamento de Licencias de Conducir',
+  });
+});
 app.post('/api/logout', (req, res) => auth.logout(req, res));
 
 app.use(auth.guard);
@@ -77,8 +85,19 @@ app.get('/api/meta', wrap((req, res) => {
     },
     feriados: feriados.listar(),
     rango_agenda: db.prepare('SELECT MIN(fecha) desde, MAX(fecha) hasta FROM agenda').get(),
+    logo: logoDisponible(),
+    organismo: process.env.AGENDA_ORGANISMO || 'Municipalidad de Valparaíso',
+    unidad: process.env.AGENDA_UNIDAD || 'Departamento de Licencias de Conducir',
   });
 }));
+
+// Busca un archivo de logo puesto por el usuario en public/ (logo.svg, .png, .jpg, .webp).
+function logoDisponible() {
+  for (const nombre of ['logo.svg', 'logo.png', 'logo.jpg', 'logo.jpeg', 'logo.webp']) {
+    if (fs.existsSync(path.join(RAIZ, 'public', nombre))) return '/' + nombre;
+  }
+  return null;
+}
 
 // ---------- AGENDA ----------
 const SELECT_BLOQUE = `
