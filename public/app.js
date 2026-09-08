@@ -389,10 +389,21 @@ function slotCard(b) {
   else if (b.resultado === 'REPROBADO') badges.push('<span class="badge reprob">Reprobó</span>');
   else if (b.resultado) badges.push('<span class="badge noasiste">' + esc(b.resultado) + '</span>');
   return `<button class="${cls}" data-id="${b.id}">
-    <span class="nombre">${esc(b.nombre || '(sin nombre)')}</span>
-    <span class="sub">${esc(b.rut || 'sin RUT')} &middot; ${esc(b.clase || 's/clase')}</span>
+    <span class="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
+    <span class="sub">
+      <span class="clase-tag ${claseFamilia(b.clase)}">${esc(b.clase || '—')}</span>
+      <span class="cita-rut num">${esc(b.rut || 'sin RUT')}</span>
+    </span>
     ${badges.length ? `<span class="badges">${badges.join('')}</span>` : ''}
   </button>`;
+}
+// Familia de la clase de licencia (para el color del recuadro).
+function claseFamilia(c) {
+  const x = String(c || '').toUpperCase();
+  if (x === 'D' || x === 'A5') return 'pesada';
+  if (x === 'E') return 'prof';
+  if (x.startsWith('A')) return 'moto';
+  return 'liviana';
 }
 
 function pintarGrilla(cont, filas, fecha) {
@@ -716,7 +727,7 @@ async function renderDia() {
         <td class="num">${esc(r.hora)}</td>
         <td class="num">${esc(r.rut || '')}</td>
         <td class="hd-nom">${esc(nom(r.nombre))}</td>
-        <td class="hd-c">${esc(r.clase || '')}</td>
+        <td class="hd-c">${r.clase ? `<span class="clase-tag ${claseFamilia(r.clase)}">${esc(r.clase)}</span>` : ''}</td>
         <td class="num">${esc(r.contacto || '')}</td>
         <td>${r.tipo_cita === 'REAGENDADO' ? 'Reagendado' : r.tipo_cita === 'TRASLADO EN TERRENO' ? 'Terreno' : ''}${r.pendiente_reagendar ? '<span class="hd-marca">Pend. reag.</span>' : ''}</td>
         <td class="hd-res">${res}</td>

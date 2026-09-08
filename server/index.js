@@ -24,8 +24,12 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: '4mb' }));
 app.use(auth.middleware);
 app.use(express.static(path.join(RAIZ, 'public'), {
-  etag: true,
-  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+  etag: false, lastModified: false,
+  setHeaders: (res, ruta) => {
+    // App local: nunca cachear HTML/CSS/JS (asi los cambios se ven al recargar sin trucos).
+    if (/\.(html|css|js)$/i.test(ruta)) res.setHeader('Cache-Control', 'no-store, must-revalidate');
+    else res.setHeader('Cache-Control', 'public, max-age=86400');
+  },
 }));
 const subir = multer({ dest: path.join(os.tmpdir(), 'agenda-uploads'), limits: { fileSize: 25 * 1024 * 1024 } });
 
