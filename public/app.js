@@ -381,12 +381,11 @@ function slotCard(b) {
   if (!ocupada) {
     return `<button class="${cls}" data-id="${b.id}">
       <span class="mas">+</span><span>Agendar</span>
-      ${b.hora === META.hora_d_a5 ? '<span class="badges"><span class="badge dpesada">Clases D · A5</span></span>' : ''}
+      ${b.hora === META.hora_d_a5 ? '<span class="badges"><span class="badge dpesada">Bloque para D y A5</span></span>' : ''}
     </button>`;
   }
 
   const badges = [];
-  if (b.hora === META.hora_d_a5) badges.push('<span class="badge dpesada">Clases D · A5</span>');
   if (b.tipo_cita === 'REAGENDADO') badges.push('<span class="badge reag">Reagendada</span>');
   if (b.pendiente_reagendar) badges.push('<span class="badge reag">Pendiente de reagendar</span>');
   if (b.confirmo_asistencia === 1) badges.push('<span class="badge aprob">Confirmó asistencia</span>');

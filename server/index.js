@@ -487,9 +487,21 @@ app.use((err, req, res, next) => {
   res.status(err.status || 400).json(cuerpo);
 });
 
+function ipsLan() {
+  const out = [];
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const nic of list || []) {
+      if (nic.family === 'IPv4' && !nic.internal) out.push(nic.address);
+    }
+  }
+  return out;
+}
+
 app.listen(PUERTO, () => {
-  console.log(`\n  Agenda de Practicos  ->  http://localhost:${PUERTO}`);
-  console.log(auth.SIN_LOGIN ? '  (modo sin login)\n' : '  (login con PIN)\n');
+  console.log(`\n  Agenda de Practicos`);
+  console.log(`  Este PC:        http://localhost:${PUERTO}`);
+  for (const ip of ipsLan()) console.log(`  Otros PC (LAN): http://${ip}:${PUERTO}`);
+  console.log(auth.SIN_LOGIN ? '  Modo sin login\n' : '  Login con PIN\n');
   const n = db.prepare('SELECT COUNT(*) n FROM agenda').get().n;
   if (!n) console.log('  Base vacia. Importa el Excel desde "Datos" o corre: npm run migrar\n');
   backupMod.programar();

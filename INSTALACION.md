@@ -1,69 +1,83 @@
-# Instalación en el PC de la agenda
+# Instalación y trabajo desde varios PC
 
-## 1. Requisitos
+## Cómo funciona (importante)
 
-- **Node.js 22.5 o superior** — descargar de <https://nodejs.org> (opción LTS sirve si es 22.5+; si no, la "Current").
-  Verificar en una terminal: `node --version`
+La aplicación es **un servidor + una base de datos en un solo archivo**
+(`data\agenda.db`). Ese archivo vive en **un único PC**: el "servidor".
 
-## 2. Copiar la carpeta
+- **Se instala en un solo PC** (el servidor).
+- Los demás PC **no instalan nada**: entran con el navegador a la dirección
+  del servidor. Todos ven y editan los mismos datos en tiempo real.
+- La información **siempre está en el PC servidor**, en `data\agenda.db`.
+  Los backups también.
 
-Copiar toda la carpeta `agenda de practicos` al PC (por ejemplo a `C:\agenda-practicos`).
+```
+                 ┌─────────────────────────────┐
+   PC 1 (navegador) ─┐                          │
+   PC 2 (navegador) ─┼──►  PC SERVIDOR  ──►  data\agenda.db
+   PC 3 (navegador) ─┘   (corre npm start)      │
+                 └─────────────────────────────┘
+```
 
-## 3. Primera vez
+> No pongas `data\agenda.db` en una carpeta de red compartida. SQLite sobre
+> red se corrompe. La base va SIEMPRE en un disco local del servidor.
 
-Doble clic en **`iniciar.bat`**. La primera vez instala dependencias solo
-(tarda 1–2 minutos) y luego abre el navegador en <http://localhost:4900>.
+### ¿Qué PC elegir como servidor?
 
-Si preferís la terminal:
+El que esté **más tiempo encendido** y en la **misma red** que los demás.
+Puede ser un PC de escritorio fijo o un mini-PC dedicado. Si ese PC se apaga,
+nadie puede trabajar hasta que vuelva a encenderse.
+
+---
+
+## Parte A — Instalar en el PC servidor (una sola vez)
+
+### 1. Node.js
+
+Descargar de <https://nodejs.org> (versión **22.5 o superior**).
+Verificar en una terminal: `node --version`
+
+### 2. Copiar la carpeta
+
+Copiar `agenda de practicos` al PC, por ejemplo a `C:\agenda-practicos`.
+
+### 3. Primera ejecución
+
+Doble clic en **`iniciar.bat`**. La primera vez instala dependencias
+(1–2 min) y luego abre el navegador.
+
+O por terminal:
 
 ```bat
 npm install
-npm run migrar        REM carga los datos del Excel (data\origen.xlsx)
+npm run migrar
 npm start
 ```
 
-## 4. Cargar los datos del Excel
+### 4. Cargar los datos
 
 Copiar `AGENDA PRÁCTICOS.xlsx` a `data\origen.xlsx` y correr `npm run migrar`
-(o importar desde la pestaña **Datos** de la aplicación).
+(o importar desde la pestaña **Datos**). Esto solo se hace una vez.
 
-## 5. Uso diario
+### 5. PIN de acceso
 
-Doble clic en `iniciar.bat`. Para cerrar: cerrar la ventana negra (terminal).
-
-## 6. Login
-
-Por defecto la aplicación pide un **PIN** compartido: `1234`.
-
-Para cambiarlo, crear un archivo `.env` **no** — Node no lo lee solo. En su lugar,
-editar `iniciar.bat` y agregar la línea antes de `node server\index.js`:
+Por defecto el PIN es `1234`. Para cambiarlo, editar `iniciar.bat` y agregar
+antes de `node server\index.js`:
 
 ```bat
 set AGENDA_PIN=elpin-que-quieras
 ```
 
-Para **desactivar el login** (PC de un solo uso, sin datos sensibles a la vista):
-
-```bat
-set AGENDA_SIN_LOGIN=1
-```
-
 Cada acción queda registrada con el nombre que la persona escribe al entrar
-(pestaña Datos → "Últimos movimientos").
+(pestaña **Datos → Últimos movimientos**).
 
-## 7. Arranque automático con Windows (opcional)
+### 6. Que arranque solo con Windows (recomendado para el servidor)
 
-### Opción simple: carpeta de Inicio
+**Opción simple** — carpeta de Inicio:
+1. `Win + R` → `shell:startup` → Enter
+2. Crear ahí un acceso directo a `iniciar.bat`
 
-1. `Win + R` → `shell:startup` → Enter.
-2. Crear un acceso directo a `iniciar.bat` dentro de esa carpeta.
-
-Así el servidor arranca al iniciar sesión en Windows.
-
-### Opción robusta: servicio con NSSM
-
-1. Descargar NSSM de <https://nssm.cc>.
-2. En una terminal como administrador:
+**Opción robusta** — servicio con NSSM (<https://nssm.cc>), en terminal como administrador:
 
 ```bat
 nssm install AgendaPracticos "C:\Program Files\nodejs\node.exe" "C:\agenda-practicos\server\index.js"
@@ -72,27 +86,74 @@ nssm set AgendaPracticos AppEnvironmentExtra AGENDA_PIN=elpin
 nssm start AgendaPracticos
 ```
 
-El servicio queda corriendo aunque nadie inicie sesión. El navegador se abre a
-mano en <http://localhost:4900>.
+Con NSSM el servidor corre aunque nadie inicie sesión en el PC.
 
-## 8. Acceso desde otros PC de la misma red (opcional)
+---
 
-El servidor ya escucha en todas las interfaces de red. Para que otros PC entren:
+## Parte B — Habilitar el acceso desde los otros PC
 
-1. Abrir el puerto **4900** en el Firewall de Windows (entrada, TCP).
-2. Los demás entran a `http://IP-DEL-PC:4900` (ver la IP con `ipconfig`).
+### 1. Averiguar la dirección del servidor
 
-**Dejar el login activo (con PIN) en este caso.**
+Al arrancar, la terminal muestra algo como:
 
-## 9. Backups
+```
+  Este PC:        http://localhost:4900
+  Otros PC (LAN): http://192.168.1.45:4900
+```
 
-- Automático: uno al arrancar (si el último tiene +20 h) y luego cada 24 h,
-  en `data\backups\`. Se conservan los últimos 30.
-- Manual: pestaña Datos → "Crear backup", o `npm run backup`.
-- Restaurar: cerrar el servidor, copiar el `.db` deseado sobre `data\agenda.db`.
+Esa segunda dirección (`http://192.168.1.45:4900`) es la que usan los demás PC.
+Si no aparece, correr `ipconfig` y usar la "Dirección IPv4".
 
-## 10. Tests
+> Conviene que el servidor tenga **IP fija** (reserva de DHCP en el router, o
+> IP estática). Si la IP cambia, hay que avisar la nueva a los demás PC.
+
+### 2. Abrir el puerto en el Firewall de Windows (en el PC servidor)
+
+1. "Firewall de Windows Defender con seguridad avanzada"
+2. Reglas de entrada → Nueva regla → Puerto → TCP → puerto específico **4900**
+3. Permitir la conexión → aplicar a Dominio y Privada → nombre "Agenda de Prácticos"
+
+O en terminal como administrador:
 
 ```bat
-npm test
+netsh advfirewall firewall add rule name="Agenda de Practicos" dir=in action=allow protocol=TCP localport=4900
 ```
+
+### 3. En cada PC cliente
+
+Solo abrir el navegador en `http://IP-DEL-SERVIDOR:4900` y crear un acceso
+directo / marcador. **Nada que instalar.** Dejar el **login con PIN activo**.
+
+---
+
+## Backups (siempre en el PC servidor)
+
+- **Automático**: uno al arrancar (si el último tiene +20 h) y luego cada 24 h,
+  en `data\backups\`. Se conservan los últimos 30.
+- **Manual**: pestaña Datos → "Crear backup", o `npm run backup`.
+- **Restaurar**: detener el servidor, copiar el `.db` deseado sobre
+  `data\agenda.db`, volver a arrancar.
+- **Recomendado**: además copiar la carpeta `data\` completa a otro disco o a
+  la nube una vez por semana (Tarea Programada de Windows con
+  `xcopy /Y "C:\agenda-practicos\data" "D:\respaldos\agenda" /E /I`).
+
+---
+
+## Si más adelante se necesita acceso desde fuera de la oficina
+
+Este modelo funciona solo dentro de la red local. Para acceso remoto (otra
+sede, teletrabajo) las opciones son: VPN de la institución, o publicar la
+aplicación en un servidor propio. Es un paso aparte; avisar cuando haga falta.
+
+---
+
+## Notas técnicas
+
+- `node:sqlite` es experimental en Node: al arrancar aparece un
+  `ExperimentalWarning`, es inofensivo.
+- Puerto: `set PORT=8080` en `iniciar.bat` para cambiarlo.
+- Ruta de la base: `set AGENDA_DB=D:\ruta\agenda.db` para moverla.
+- Concurrencia: la app avisa si dos personas editan el mismo bloque a la vez
+  (una recibe "otra persona modificó este bloque"). Aguanta bien 3–5 usuarios
+  simultáneos.
+- Tests: `npm test`
