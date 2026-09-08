@@ -1,6 +1,7 @@
 'use strict';
 const { CATALOGOS } = require('./config');
 const rut = require('./rut');
+const telefono = require('./telefono');
 
 const s = (v) => (v == null ? '' : String(v)).trim();
 const up = (v) => s(v).toUpperCase().replace(/\s+/g, ' ');
@@ -104,8 +105,7 @@ function correo(v) {
 }
 
 function contacto(v) {
-  if (v == null || v === '') return null;
-  return s(v).replace(/\.0$/, '');
+  return telefono.normalizar(v).valor;
 }
 
 function nombre(v) {

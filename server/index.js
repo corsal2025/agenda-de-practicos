@@ -18,6 +18,7 @@ const feriados = require('./feriados');
 const papelera = require('./papelera');
 const auth = require('./auth');
 const rut = require('./rut');
+const telefono = require('./telefono');
 
 const app = express();
 app.disable('x-powered-by');
@@ -196,6 +197,11 @@ app.put('/api/agenda/:id', wrap((req, res) => {
 
   const { avisos, rutFmt, clase } = validarBloque(body, bloque);
 
+  const tel = telefono.normalizar(body.contacto);
+  if (!tel.vacio && !tel.valido) {
+    throw bad('Teléfono incompleto. Un número chileno tiene 9 dígitos (celular: 9 XXXX XXXX). Se guarda como +56.');
+  }
+
   let funcionario_id = body.funcionario_id ? Number(body.funcionario_id) : null;
   if (!funcionario_id && body.funcionario_nombre) funcionario_id = upsertFuncionario(String(body.funcionario_nombre).trim().toUpperCase());
 
@@ -232,7 +238,7 @@ app.put('/api/agenda/:id', wrap((req, res) => {
     rut: rutFmt,
     nombre,
     clase,
-    contacto: body.contacto ? String(body.contacto).trim() : null,
+    contacto: tel.valor,
     correo: body.correo ? String(body.correo).trim().toLowerCase() : null,
     tipo_cita: body.tipo_cita || null,
     motivo_reagendamiento: body.motivo_reagendamiento ? String(body.motivo_reagendamiento).trim() : null,

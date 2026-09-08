@@ -53,6 +53,14 @@ function fFechaHora(v) {
 }
 // Nombres siempre en mayuscula al mostrar.
 const nom = (v) => String(v ?? '').toUpperCase();
+// Telefono chileno para mostrar: +56 9 1234 5678
+function fTel(v) {
+  let d = String(v ?? '').replace(/\D/g, '');
+  if (d.startsWith('56') && d.length > 9) d = d.slice(2);
+  if (!d) return '';
+  if (d.length === 9) return `+56 ${d[0]} ${d.slice(1, 5)} ${d.slice(5)}`;
+  return '+56 ' + d;
+}
 const DIAS_SEM = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 function fFechaLarga(iso) {
@@ -188,7 +196,7 @@ function editorSlot(b, alGuardar) {
     <div class="campo"><label>RUT</label><input id="f-rut" value="${esc(b.rut)}" placeholder="12.345.678-9"></div>
     <div class="campo"><label>Nombre</label><input id="f-nombre" value="${esc(nom(b.nombre))}" style="text-transform:uppercase"></div>
     <div class="campo"><label>Clase</label><select id="f-clase">${opt(c.clase, b.clase)}</select></div>
-    <div class="campo"><label>Telefono</label><input id="f-contacto" value="${esc(b.contacto)}"></div>
+    <div class="campo"><label>Teléfono</label><input id="f-contacto" value="${esc(fTel(b.contacto))}" placeholder="9 1234 5678" inputmode="tel"></div>
     <div class="campo"><label>Correo</label><input id="f-correo" value="${esc(b.correo)}"></div>
     <div class="campo"><label>Tipo de cita</label><select id="f-tipo">${opt(c.tipo_cita, b.tipo_cita)}</select></div>
     <div class="campo ancho"><label>Motivo reagendamiento</label><input id="f-motivo" value="${esc(b.motivo_reagendamiento)}"></div>
@@ -330,7 +338,7 @@ async function dialogoPorConfirmar() {
     <div class="ancho tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Nombre</th><th>Teléfono</th><th>Correo</th><th class="c"></th></tr></thead>
     <tbody id="pc-body">${rows.length ? rows.map((r) => `<tr data-id="${r.id}">
       <td class="c">${esc(fFecha(r.fecha))}</td><td class="c">${esc(r.hora)}</td><td>${esc(nom(r.nombre))}</td>
-      <td>${esc(r.contacto)}</td><td>${esc(r.correo)}</td>
+      <td class="c num">${esc(fTel(r.contacto))}</td><td>${esc(r.correo)}</td>
       <td><button class="btn chico" data-si="${r.id}">Confirmo</button>
           <button class="btn chico sec" data-no="${r.id}">No</button></td></tr>`).join('')
       : '<tr><td colspan="6" class="muted">Nada por confirmar.</td></tr>'}</tbody></table></div>
@@ -672,7 +680,7 @@ async function historial(rutv, nombre) {
 const ETIQUETA = {
   INCOMPLETA: 'Cita incompleta', RUT_INVALIDO: 'RUT invalido', CLASE_BLOQUE: 'Clase en bloque incorrecto',
   DUPLICADO_FUTURO: 'Duplicado futuro', DUPLICADO_DIA: 'Duplicado el mismo dia', CONFLICTO_TERRENO: 'Conflicto terreno',
-  SIN_RESULTADO: 'Sin resultado', SIN_CONTACTO: 'Sin contacto', DIA_INHABIL: 'Cita en dia inhabil',
+  SIN_RESULTADO: 'Sin resultado', SIN_CONTACTO: 'Sin contacto', TELEFONO_INCOMPLETO: 'Teléfono incompleto', DIA_INHABIL: 'Cita en dia inhabil',
   PENDIENTE_REAGENDAR: 'Pendiente de reagendar',
 };
 let filtErr = { tipo: '' };
@@ -785,7 +793,7 @@ async function renderDia() {
         <td class="num">${esc(r.rut || '')}</td>
         <td class="hd-nom">${esc(nom(r.nombre))}</td>
         <td class="hd-c">${r.clase ? `<span class="clase-tag ${claseFamilia(r.clase)}">${esc(r.clase)}</span>` : ''}</td>
-        <td class="num">${esc(r.contacto || '')}</td>
+        <td class="num">${esc(fTel(r.contacto))}</td>
         <td>${r.tipo_cita === 'REAGENDADO' ? 'Reagendado' : r.tipo_cita === 'TRASLADO EN TERRENO' ? 'Terreno' : ''}${r.pendiente_reagendar ? '<span class="hd-marca">Pendiente de reagendar</span>' : ''}</td>
         <td class="hd-res">${res}</td>
         <td class="hd-obs"></td>
@@ -826,9 +834,11 @@ async function renderDia() {
       </table>
 
       <div class="hd-pie">
-        <div class="hd-firma"><div class="hd-linea"></div><span>Firma examinador/a</span></div>
-        <div class="hd-firma"><div class="hd-linea"></div><span>Visto bueno jefatura</span></div>
-        <div class="hd-gen">Generado ${esc(generado)}<br>Sistema de Agenda de Prácticos</div>
+        <div class="hd-firmas">
+          <div class="hd-firma"><div class="hd-linea"></div><span>Firma examinador/a</span></div>
+          <div class="hd-firma"><div class="hd-linea"></div><span>Visto bueno jefatura</span></div>
+        </div>
+        <div class="hd-gen">Generado ${esc(generado)} · Sistema de Agenda de Prácticos</div>
       </div>
     </article>`;
   }).join('');

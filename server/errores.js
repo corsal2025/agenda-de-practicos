@@ -4,6 +4,7 @@ const { HORA_D_A5, CLASES_PESADAS } = require('./config');
 const { hoyISO, esHabil } = require('./fechas');
 const feriados = require('./feriados');
 const rut = require('./rut');
+const telefono = require('./telefono');
 
 // Recalcula el reporte de errores sobre el estado actual de la agenda.
 // Devuelve una lista de hallazgos { tipo, severidad, fecha, hora, examinador, rut, nombre, mensaje }.
@@ -76,6 +77,12 @@ function reporte() {
     if (ocupada && f.fecha >= hoy && !f.contacto && !f.correo) {
       hallazgos.push({ ...base(f), tipo: 'SIN_CONTACTO', severidad: 'warning',
         mensaje: 'Cita futura sin telefono ni correo: no se puede avisar ni confirmar' });
+    }
+
+    // 5b) Telefono incompleto (no llega a 9 digitos)
+    if (ocupada && f.contacto && telefono.digitos(f.contacto).length !== 9) {
+      hallazgos.push({ ...base(f), tipo: 'TELEFONO_INCOMPLETO', severidad: 'warning',
+        mensaje: `Telefono incompleto: ${f.contacto} (deben ser 9 digitos)` });
     }
 
     // 6) Cita en un dia que hoy es feriado o fin de semana
