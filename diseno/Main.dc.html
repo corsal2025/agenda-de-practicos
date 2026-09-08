@@ -1,0 +1,284 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap">
+  <style>
+    :root {
+      --azul: #1b3a75; --azul-900: #102550; --azul-50: #eaf0fa;
+      --tinta: #1b2430; --tinta-2: #56616f; --tinta-3: #8b95a3;
+      --linea: #dde2ea; --linea-2: #eceff4;
+      --papel: #ffffff; --fondo: #f3f5f8;
+      --ok: #1f7a3d; --ok-bg: #e7f4ec;
+      --alerta: #a8590a; --alerta-bg: #fbf0e2;
+      --error: #ad2b2f; --error-bg: #fbebeb;
+      --pesada: #5a3fae; --pesada-bg: #efeafb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--fondo); color: var(--tinta);
+      font-family: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--azul); text-decoration: none; }
+    a:hover { color: var(--azul-900); text-decoration: underline; }
+    h1, h2, h3 { margin: 0; font-family: "Source Serif 4", Georgia, "Times New Roman", serif; }
+    .serif { font-family: "Source Serif 4", Georgia, serif; }
+    .num { font-variant-numeric: tabular-nums; }
+
+    .barra-nacion { height: 3px; background: linear-gradient(90deg, var(--azul), #2a5db0); }
+
+    .cabecera { background: var(--papel); border-bottom: 1px solid var(--linea);
+      padding: 16px 32px 0; display: flex; flex-direction: column; gap: 12px; }
+    .cab-top { display: flex; align-items: center; gap: 14px; }
+    .escudo { width: 40px; height: 40px; flex: none; }
+    .cab-id { display: flex; flex-direction: column; gap: 1px; }
+    .cab-org { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--tinta-2); }
+    .cab-titulo { font-size: 21px; font-weight: 700; color: var(--azul-900); }
+    .cab-user { margin-left: auto; text-align: right; display: flex; flex-direction: column; gap: 2px; }
+    .cab-user b { font-size: 13px; font-weight: 700; }
+    .cab-user span { font-size: 12px; color: var(--tinta-2); }
+
+    .nav { display: flex; gap: 4px; }
+    .nav a { padding: 10px 14px 12px; font-size: 13.5px; font-weight: 600; color: var(--tinta-2);
+      border-bottom: 3px solid transparent; }
+    .nav a:hover { color: var(--tinta); text-decoration: none; }
+    .nav a.on { color: var(--azul-900); border-bottom-color: var(--azul); }
+
+    .cuerpo { padding: 24px 32px 40px; display: flex; flex-direction: column; gap: 16px; }
+
+    .toolbar { background: var(--papel); border: 1px solid var(--linea); border-radius: 4px;
+      padding: 14px 16px; display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+    .campo { display: flex; flex-direction: column; gap: 5px; }
+    .campo > label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tinta-3); }
+    .control { display: flex; align-items: center; gap: 0; border: 1px solid var(--linea); border-radius: 3px; background: var(--papel); height: 36px; }
+    .control .val { padding: 0 12px; font-weight: 600; font-size: 13.5px; min-width: 150px; }
+    .control .step { width: 34px; height: 100%; display: grid; place-items: center; color: var(--tinta-2); border-left: 1px solid var(--linea); }
+    .control .step:first-child { border-left: 0; border-right: 1px solid var(--linea); }
+    .select { border: 1px solid var(--linea); border-radius: 3px; height: 36px; padding: 0 34px 0 12px; font: inherit; font-weight: 600;
+      background: var(--papel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2356616f' stroke-width='2'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 12px center; -webkit-appearance: none; appearance: none; }
+    .btn { height: 36px; padding: 0 16px; border-radius: 3px; border: 1px solid var(--azul); background: var(--azul); color: #fff;
+      font: inherit; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 7px; }
+    .btn.sec { background: var(--papel); color: var(--tinta); border-color: var(--linea); }
+    .toolbar .der { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .pastilla { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 3px;
+      background: var(--azul-50); border: 1px solid #cdddf2; color: var(--azul-900); font-weight: 700; font-size: 13px; }
+
+    .resumen { display: flex; gap: 10px; flex-wrap: wrap; }
+    .stat { background: var(--papel); border: 1px solid var(--linea); border-radius: 4px; padding: 10px 14px;
+      display: flex; flex-direction: column; gap: 2px; min-width: 120px; }
+    .stat b { font-size: 20px; font-weight: 800; line-height: 1.1; }
+    .stat span { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--tinta-3); }
+
+    .tabla-agenda { background: var(--papel); border: 1px solid var(--linea); border-radius: 4px; overflow: hidden; }
+    .ta-cabeza { display: grid; grid-template-columns: 84px repeat(3, minmax(0, 1fr)); border-bottom: 2px solid var(--azul); }
+    .ta-cabeza > div { padding: 12px 14px; }
+    .ta-hh { }
+    .ta-exam { text-align: center; border-left: 1px solid var(--linea-2); }
+    .ta-exam .n { font-family: "Source Serif 4", Georgia, serif; font-weight: 700; font-size: 15px; color: var(--azul-900); letter-spacing: .01em; }
+    .ta-exam .c { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--tinta-3); margin-top: 2px; }
+
+    .fila { display: grid; grid-template-columns: 84px repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--linea-2); }
+    .fila.pesada { background: var(--pesada-bg); }
+    .rail { padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; align-items: flex-end; text-align: right; }
+    .rail .hh { font-weight: 700; font-size: 13px; }
+    .rail .et { font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--pesada); }
+    .celda { padding: 8px; border-left: 1px solid var(--linea-2); }
+
+    .cita { border: 1px solid var(--linea); border-left: 3px solid var(--azul); border-radius: 3px; background: var(--papel);
+      padding: 9px 11px; display: flex; align-items: center; gap: 12px; min-height: 54px; }
+    .cita.aprob { border-left-color: var(--ok); }
+    .cita.reprob { border-left-color: var(--error); }
+    .cita .info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .cita .nom { font-weight: 700; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cita .meta { font-size: 12px; color: var(--tinta-2); }
+    .cita .chip { margin-left: auto; flex: none; }
+
+    .chip { font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+      padding: 3px 7px; border-radius: 3px; border: 1px solid transparent; white-space: nowrap; }
+    .chip.ok { background: var(--ok-bg); color: var(--ok); border-color: #bfe1c9; }
+    .chip.rr { background: var(--error-bg); color: var(--error); border-color: #edc7c7; }
+    .chip.re { background: var(--alerta-bg); color: var(--alerta); border-color: #ecd4b6; }
+    .chip.co { background: var(--papel); color: var(--azul-900); border-color: #b9cdea; }
+    .chip.da { background: var(--pesada-bg); color: var(--pesada); border-color: #d3c6f2; }
+
+    .libre { border: 1px dashed #c3ccd8; border-radius: 3px; min-height: 54px; display: flex; align-items: center;
+      justify-content: space-between; padding: 9px 11px; color: var(--tinta-3); }
+    .libre .ag { font-size: 12px; font-weight: 700; color: var(--azul); display: inline-flex; align-items: center; gap: 5px; }
+    .bloqueo { min-height: 54px; border: 1px solid var(--linea); border-radius: 3px; display: flex; align-items: center; gap: 9px;
+      padding: 9px 11px; color: var(--alerta); background: repeating-linear-gradient(45deg, transparent, transparent 8px, #f6ede0 8px, #f6ede0 16px); }
+    .bloqueo b { font-weight: 800; font-size: 12px; letter-spacing: .03em; text-transform: uppercase; }
+
+    .pie { display: flex; align-items: center; gap: 8px; padding-top: 6px; border-top: 1px solid var(--linea);
+      font-size: 12px; color: var(--tinta-3); }
+  </style>
+</helmet>
+
+<div>
+  <div class="barra-nacion"></div>
+
+  <div class="cabecera">
+    <div class="cab-top">
+      <svg class="escudo" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20 2l15 5v11c0 9.5-6.2 16.8-15 20-8.8-3.2-15-10.5-15-20V7l15-5z" fill="#1b3a75"/>
+        <path d="M20 6.2l11 3.7v8.3c0 7.2-4.6 12.9-11 15.6-6.4-2.7-11-8.4-11-15.6V9.9l11-3.7z" stroke="#fff" stroke-width="1.4" opacity=".55"/>
+        <path d="M13 21l4.5 4.5L27 15" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="cab-id">
+        <span class="cab-org">Departamento de Licencias de Conducir</span>
+        <span class="cab-titulo">Agenda de Prácticos</span>
+      </div>
+      <div class="cab-user">
+        <b>MARIO GONZÁLEZ</b>
+        <span>Funcionario · lunes 8 de septiembre de 2026</span>
+      </div>
+    </div>
+    <nav class="nav">
+      <a class="on">Agenda</a>
+      <a>Citas disponibles</a>
+      <a>Reagendar</a>
+      <a>Buscar</a>
+      <a>Reporte de errores</a>
+      <a>Agenda del día</a>
+      <a>Analítica</a>
+      <a>Datos</a>
+    </nav>
+  </div>
+
+  <div class="cuerpo">
+    <div class="toolbar">
+      <div class="campo">
+        <label>Fecha</label>
+        <div class="control">
+          <div class="step">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M7.5 2L3.5 6l4 4"/></svg>
+          </div>
+          <span class="val num">08-09-2026</span>
+          <div class="step">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.5 2l4 4-4 4"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="campo">
+        <label>Examinador</label>
+        <div class="select">Todos los examinadores</div>
+      </div>
+      <button class="btn sec">Hoy</button>
+      <div class="der">
+        <span class="pastilla">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4v4l3 2M14 8A6 6 0 112 8a6 6 0 0112 0z"/></svg>
+          12 bloques libres
+        </span>
+        <button class="btn sec">Por confirmar</button>
+        <button class="btn sec">Bloquear día</button>
+      </div>
+    </div>
+
+    <div class="resumen">
+      <div class="stat"><b class="num">33</b><span>Bloques del día</span></div>
+      <div class="stat"><b class="num">21</b><span>Citas agendadas</span></div>
+      <div class="stat"><b class="num">12</b><span>Disponibles</span></div>
+      <div class="stat"><b class="num">2</b><span>Bloqueados</span></div>
+      <div class="stat"><b class="num">3</b><span>Reagendadas</span></div>
+    </div>
+
+    <div class="tabla-agenda">
+      <div class="ta-cabeza">
+        <div class="ta-hh"></div>
+        <div class="ta-exam"><div class="n">Daniel Lagos</div><div class="c">11 citas</div></div>
+        <div class="ta-exam"><div class="n">Domingo Navarro</div><div class="c">9 citas · 2 terreno</div></div>
+        <div class="ta-exam"><div class="n">Luis Fernández</div><div class="c">10 citas</div></div>
+      </div>
+
+      <div class="fila">
+        <div class="rail"><span class="hh num">08:30</span></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Carlos Sergio Bombal Rivera</span><span class="meta num">18.299.577-0 · Clase B</span></div><span class="chip co">Confirmó</span></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Catalina Lucía Brit Loaiza</span><span class="meta num">20.174.329-K · Clase B</span></div></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">León Ayandokun</span><span class="meta num">22.748.143-9 · Clase B</span></div></div></div>
+      </div>
+
+      <div class="fila">
+        <div class="rail"><span class="hh num">09:00</span></div>
+        <div class="celda"><div class="cita aprob"><div class="info"><span class="nom">Mario Enrique Olguín Negrón</span><span class="meta num">8.104.240-3 · Clase B</span></div><span class="chip ok">Aprobó</span></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Julieta Victoria Calderón Godoy</span><span class="meta num">21.884.748-K · Clase B</span></div><span class="chip re">Reag.</span></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Benjamín Fuentes Riquelme</span><span class="meta num">8.271.851-3 · Clase B</span></div></div></div>
+      </div>
+
+      <div class="fila">
+        <div class="rail"><span class="hh num">09:30</span></div>
+        <div class="celda"><div class="cita aprob"><div class="info"><span class="nom">Maximiliano Andrés Falcón Álvarez</span><span class="meta num">22.629.950-5 · Clase B</span></div><span class="chip ok">Aprobó</span></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Claudia Quevedo Riquelme</span><span class="meta num">18.566.798-7 · Clase B</span></div></div></div>
+        <div class="celda"><div class="cita reprob"><div class="info"><span class="nom">Javier Calbún Letelier</span><span class="meta num">15.233.606-3 · Clase C</span></div><span class="chip rr">Reprobó</span></div></div>
+      </div>
+
+      <div class="fila">
+        <div class="rail"><span class="hh num">10:00</span></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Matías Cerpa Torres</span><span class="meta num">19.777.268-4 · Clase B</span></div></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Juan Carlos Duarte López</span><span class="meta num">21.205.135-7 · Clase A2</span></div></div></div>
+        <div class="celda"><div class="libre"><span>Bloque disponible</span><span class="ag"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2v8M2 6h8"/></svg>Agendar</span></div></div>
+      </div>
+
+      <div class="fila">
+        <div class="rail"><span class="hh num">10:30</span></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Javiera Navia Araos</span><span class="meta num">19.193.170-K · Clase B</span></div></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Bastián Alejandro Greff Muñoz</span><span class="meta num">21.056.038-6 · Clase B</span></div></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Endry Márquez Rojas</span><span class="meta num">27.185.624-5 · Clase C</span></div></div></div>
+      </div>
+
+      <div class="fila">
+        <div class="rail"><span class="hh num">11:00</span></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Emely Olivares Veas</span><span class="meta num">21.543.756-6 · Clase B</span></div></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Isabel Soto Ulloa</span><span class="meta num">19.327.358-0 · Clase B</span></div></div></div>
+        <div class="celda"><div class="libre"><span>Bloque disponible</span><span class="ag"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2v8M2 6h8"/></svg>Agendar</span></div></div>
+      </div>
+
+      <div class="fila">
+        <div class="rail"><span class="hh num">11:30</span></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Francisco Leiva Ahumada</span><span class="meta num">18.784.275-1 · Clase A4</span></div></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Monserrat Danitza Canelo Umaña</span><span class="meta num">21.317.710-9 · Clase B</span></div></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Javiera Barat Araya</span><span class="meta num">21.665.544-3 · Clase B</span></div></div></div>
+      </div>
+
+      <div class="fila">
+        <div class="rail"><span class="hh num">12:00</span></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Enzo Paolo Figueroa León</span><span class="meta num">21.984.766-1 · Clase B</span></div></div></div>
+        <div class="celda"><div class="bloqueo"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V5a3 3 0 016 0v2"/></svg><b>Examen en terreno</b></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Ignacio Alfonso Orrego Hidalgo</span><span class="meta num">19.012.650-7 · Clase B</span></div></div></div>
+      </div>
+
+      <div class="fila pesada">
+        <div class="rail"><span class="hh num">12:30</span><span class="et">Clases D · A5</span></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Bastián A. Huenchual Arredondo</span><span class="meta num">22.410.612-2 · Clase C</span></div><span class="chip da">D/A5</span></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Daniel Madrid Iyanes</span><span class="meta num">20.271.935-K · Clase D</span></div><span class="chip da">D/A5</span></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Cristián Jiménez Romero</span><span class="meta num">21.959.129-2 · Clase D</span></div><span class="chip da">D/A5</span></div></div>
+      </div>
+
+      <div class="fila">
+        <div class="rail"><span class="hh num">13:00</span></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Daniela Alarcón Alarcón</span><span class="meta num">15.080.969-K · Clase B</span></div></div></div>
+        <div class="celda"><div class="bloqueo"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V5a3 3 0 016 0v2"/></svg><b>Traslado regreso</b></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">César Castillo Pérez</span><span class="meta num">14.376.448-6 · Clase B</span></div></div></div>
+      </div>
+
+      <div class="fila">
+        <div class="rail"><span class="hh num">13:30</span></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Elena del Carmen Gómez López</span><span class="meta num">13.422.696-9 · Clase B</span></div><span class="chip re">Reag.</span></div></div>
+        <div class="celda"><div class="libre"><span>Bloque disponible</span><span class="ag"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2v8M2 6h8"/></svg>Agendar</span></div></div>
+        <div class="celda"><div class="cita"><div class="info"><span class="nom">Gustavo Alonso Retamales Araya</span><span class="meta num">22.579.621-1 · Clase B</span></div></div></div>
+      </div>
+    </div>
+
+    <div class="pie">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5l2 1.5"/></svg>
+      Sistema de Agenda de Prácticos · Departamento de Licencias de Conducir · datos guardados localmente
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

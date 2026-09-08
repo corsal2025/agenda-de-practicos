@@ -1,0 +1,157 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap">
+  <style>
+    :root {
+      --azul: #1b3a75; --azul-900: #102550; --azul-50: #eaf0fa;
+      --tinta: #1b2430; --tinta-2: #56616f; --tinta-3: #8b95a3;
+      --linea: #dde2ea; --linea-2: #eceff4; --papel: #fff; --fondo: #f3f5f8;
+      --ok: #1f7a3d; --error: #ad2b2f; --alerta: #a8590a; --gris: #98a2b2;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--fondo); color: var(--tinta);
+      font-family: "Public Sans", "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    a { color: var(--azul); } a:hover { color: var(--azul-900); }
+    h1,h2,h3 { margin: 0; font-family: "Source Serif 4", Georgia, serif; }
+    .num { font-variant-numeric: tabular-nums; }
+    .barra-nacion { height: 3px; background: linear-gradient(90deg, var(--azul), #2a5db0); }
+
+    .cabecera { background: var(--papel); border-bottom: 1px solid var(--linea); padding: 16px 32px 0; display: flex; flex-direction: column; gap: 12px; }
+    .cab-top { display: flex; align-items: center; gap: 14px; }
+    .escudo { width: 40px; height: 40px; flex: none; }
+    .cab-org { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--tinta-2); }
+    .cab-titulo { font-size: 21px; font-weight: 700; color: var(--azul-900); }
+    .cab-user { margin-left: auto; text-align: right; }
+    .cab-user b { font-size: 13px; } .cab-user span { display: block; font-size: 12px; color: var(--tinta-2); }
+    .nav { display: flex; gap: 4px; }
+    .nav a { padding: 10px 14px 12px; font-size: 13.5px; font-weight: 600; color: var(--tinta-2); border-bottom: 3px solid transparent; }
+    .nav a.on { color: var(--azul-900); border-bottom-color: var(--azul); }
+
+    .cuerpo { padding: 24px 32px 40px; display: flex; flex-direction: column; gap: 18px; }
+    .titulo-fila { display: flex; align-items: flex-end; gap: 16px; }
+    .titulo-fila h2 { font-size: 22px; font-weight: 700; color: var(--azul-900); }
+    .titulo-fila .rango { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--tinta-2); }
+    .titulo-fila .rango .pill { border: 1px solid var(--linea); border-radius: 3px; padding: 7px 12px; font-weight: 600; background: var(--papel); }
+
+    .kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+    .kpi { background: var(--papel); border: 1px solid var(--linea); border-radius: 4px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; }
+    .kpi .v { font-family: "Source Serif 4", Georgia, serif; font-weight: 700; font-size: 27px; line-height: 1; color: var(--azul-900); }
+    .kpi .l { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-3); }
+    .kpi .t { font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+    .kpi .t.sube { color: var(--ok); } .kpi .t.baja { color: var(--error); } .kpi .t.plano { color: var(--tinta-3); }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .tarjeta { background: var(--papel); border: 1px solid var(--linea); border-radius: 4px; padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+    .tarjeta h3 { font-size: 15px; font-weight: 700; color: var(--azul-900); display: flex; align-items: center; justify-content: space-between; }
+    .tarjeta h3 small { font-family: "Public Sans", sans-serif; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--tinta-3); }
+
+    .barh { display: flex; flex-direction: column; gap: 12px; }
+    .barh .row { display: grid; grid-template-columns: 168px 1fr 52px; align-items: center; gap: 12px; }
+    .barh .cap { font-size: 13px; font-weight: 600; color: var(--tinta-2); }
+    .barh .track { height: 14px; background: var(--linea-2); border-radius: 2px; overflow: hidden; }
+    .barh .fill { height: 100%; border-radius: 2px; }
+    .barh .val { font-size: 13px; font-weight: 700; text-align: right; }
+
+    .leyenda { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--tinta-2); }
+    .leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+    .leyenda i { width: 10px; height: 10px; border-radius: 2px; }
+  </style>
+</helmet>
+
+<div>
+  <div class="barra-nacion"></div>
+  <div class="cabecera">
+    <div class="cab-top">
+      <svg class="escudo" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20 2l15 5v11c0 9.5-6.2 16.8-15 20-8.8-3.2-15-10.5-15-20V7l15-5z" fill="#1b3a75"/>
+        <path d="M13 21l4.5 4.5L27 15" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div>
+        <div class="cab-org">Departamento de Licencias de Conducir</div>
+        <div class="cab-titulo">Agenda de Prácticos</div>
+      </div>
+      <div class="cab-user"><b>MARIO GONZÁLEZ</b><span>Funcionario · 8 sep 2026</span></div>
+    </div>
+    <nav class="nav">
+      <a>Agenda</a><a>Citas disponibles</a><a>Reagendar</a><a>Buscar</a>
+      <a>Reporte de errores</a><a>Agenda del día</a><a class="on">Analítica</a><a>Datos</a>
+    </nav>
+  </div>
+
+  <div class="cuerpo">
+    <div class="titulo-fila">
+      <h2>Analítica</h2>
+      <div class="rango">
+        Período
+        <span class="pill num">03-08-2026</span>
+        <span>a</span>
+        <span class="pill num">30-06-2027</span>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><span class="v num">21%</span><span class="l">Ocupación</span><span class="t plano">1.587 de 7.429 bloques</span></div>
+      <div class="kpi"><span class="v num">78%</span><span class="l">Aprobación</span><span class="t sube"><svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8l3-3 2 2 3-4"/></svg>478 de 616</span></div>
+      <div class="kpi"><span class="v num">10%</span><span class="l">Inasistencia</span><span class="t baja"><svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 4l3 3 2-2 3 4"/></svg>62 casos</span></div>
+      <div class="kpi"><span class="v num">14%</span><span class="l">Reagendamiento</span><span class="t plano">221 citas</span></div>
+      <div class="kpi"><span class="v num">1.587</span><span class="l">Citas agendadas</span><span class="t plano">ago 2026 – jun 2027</span></div>
+      <div class="kpi"><span class="v num">50</span><span class="l">En lista de espera</span><span class="t plano">activas</span></div>
+    </div>
+
+    <div class="grid2">
+      <div class="tarjeta">
+        <h3>Resultado de exámenes <small>616 con resultado</small></h3>
+        <div class="barh">
+          <div class="row"><span class="cap">Aprobó</span><div class="track"><div class="fill" style="width: 78%; background: #1f7a3d"></div></div><span class="val num">478</span></div>
+          <div class="row"><span class="cap">Reprobó</span><div class="track"><div class="fill" style="width: 13%; background: #ad2b2f"></div></div><span class="val num">79</span></div>
+          <div class="row"><span class="cap">No asistió</span><div class="track"><div class="fill" style="width: 6%; background: #98a2b2"></div></div><span class="val num">38</span></div>
+          <div class="row"><span class="cap">Reprobó por inasistencia</span><div class="track"><div class="fill" style="width: 3%; background: #a8590a"></div></div><span class="val num">21</span></div>
+        </div>
+      </div>
+
+      <div class="tarjeta">
+        <h3>Citas por examinador <small>total 1.587</small></h3>
+        <div class="barh">
+          <div class="row"><span class="cap">Daniel Lagos</span><div class="track"><div class="fill" style="width: 92%; background: #1b3a75"></div></div><span class="val num">548</span></div>
+          <div class="row"><span class="cap">Domingo Navarro</span><div class="track"><div class="fill" style="width: 88%; background: #1b3a75"></div></div><span class="val num">524</span></div>
+          <div class="row"><span class="cap">Luis Fernández</span><div class="track"><div class="fill" style="width: 86%; background: #1b3a75"></div></div><span class="val num">515</span></div>
+        </div>
+      </div>
+
+      <div class="tarjeta">
+        <h3>Citas por clase <small>7 clases</small></h3>
+        <div class="barh">
+          <div class="row"><span class="cap">Clase B</span><div class="track"><div class="fill" style="width: 96%; background: #2a5db0"></div></div><span class="val num">1.226</span></div>
+          <div class="row"><span class="cap">Clase C</span><div class="track"><div class="fill" style="width: 12%; background: #2a5db0"></div></div><span class="val num">114</span></div>
+          <div class="row"><span class="cap">Clase D</span><div class="track"><div class="fill" style="width: 10%; background: #5a3fae"></div></div><span class="val num">99</span></div>
+          <div class="row"><span class="cap">Clase A2</span><div class="track"><div class="fill" style="width: 6%; background: #2a5db0"></div></div><span class="val num">61</span></div>
+          <div class="row"><span class="cap">Otras (A3–A5)</span><div class="track"><div class="fill" style="width: 7%; background: #98a2b2"></div></div><span class="val num">66</span></div>
+        </div>
+      </div>
+
+      <div class="tarjeta">
+        <h3>Tendencia de citas por día <small>ago – nov 2026</small></h3>
+        <svg viewBox="0 0 520 200" width="100%" height="200" preserveAspectRatio="none">
+          <line x1="0" y1="160" x2="520" y2="160" stroke="#dde2ea" stroke-width="1"/>
+          <line x1="0" y1="110" x2="520" y2="110" stroke="#eceff4" stroke-width="1"/>
+          <line x1="0" y1="60" x2="520" y2="60" stroke="#eceff4" stroke-width="1"/>
+          <path d="M0 130 L60 96 L120 120 L180 74 L240 100 L300 58 L360 88 L420 44 L480 70 L520 52 L520 160 L0 160 Z" fill="#1b3a75" fill-opacity=".10"/>
+          <path d="M0 130 L60 96 L120 120 L180 74 L240 100 L300 58 L360 88 L420 44 L480 70 L520 52" fill="none" stroke="#1b3a75" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="leyenda">
+          <span><i style="background:#1b3a75"></i>Citas agendadas por fecha de la cita</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

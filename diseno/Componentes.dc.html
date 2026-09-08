@@ -1,0 +1,236 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap">
+  <style>
+    :root {
+      --azul: #1b3a75; --azul-900: #102550; --azul-50: #eaf0fa;
+      --tinta: #1b2430; --tinta-2: #56616f; --tinta-3: #8b95a3;
+      --linea: #dde2ea; --linea-2: #eceff4; --papel: #fff; --fondo: #f3f5f8;
+      --ok: #1f7a3d; --ok-bg: #e7f4ec;
+      --alerta: #a8590a; --alerta-bg: #fbf0e2;
+      --error: #ad2b2f; --error-bg: #fbebeb;
+      --pesada: #5a3fae; --pesada-bg: #efeafb;
+      --info: #1b4f8f; --info-bg: #e9f1fa;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--fondo); color: var(--tinta);
+      font-family: "Public Sans", "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    a { color: var(--azul); } a:hover { color: var(--azul-900); }
+    h1,h2,h3,h4 { margin: 0; font-family: "Source Serif 4", Georgia, serif; }
+    .num { font-variant-numeric: tabular-nums; }
+
+    .wrap { padding: 36px 44px 56px; display: flex; flex-direction: column; gap: 30px; }
+    .cab { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid var(--azul); padding-bottom: 16px; }
+    .cab .escudo { width: 38px; height: 38px; }
+    .cab h1 { font-size: 24px; font-weight: 700; color: var(--azul-900); }
+    .cab .sub { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--tinta-3); }
+
+    .bloque { display: flex; flex-direction: column; gap: 14px; }
+    .bloque > h2 { font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--tinta-3); }
+    .panel { background: var(--papel); border: 1px solid var(--linea); border-radius: 4px; padding: 22px; }
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+
+    .ramp { display: flex; flex-direction: column; gap: 10px; }
+    .ramp .r { display: flex; align-items: baseline; gap: 14px; }
+    .ramp .r .k { width: 130px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-3); }
+    .d1 { font-family: "Source Serif 4", Georgia, serif; font-weight: 700; font-size: 28px; color: var(--azul-900); }
+    .d2 { font-family: "Source Serif 4", Georgia, serif; font-weight: 700; font-size: 20px; color: var(--azul-900); }
+    .b1 { font-size: 15px; } .b2 { font-size: 14px; } .b3 { font-size: 12.5px; color: var(--tinta-2); }
+    .lbl { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tinta-3); }
+
+    .swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .sw { border: 1px solid var(--linea); border-radius: 4px; overflow: hidden; }
+    .sw .c { height: 56px; } .sw .t { padding: 8px 10px; font-size: 11.5px; }
+    .sw .t b { display: block; font-weight: 700; } .sw .t span { color: var(--tinta-3); font-variant-numeric: tabular-nums; }
+
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .btn { height: 38px; padding: 0 18px; border-radius: 3px; border: 1px solid var(--azul); background: var(--azul); color: #fff;
+      font: inherit; font-weight: 600; font-size: 13.5px; display: inline-flex; align-items: center; gap: 8px; }
+    .btn.sec { background: var(--papel); color: var(--tinta); border-color: var(--linea); }
+    .btn.peligro { background: var(--error); border-color: var(--error); }
+    .btn.chico { height: 30px; padding: 0 12px; font-size: 12.5px; }
+
+    .campo { display: flex; flex-direction: column; gap: 6px; }
+    .campo label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tinta-3); }
+    .campo input, .campo .select { height: 38px; border: 1px solid var(--linea); border-radius: 3px; padding: 0 12px; font: inherit; font-size: 14px; display: flex; align-items: center; background: var(--papel); }
+    .campo .select { justify-content: space-between; color: var(--tinta); font-weight: 600; }
+
+    .chips { display: flex; gap: 10px; flex-wrap: wrap; }
+    .chip { font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 4px 8px; border-radius: 3px; border: 1px solid transparent; }
+    .chip.ok { background: var(--ok-bg); color: var(--ok); border-color: #bfe1c9; }
+    .chip.rr { background: var(--error-bg); color: var(--error); border-color: #edc7c7; }
+    .chip.re { background: var(--alerta-bg); color: var(--alerta); border-color: #ecd4b6; }
+    .chip.co { background: var(--papel); color: var(--azul-900); border-color: #b9cdea; }
+    .chip.da { background: var(--pesada-bg); color: var(--pesada); border-color: #d3c6f2; }
+    .sev { font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 4px 9px; border-radius: 3px; }
+    .sev.err { background: var(--error-bg); color: var(--error); }
+    .sev.adv { background: var(--alerta-bg); color: var(--alerta); }
+    .sev.inf { background: var(--info-bg); color: var(--info); }
+
+    .cita { border: 1px solid var(--linea); border-left: 3px solid var(--azul); border-radius: 3px; background: var(--papel);
+      padding: 10px 12px; display: flex; align-items: center; gap: 12px; }
+    .cita.aprob { border-left-color: var(--ok); }
+    .cita .nom { font-weight: 700; font-size: 13.5px; }
+    .cita .meta { font-size: 12px; color: var(--tinta-2); }
+    .cita .chip { margin-left: auto; }
+    .libre { border: 1px dashed #c3ccd8; border-radius: 3px; padding: 10px 12px; display: flex; justify-content: space-between; color: var(--tinta-3); }
+    .libre .ag { color: var(--azul); font-weight: 700; font-size: 12px; }
+    .bloq { border: 1px solid var(--linea); border-radius: 3px; padding: 10px 12px; color: var(--alerta); font-weight: 700; font-size: 12px; letter-spacing: .03em; text-transform: uppercase;
+      background: repeating-linear-gradient(45deg, transparent, transparent 8px, #f6ede0 8px, #f6ede0 16px); display: flex; align-items: center; gap: 8px; }
+
+    .kpi { background: var(--papel); border: 1px solid var(--linea); border-radius: 4px; padding: 14px 16px; display: inline-flex; flex-direction: column; gap: 3px; min-width: 170px; }
+    .kpi .v { font-family: "Source Serif 4", Georgia, serif; font-weight: 700; font-size: 27px; color: var(--azul-900); line-height: 1; }
+    .kpi .l { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-3); }
+
+    .ficha { border: 1px solid var(--linea); border-radius: 4px; max-width: 460px; background: var(--papel); }
+    .ficha .fh { padding: 14px 16px; border-bottom: 1px solid var(--linea); display: flex; justify-content: space-between; align-items: center; }
+    .ficha .fh b { font-family: "Source Serif 4", Georgia, serif; font-size: 15px; color: var(--azul-900); }
+    .ficha .fh .num { font-size: 12px; color: var(--tinta-2); }
+    .ficha .fb { padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .ficha .fb .campo label { font-size: 10.5px; }
+    .ficha .fb .campo input, .ficha .fb .campo .select { height: 34px; font-size: 13px; }
+    .ficha .ff { padding: 12px 16px; border-top: 1px solid var(--linea); display: flex; justify-content: flex-end; gap: 8px; }
+  </style>
+</helmet>
+
+<div>
+  <div class="wrap">
+    <div class="cab">
+      <svg class="escudo" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20 2l15 5v11c0 9.5-6.2 16.8-15 20-8.8-3.2-15-10.5-15-20V7l15-5z" fill="#1b3a75"/>
+        <path d="M13 21l4.5 4.5L27 15" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div>
+        <div class="sub">Sistema de diseño</div>
+        <h1>Agenda de Prácticos — Componentes</h1>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h2>Tipografía</h2>
+      <div class="panel cols">
+        <div class="ramp">
+          <div class="lbl">Source Serif 4 · títulos</div>
+          <div class="r"><span class="k">Display</span><span class="d1">Agenda de Prácticos</span></div>
+          <div class="r"><span class="k">Sección</span><span class="d2">Reporte de errores</span></div>
+        </div>
+        <div class="ramp">
+          <div class="lbl">Public Sans · interfaz y datos</div>
+          <div class="r"><span class="k">Cuerpo</span><span class="b1">Carlos Sergio Bombal Rivera</span></div>
+          <div class="r"><span class="k">Base</span><span class="b2">Clase B · Normal · 1ª vez</span></div>
+          <div class="r"><span class="k">Datos</span><span class="b3 num">18.299.577-0 · 08:30</span></div>
+          <div class="r"><span class="k">Etiqueta</span><span class="lbl">Funcionario que agenda</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h2>Color</h2>
+      <div class="panel">
+        <div class="swatches">
+          <div class="sw"><div class="c" style="background:#102550"></div><div class="t"><b>Azul institución</b><span>#102550</span></div></div>
+          <div class="sw"><div class="c" style="background:#1b3a75"></div><div class="t"><b>Azul primario</b><span>#1b3a75</span></div></div>
+          <div class="sw"><div class="c" style="background:#eaf0fa"></div><div class="t"><b>Azul tenue</b><span>#eaf0fa</span></div></div>
+          <div class="sw"><div class="c" style="background:#5a3fae"></div><div class="t"><b>Clases D/A5</b><span>#5a3fae</span></div></div>
+          <div class="sw"><div class="c" style="background:#1f7a3d"></div><div class="t"><b>Aprobó</b><span>#1f7a3d</span></div></div>
+          <div class="sw"><div class="c" style="background:#a8590a"></div><div class="t"><b>Advertencia</b><span>#a8590a</span></div></div>
+          <div class="sw"><div class="c" style="background:#ad2b2f"></div><div class="t"><b>Error</b><span>#ad2b2f</span></div></div>
+          <div class="sw"><div class="c" style="background:#f3f5f8; border-right:1px solid #dde2ea"></div><div class="t"><b>Fondo</b><span>#f3f5f8</span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h2>Botones y campos</h2>
+      <div class="panel cols">
+        <div style="display:flex; flex-direction:column; gap:16px">
+          <div class="row">
+            <button class="btn">Guardar cita</button>
+            <button class="btn sec">Cancelar</button>
+            <button class="btn peligro">Liberar bloque</button>
+          </div>
+          <div class="row">
+            <button class="btn sec chico">Recalcular</button>
+            <button class="btn chico">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2v8M2 6h8"/></svg>
+              Agendar
+            </button>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:14px">
+          <div class="campo"><label>RUT</label><input type="text" value="18.299.577-0" /></div>
+          <div class="campo"><label>Examinador</label><div class="select">Daniel Lagos
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#56616f" stroke-width="2"><path d="M2 4l4 4 4-4"/></svg></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h2>Estados</h2>
+      <div class="panel" style="display:flex; flex-direction:column; gap:18px">
+        <div>
+          <div class="lbl" style="margin-bottom:8px">Cita</div>
+          <div class="chips">
+            <span class="chip co">Confirmó</span>
+            <span class="chip ok">Aprobó</span>
+            <span class="chip rr">Reprobó</span>
+            <span class="chip re">Reagendada</span>
+            <span class="chip da">D/A5</span>
+          </div>
+        </div>
+        <div>
+          <div class="lbl" style="margin-bottom:8px">Severidad de hallazgo</div>
+          <div class="chips">
+            <span class="sev err">Error</span>
+            <span class="sev adv">Advertencia</span>
+            <span class="sev inf">Informativo</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h2>Bloque de agenda</h2>
+      <div class="panel cols">
+        <div style="display:flex; flex-direction:column; gap:10px">
+          <div class="cita aprob"><div><div class="nom">Mario Enrique Olguín Negrón</div><div class="meta num">8.104.240-3 · Clase B</div></div><span class="chip ok">Aprobó</span></div>
+          <div class="libre"><span>Bloque disponible</span><span class="ag">+ Agendar</span></div>
+          <div class="bloq">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="10" height="7" rx="1"/><path d="M5 7V5a3 3 0 016 0v2"/></svg>
+            Día administrativo
+          </div>
+        </div>
+        <div class="row">
+          <div class="kpi"><span class="v num">78%</span><span class="l">Aprobación</span></div>
+          <div class="kpi"><span class="v num">1.587</span><span class="l">Citas agendadas</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bloque">
+      <h2>Ficha de cita (editor)</h2>
+      <div class="ficha">
+        <div class="fh"><b>Editar cita</b><span class="num">08-09-2026 · 09:00 · Daniel Lagos</span></div>
+        <div class="fb">
+          <div class="campo"><label>RUT</label><input value="8.104.240-3" /></div>
+          <div class="campo"><label>Nombre</label><input value="Mario Enrique Olguín Negrón" /></div>
+          <div class="campo"><label>Clase</label><div class="select">B <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#56616f" stroke-width="2"><path d="M2 4l4 4 4-4"/></svg></div></div>
+          <div class="campo"><label>Tipo de cita</label><div class="select">Reagendado <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#56616f" stroke-width="2"><path d="M2 4l4 4 4-4"/></svg></div></div>
+          <div class="campo"><label>Resultado</label><div class="select">— <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#56616f" stroke-width="2"><path d="M2 4l4 4 4-4"/></svg></div></div>
+          <div class="campo"><label>Confirmó asistencia</label><div class="select">Sí <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="#56616f" stroke-width="2"><path d="M2 4l4 4 4-4"/></svg></div></div>
+        </div>
+        <div class="ff"><button class="btn peligro chico">Liberar</button><button class="btn sec chico">Cancelar</button><button class="btn chico">Guardar</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

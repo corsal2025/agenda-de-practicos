@@ -13,3 +13,6 @@ uploads/
 *.xls
 *.csv
 
+# Lienzo de diseño ya ensamblado (~2 MB, se regenera desde diseno/*.dc.html)
+diseno/rediseno-agenda-practicos.html
+

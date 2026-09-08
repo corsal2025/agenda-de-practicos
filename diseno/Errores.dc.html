@@ -1,0 +1,177 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap">
+  <style>
+    :root {
+      --azul: #1b3a75; --azul-900: #102550; --azul-50: #eaf0fa;
+      --tinta: #1b2430; --tinta-2: #56616f; --tinta-3: #8b95a3;
+      --linea: #dde2ea; --linea-2: #eceff4; --papel: #fff; --fondo: #f3f5f8;
+      --ok: #1f7a3d; --ok-bg: #e7f4ec;
+      --alerta: #a8590a; --alerta-bg: #fbf0e2;
+      --error: #ad2b2f; --error-bg: #fbebeb;
+      --info: #1b4f8f; --info-bg: #e9f1fa;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--fondo); color: var(--tinta);
+      font-family: "Public Sans", "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    a { color: var(--azul); } a:hover { color: var(--azul-900); }
+    h1,h2,h3 { margin: 0; font-family: "Source Serif 4", Georgia, serif; }
+    .num { font-variant-numeric: tabular-nums; }
+    .barra-nacion { height: 3px; background: linear-gradient(90deg, var(--azul), #2a5db0); }
+
+    .cabecera { background: var(--papel); border-bottom: 1px solid var(--linea); padding: 16px 32px 0; display: flex; flex-direction: column; gap: 12px; }
+    .cab-top { display: flex; align-items: center; gap: 14px; }
+    .escudo { width: 40px; height: 40px; flex: none; }
+    .cab-org { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--tinta-2); }
+    .cab-titulo { font-size: 21px; font-weight: 700; color: var(--azul-900); }
+    .cab-user { margin-left: auto; text-align: right; }
+    .cab-user b { font-size: 13px; } .cab-user span { display: block; font-size: 12px; color: var(--tinta-2); }
+    .nav { display: flex; gap: 4px; }
+    .nav a { padding: 10px 14px 12px; font-size: 13.5px; font-weight: 600; color: var(--tinta-2); border-bottom: 3px solid transparent; }
+    .nav a.on { color: var(--azul-900); border-bottom-color: var(--azul); }
+
+    .cuerpo { padding: 24px 32px 40px; display: flex; flex-direction: column; gap: 16px; }
+    .titulo-fila { display: flex; align-items: center; gap: 14px; }
+    .titulo-fila h2 { font-size: 22px; font-weight: 700; color: var(--azul-900); }
+    .titulo-fila .desc { font-size: 13px; color: var(--tinta-2); }
+    .titulo-fila .btn { margin-left: auto; height: 34px; padding: 0 14px; border: 1px solid var(--linea); border-radius: 3px; background: var(--papel);
+      font: inherit; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 7px; }
+
+    .filtros { display: flex; gap: 8px; flex-wrap: wrap; }
+    .fchip { border: 1px solid var(--linea); background: var(--papel); border-radius: 999px; padding: 7px 13px;
+      font-size: 12.5px; font-weight: 600; color: var(--tinta-2); display: inline-flex; align-items: center; gap: 7px; }
+    .fchip.on { border-color: var(--azul); background: var(--azul-50); color: var(--azul-900); }
+    .fchip .n { font-weight: 800; }
+    .fchip .pt { width: 8px; height: 8px; border-radius: 50%; }
+
+    .rej { background: var(--papel); border: 1px solid var(--linea); border-radius: 4px; overflow: hidden; }
+    table { border-collapse: collapse; width: 100%; }
+    thead th { background: #f7f9fb; border-bottom: 2px solid var(--azul); text-align: left;
+      font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-3); padding: 11px 14px; white-space: nowrap; }
+    tbody td { border-top: 1px solid var(--linea-2); padding: 11px 14px; font-size: 13px; vertical-align: middle; }
+    tbody tr:nth-child(even) { background: #fbfcfd; }
+    .sev { font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; }
+    .sev.err { background: var(--error-bg); color: var(--error); }
+    .sev.adv { background: var(--alerta-bg); color: var(--alerta); }
+    .sev.inf { background: var(--info-bg); color: var(--info); }
+    .tipo { font-weight: 700; }
+    .accion { color: var(--azul); font-weight: 600; font-size: 12.5px; }
+    td.num, th.num { font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div>
+  <div class="barra-nacion"></div>
+  <div class="cabecera">
+    <div class="cab-top">
+      <svg class="escudo" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20 2l15 5v11c0 9.5-6.2 16.8-15 20-8.8-3.2-15-10.5-15-20V7l15-5z" fill="#1b3a75"/>
+        <path d="M13 21l4.5 4.5L27 15" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div>
+        <div class="cab-org">Departamento de Licencias de Conducir</div>
+        <div class="cab-titulo">Agenda de Prácticos</div>
+      </div>
+      <div class="cab-user"><b>MARIO GONZÁLEZ</b><span>Funcionario · 8 sep 2026</span></div>
+    </div>
+    <nav class="nav">
+      <a>Agenda</a><a>Citas disponibles</a><a>Reagendar</a><a>Buscar</a>
+      <a class="on">Reporte de errores</a><a>Agenda del día</a><a>Analítica</a><a>Datos</a>
+    </nav>
+  </div>
+
+  <div class="cuerpo">
+    <div class="titulo-fila">
+      <h2>Reporte de errores</h2>
+      <span class="desc">Se recalcula sobre el estado actual de la agenda · 327 hallazgos</span>
+      <button class="btn">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 8A5 5 0 113 8M3 8V4M3 8h4"/></svg>
+        Recalcular
+      </button>
+    </div>
+
+    <div class="filtros">
+      <span class="fchip on">Todos <span class="n num">327</span></span>
+      <span class="fchip"><span class="pt" style="background:#1b4f8f"></span>Sin resultado <span class="n num">89</span></span>
+      <span class="fchip"><span class="pt" style="background:#a8590a"></span>Clase en bloque incorrecto <span class="n num">58</span></span>
+      <span class="fchip"><span class="pt" style="background:#a8590a"></span>RUT inválido <span class="n num">54</span></span>
+      <span class="fchip"><span class="pt" style="background:#ad2b2f"></span>Duplicado futuro <span class="n num">42</span></span>
+      <span class="fchip"><span class="pt" style="background:#a8590a"></span>Cita incompleta <span class="n num">32</span></span>
+      <span class="fchip"><span class="pt" style="background:#a8590a"></span>Sin contacto <span class="n num">28</span></span>
+      <span class="fchip"><span class="pt" style="background:#ad2b2f"></span>Duplicado el mismo día <span class="n num">20</span></span>
+      <span class="fchip"><span class="pt" style="background:#ad2b2f"></span>Conflicto de terreno <span class="n num">4</span></span>
+    </div>
+
+    <div class="rej">
+      <table>
+        <thead>
+          <tr>
+            <th>Severidad</th><th>Tipo</th><th>Fecha</th><th>Hora</th><th>Examinador</th><th>RUT</th><th>Nombre</th><th>Detalle</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="sev err">Error</span></td><td class="tipo">Conflicto de terreno</td>
+            <td class="num">04-08-2026</td><td class="num">08:30</td><td>Daniel Lagos</td><td class="num">1.820.204-K</td><td>Ignacio Gómez Montenegro</td>
+            <td>Figura ausente (día administrativo) pero tiene 10 citas en oficina</td><td class="accion">Abrir</td>
+          </tr>
+          <tr>
+            <td><span class="sev err">Error</span></td><td class="tipo">Duplicado futuro</td>
+            <td class="num">07-09-2026</td><td class="num">08:30</td><td>Daniel Lagos</td><td class="num">18.299.577-0</td><td>Carlos Sergio Bombal Rivera</td>
+            <td>Ya tiene 2 citas futuras: 07-09 08:30 y 03-11 09:00</td><td class="accion">Abrir</td>
+          </tr>
+          <tr>
+            <td><span class="sev err">Error</span></td><td class="tipo">Duplicado el mismo día</td>
+            <td class="num">15-09-2026</td><td class="num">10:00</td><td>Domingo Navarro</td><td class="num">20.448.634-4</td><td>Francisca Elizabeth Palma Zamora</td>
+            <td>Mismo RUT en 2 bloques el 15-09-2026</td><td class="accion">Abrir</td>
+          </tr>
+          <tr>
+            <td><span class="sev adv">Advertencia</span></td><td class="tipo">RUT inválido</td>
+            <td class="num">10-09-2026</td><td class="num">09:30</td><td>Luis Fernández</td><td class="num">19.477.268-4</td><td>Matías Cerpa Torres</td>
+            <td>RUT con dígito verificador inválido</td><td class="accion">Abrir</td>
+          </tr>
+          <tr>
+            <td><span class="sev adv">Advertencia</span></td><td class="tipo">Clase en bloque incorrecto</td>
+            <td class="num">12-09-2026</td><td class="num">09:00</td><td>Daniel Lagos</td><td class="num">20.271.935-K</td><td>Daniel Madrid Iyanes</td>
+            <td>Clase D agendada 09:00; solo se permite en el bloque 12:30</td><td class="accion">Abrir</td>
+          </tr>
+          <tr>
+            <td><span class="sev adv">Advertencia</span></td><td class="tipo">Cita incompleta</td>
+            <td class="num">18-09-2026</td><td class="num">11:00</td><td>Domingo Navarro</td><td class="num">—</td><td>Eduardo Muñoz Bustos</td>
+            <td>Registra nombre pero falta RUT</td><td class="accion">Abrir</td>
+          </tr>
+          <tr>
+            <td><span class="sev adv">Advertencia</span></td><td class="tipo">Sin contacto</td>
+            <td class="num">22-09-2026</td><td class="num">12:00</td><td>Luis Fernández</td><td class="num">21.456.710-5</td><td>Saúl Gerónimo Escobar Baeza</td>
+            <td>Cita futura sin teléfono ni correo: no se puede confirmar</td><td class="accion">Abrir</td>
+          </tr>
+          <tr>
+            <td><span class="sev inf">Informativo</span></td><td class="tipo">Sin resultado</td>
+            <td class="num">28-08-2026</td><td class="num">10:30</td><td>Daniel Lagos</td><td class="num">16.488.199-7</td><td>Esteban Pacheco Pacheco</td>
+            <td>Cita ya realizada sin resultado registrado</td><td class="accion">Abrir</td>
+          </tr>
+          <tr>
+            <td><span class="sev inf">Informativo</span></td><td class="tipo">Sin resultado</td>
+            <td class="num">29-08-2026</td><td class="num">11:30</td><td>Domingo Navarro</td><td class="num">19.980.966-0</td><td>Aitana Pérez Donoso</td>
+            <td>Cita ya realizada sin resultado registrado</td><td class="accion">Abrir</td>
+          </tr>
+          <tr>
+            <td><span class="sev inf">Informativo</span></td><td class="tipo">Pendiente de reagendar</td>
+            <td class="num">25-09-2026</td><td class="num">08:30</td><td>Daniel Lagos</td><td class="num">19.495.599-5</td><td>Francisca Claudia Escobar Herrera</td>
+            <td>Pendiente de reagendar: examinador con día administrativo</td><td class="accion">Abrir</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

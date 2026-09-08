@@ -65,22 +65,44 @@ function modal(titulo, cuerpoHtml, pieHtml) {
 const cerrarModal = () => { $('#modal-root').innerHTML = ''; };
 
 /* ================= login ================= */
+const ICO = {
+  cal: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="14" height="13" rx="1.5"/><path d="M3 8h14M7 2v4M13 2v4"/></svg>',
+  check: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 10l4 4 8-9"/></svg>',
+  reloj: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3v7l4 2M17 10A7 7 0 113 10a7 7 0 0114 0z"/></svg>',
+};
 async function pantallaLogin() {
-  let ses;
-  try { ses = await (await fetch('/api/sesion')).json(); } catch (_) { ses = {}; }
   const root = $('#modal-root');
   root.innerHTML = '';
-  const ov = h(`<div class="overlay">
-    <div class="modal" style="width:min(400px,100%)">
-      <header><h3>Ingreso</h3></header>
-      <div class="cuerpo" style="grid-template-columns:1fr">
-        <div class="campo"><label>Tu nombre</label><input id="lg-nombre" list="lg-lista" autocomplete="off"></div>
-        <datalist id="lg-lista"></datalist>
-        <div class="campo"><label>PIN</label><input id="lg-pin" type="password" autocomplete="off"></div>
-        <p class="muted" style="font-size:.8rem">El PIN lo define quien instala la aplicacion (variable AGENDA_PIN).</p>
+  const ov = h(`<div class="login-split">
+    <div class="login-marca">
+      <div style="display:flex;align-items:center;gap:12px">
+        <svg width="42" height="42" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M20 2l15 5v11c0 9.5-6.2 16.8-15 20-8.8-3.2-15-10.5-15-20V7l15-5z" fill="#fff" opacity=".14"></path>
+          <path d="M13 21l4.5 4.5L27 15" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+        <span class="lm-org">Departamento de Licencias de Conducir</span>
       </div>
-      <footer><button class="btn" id="lg-ok">Entrar</button></footer>
-    </div></div>`);
+      <h1>Agenda de Prácticos</h1>
+      <p>Gestión de la agenda de exámenes prácticos: reserva de citas, reagendamiento, control de asistencia y reportes.</p>
+      <div class="lm-lista">
+        <div>${ICO.cal} 33 bloques diarios por 3 examinadores</div>
+        <div>${ICO.check} Validación automática de RUT y reglas de clase</div>
+        <div>${ICO.reloj} Cada cambio queda registrado con responsable</div>
+      </div>
+    </div>
+    <div class="login-acceso">
+      <div class="caja">
+        <h2>Ingreso al sistema</h2>
+        <p class="intro">Identifícate para registrar tus cambios en la bitácora.</p>
+        <div class="campo"><label>Nombre del funcionario/a</label><input id="lg-nombre" autocomplete="off"></div>
+        <div class="campo"><label>Clave de acceso</label><input id="lg-pin" type="password" autocomplete="off">
+          <span class="muted" style="font-size:11.5px">Clave compartida definida por el administrador del equipo.</span></div>
+        <button class="btn" id="lg-ok">Entrar
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8h9M8 4l4 4-4 4"/></svg></button>
+        <div class="login-nota">Departamento de Licencias de Conducir · uso interno</div>
+      </div>
+    </div>
+  </div>`);
   root.appendChild(ov);
   const entrar = async () => {
     try {
@@ -91,6 +113,7 @@ async function pantallaLogin() {
   };
   $('#lg-ok').onclick = entrar;
   $('#lg-pin').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
+  $('#lg-nombre').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#lg-pin').focus(); });
   $('#lg-nombre').focus();
 }
 
@@ -232,8 +255,9 @@ async function renderAgenda() {
           <select id="a-exam"><option value="">Todos</option>
             ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}" ${String(e.id) === String(estadoAgenda.examinador_id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
           </select></div>
-        <button class="btn sec" id="a-porconfirmar">Por confirmar...</button>
-        <button class="btn sec" id="a-bloqdia">Bloquear dia...</button>
+        <span class="pastilla" id="a-libres" style="margin-left:auto">— bloques libres</span>
+        <button class="btn sec" id="a-porconfirmar">Por confirmar</button>
+        <button class="btn sec" id="a-bloqdia">Bloquear día</button>
       </div>
     </div>
     <div class="panel"><div id="a-grid">Cargando...</div></div>`;
@@ -248,7 +272,10 @@ async function renderAgenda() {
 
   const q = new URLSearchParams({ fecha: estadoAgenda.fecha });
   if (estadoAgenda.examinador_id) q.set('examinador_id', estadoAgenda.examinador_id);
-  pintarGrilla($('#a-grid'), await api(`/agenda?${q}`), estadoAgenda.fecha);
+  const filas = await api(`/agenda?${q}`);
+  const libres = filas.filter((f) => !f.rut && !f.nombre && !f.bloqueado).length;
+  $('#a-libres').textContent = `${libres} ${libres === 1 ? 'bloque libre' : 'bloques libres'}`;
+  pintarGrilla($('#a-grid'), filas, estadoAgenda.fecha);
 }
 
 async function dialogoPorConfirmar() {
@@ -332,11 +359,12 @@ function slotCard(b) {
 
   const badges = [];
   if (b.hora === META.hora_d_a5) badges.push('<span class="badge dpesada">D/A5</span>');
-  if (b.tipo_cita === 'REAGENDADO') badges.push('<span class="badge reag">REAG</span>');
-  if (b.pendiente_reagendar) badges.push('<span class="badge reag">PEND</span>');
-  if (b.confirmo_asistencia === 1) badges.push('<span class="badge aprob">CONF</span>');
-  if (b.resultado === 'APROBADO') badges.push('<span class="badge aprob">APROBO</span>');
-  else if (b.resultado) badges.push('<span class="badge reprob">' + esc(b.resultado) + '</span>');
+  if (b.tipo_cita === 'REAGENDADO') badges.push('<span class="badge reag">Reag.</span>');
+  if (b.pendiente_reagendar) badges.push('<span class="badge reag">Pend.</span>');
+  if (b.confirmo_asistencia === 1) badges.push('<span class="badge aprob">Confirmó</span>');
+  if (b.resultado === 'APROBADO') badges.push('<span class="badge aprob">Aprobó</span>');
+  else if (b.resultado === 'REPROBADO') badges.push('<span class="badge reprob">Reprobó</span>');
+  else if (b.resultado) badges.push('<span class="badge noasiste">' + esc(b.resultado) + '</span>');
   return `<button class="${cls}" data-id="${b.id}">
     <span class="nombre">${esc(b.nombre || '(sin nombre)')}</span>
     <span class="sub">${esc(b.rut || 'sin RUT')} &middot; ${esc(b.clase || 's/clase')}</span>
@@ -356,13 +384,19 @@ function pintarGrilla(cont, filas, fecha) {
     return;
   }
   const porKey = {};
-  filas.forEach((f) => { porKey[`${f.hora}|${f.examinador_id}`] = f; });
+  const cuenta = {};
+  filas.forEach((f) => {
+    porKey[`${f.hora}|${f.examinador_id}`] = f;
+    if (f.rut || f.nombre) cuenta[f.examinador_id] = (cuenta[f.examinador_id] || 0) + 1;
+  });
   cont.className = 'grilla';
-  cont.style.gridTemplateColumns = `56px repeat(${exs.length}, minmax(0, 1fr))`;
-  let html = `<div></div>` + exs.map((e) => `<div class="g-head">${esc(e.nombre)}</div>`).join('');
+  cont.style.gridTemplateColumns = `58px repeat(${exs.length}, minmax(0, 1fr))`;
+  let html = `<div></div>` + exs.map((e) =>
+    `<div class="g-head"><span class="gh-n">${esc(e.nombre)}</span><span class="gh-c">${cuenta[e.id] || 0} citas</span></div>`).join('');
   for (const hora of META.horas) {
-    html += `<div class="g-hora">${esc(hora)}</div>`;
-    for (const e of exs) html += `<div>${slotCard(porKey[`${hora}|${e.id}`])}</div>`;
+    const pesada = hora === META.hora_d_a5;
+    html += `<div class="g-hora">${esc(hora)}${pesada ? '<span class="et">D · A5</span>' : ''}</div>`;
+    for (const e of exs) html += `<div${pesada ? ' class="fila-pesada"' : ''}>${slotCard(porKey[`${hora}|${e.id}`])}</div>`;
   }
   cont.innerHTML = html;
   cont.querySelectorAll('.slot[data-id]').forEach((el) => {
@@ -616,19 +650,37 @@ async function renderDia() {
 /* ================= tab: ANALITICA ================= */
 let charts = [];
 function limpiarCharts() { charts.forEach((c) => c.destroy()); charts = []; }
+function paletaInst() {
+  const oscuro = document.documentElement.dataset.tema === 'oscuro';
+  return {
+    serie: ['#1b3a75', '#2a5db0', '#5a3fae', '#1f7a3d', '#a8590a', '#ad2b2f', '#8b95a3', '#1b4f8f', '#6f8bd0'],
+    linea: oscuro ? '#6d8bff' : '#1b3a75',
+    rejilla: oscuro ? 'rgba(255,255,255,.08)' : 'rgba(16,24,40,.08)',
+    texto: oscuro ? '#9aa4bd' : '#56616f',
+  };
+}
 function grafico(id, tipo, labels, datos, label) {
   const ctx = document.getElementById(id);
   if (!ctx) return;
+  const p = paletaInst();
   charts.push(new Chart(ctx, {
     type: tipo,
     data: { labels, datasets: [{
       label: label || '', data: datos,
-      backgroundColor: ['#1d4ed8', '#0ea5e9', '#15803d', '#b45309', '#7c3aed', '#be123c', '#64748b', '#0891b2', '#ca8a04'],
-      borderColor: '#1d4ed8', tension: .25,
+      backgroundColor: tipo === 'doughnut' ? p.serie
+        : tipo === 'line' ? 'rgba(27,58,117,.10)' : p.linea,
+      borderColor: p.linea, borderWidth: tipo === 'line' ? 2.5 : 0, tension: .3, fill: tipo === 'line',
+      borderRadius: tipo === 'bar' ? 2 : 0, maxBarThickness: 46,
+      pointRadius: 0, pointHoverRadius: 4,
     }] },
-    options: { responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: tipo === 'doughnut' } },
-      scales: tipo === 'doughnut' ? {} : { y: { beginAtZero: true } } },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: tipo === 'doughnut', labels: { color: p.texto, font: { family: 'Public Sans' } } } },
+      scales: tipo === 'doughnut' ? {} : {
+        x: { grid: { color: p.rejilla }, ticks: { color: p.texto, font: { family: 'Public Sans' } } },
+        y: { beginAtZero: true, grid: { color: p.rejilla }, ticks: { color: p.texto, font: { family: 'Public Sans' } } },
+      },
+    },
   }));
 }
 async function renderAnalitica() {
@@ -866,6 +918,7 @@ document.querySelectorAll('#nav button').forEach((b) => { b.onclick = () => irA(
     document.documentElement.dataset.tema = nuevo;
     try { localStorage.setItem('agenda-tema', nuevo); } catch (_) { /* ignore */ }
     pinta();
+    if ((location.hash.slice(1) || 'agenda') === 'analitica') renderAnalitica();
   };
 })();
 
