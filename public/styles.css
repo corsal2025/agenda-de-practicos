@@ -439,5 +439,5 @@ tbody tr:first-child td { border-top: 0; }
   .hd-tabla thead { display: table-header-group; }
   .hd-tabla tr { break-inside: avoid; page-break-inside: avoid; }
   .hd-pie { margin-top: 18mm; }
-  @page { margin: 14mm 12mm; }
+  /* El tamaño y margen de @page los fija #estilo-pagina segun el formato elegido. */
 }

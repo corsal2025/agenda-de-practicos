@@ -648,19 +648,42 @@ const ESCUDO_SVG = `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.or
   <path d="M20 2l15 5v11c0 9.5-6.2 16.8-15 20-8.8-3.2-15-10.5-15-20V7l15-5z" fill="#1b3a75"></path>
   <path d="M13 21l4.5 4.5L27 15" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
 
+// Formato de hoja para imprimir (se elige segun el papel que haya en la impresora).
+const PAGINAS = {
+  carta:  { etq: 'Carta · 216 × 279 mm', size: '216mm 279mm' },
+  a4:     { etq: 'A4 · 210 × 297 mm', size: '210mm 297mm' },
+  oficio: { etq: 'Oficio · 216 × 330 mm', size: '216mm 330mm' },
+};
+function formatoImpresion() {
+  try { return PAGINAS[localStorage.getItem('agenda-formato')] ? localStorage.getItem('agenda-formato') : 'carta'; }
+  catch (_) { return 'carta'; }
+}
+function aplicarFormatoImpresion(f) {
+  const p = PAGINAS[f] || PAGINAS.carta;
+  let st = document.getElementById('estilo-pagina');
+  if (!st) { st = document.createElement('style'); st.id = 'estilo-pagina'; document.head.appendChild(st); }
+  st.textContent = `@media print { @page { size: ${p.size}; margin: 14mm 12mm; } }`;
+  try { localStorage.setItem('agenda-formato', f); } catch (_) { /* ignore */ }
+}
+aplicarFormatoImpresion(formatoImpresion());
+
 async function renderDia() {
   const fecha = (estadoAgenda.fecha || hoy());
   view.innerHTML = `
     <div class="panel no-print"><div class="fila">
       <div class="campo"><label>Fecha</label><input type="date" id="dd-fecha" value="${fecha}"></div>
+      <div class="campo"><label>Formato de hoja</label>
+        <select id="dd-formato">${Object.entries(PAGINAS).map(([k, v]) =>
+          `<option value="${k}" ${k === formatoImpresion() ? 'selected' : ''}>${esc(v.etq)}</option>`).join('')}</select></div>
       <button class="btn" id="dd-print">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6V2h8v4M4 12H2V6h12v6h-2M4 10h8v4H4z"/></svg>
         Imprimir informe
       </button>
-      <span class="muted">Genera una hoja por examinador/a, lista para firmar.</span>
+      <span class="muted">Una hoja por examinador/a, lista para firmar. Elegí el formato según el papel de la impresora.</span>
     </div></div>
     <div id="dd-cont" class="dd-cont">Cargando...</div>`;
   $('#dd-fecha').onchange = (e) => { estadoAgenda.fecha = e.target.value; renderDia(); };
+  $('#dd-formato').onchange = (e) => { aplicarFormatoImpresion(e.target.value); toast(`Formato: ${PAGINAS[e.target.value].etq}`); };
   $('#dd-print').onclick = () => window.print();
 
   const data = await api(`/dia?fecha=${fecha}`);
