@@ -143,7 +143,8 @@ async function pantallaLogin() {
 /* ================= router ================= */
 const tabs = {
   agenda: renderAgenda, disponibles: renderDisponibles, reagendar: renderReagendar,
-  buscar: renderBuscar, errores: renderErrores, dia: renderDia, analitica: renderAnalitica, datos: renderDatos,
+  buscar: renderBuscar, errores: renderErrores, dia: renderDia, analitica: renderAnalitica,
+  papelera: renderPapelera, datos: renderDatos,
 };
 function irA(tab) {
   if (location.hash !== `#${tab}`) { location.hash = tab; return; }
@@ -302,6 +303,7 @@ async function renderAgenda() {
   const libres = filas.filter((f) => !f.rut && !f.nombre && !f.bloqueado).length;
   $('#a-libres').textContent = `${libres} ${libres === 1 ? 'bloque libre' : 'bloques libres'}`;
   pintarGrilla($('#a-grid'), filas, estadoAgenda.fecha);
+  actualizarBadgePapelera();
 }
 
 async function dialogoPorConfirmar() {
@@ -897,6 +899,61 @@ async function renderAnalitica() {
   cargar();
 }
 
+/* ================= tab: PAPELERA ================= */
+const MOTIVO_TXT = {
+  liberar: 'Se liberó el bloque', bloquear: 'Se bloqueó el bloque',
+  'bloquear-dia': 'Se bloqueó el día completo', sobrescribir: 'Se pisó con otra cita',
+  reagendar: 'Se reagendó a otro bloque',
+};
+async function actualizarBadgePapelera() {
+  const b = document.getElementById('badge-papelera');
+  if (!b) return;
+  try {
+    const n = (await api('/papelera')).length;
+    b.textContent = n > 99 ? '99+' : String(n);
+    b.hidden = n === 0;
+    if (n === 0) b.textContent = '';
+  } catch (_) { b.hidden = true; }
+}
+async function renderPapelera() {
+  view.innerHTML = `
+    <div class="panel">
+      <h2>Papelera</h2>
+      <p class="muted">Citas retiradas de un bloque al <b>liberarlo</b>, <b>bloquearlo</b>, <b>pisarlo</b> con otra cita
+        o <b>reagendarlo</b>. Se conservan las últimas 200; se listan las 80 más recientes.
+        Restaurar solo funciona si el bloque original sigue libre.</p>
+      <div class="tabla-scroll"><table><thead><tr>
+        <th class="c">Cuándo</th><th class="c">Motivo</th><th class="c">Bloque original</th>
+        <th>Nombre</th><th>RUT</th><th class="c">Clase</th><th>Por</th><th class="c"></th>
+      </tr></thead><tbody id="pap-body"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
+    </div>`;
+
+  const cargar = async () => {
+    const pap = await api('/papelera');
+    $('#pap-body').innerHTML = pap.length ? pap.map((p) => `<tr>
+      <td class="num c">${esc(fFechaHora(p.ts))}</td>
+      <td class="c">${esc(MOTIVO_TXT[p.motivo] || p.motivo || '—')}</td>
+      <td class="num c">${esc(fFecha(p.fecha))} · ${esc(p.hora)}</td>
+      <td>${esc(nom(p.nombre) || p.bloqueo_motivo || '—')}</td>
+      <td class="num">${esc(p.rut || '—')}</td>
+      <td class="c">${p.clase ? `<span class="clase-tag ${claseFamilia(p.clase)}">${esc(p.clase)}</span>` : '—'}</td>
+      <td>${esc(p.actor || '—')}</td>
+      <td class="c"><button class="btn chico" data-id="${p.id}">Restaurar</button></td></tr>`).join('')
+      : '<tr><td colspan="8" class="muted">La papelera está vacía.</td></tr>';
+    $('#pap-body').querySelectorAll('button[data-id]').forEach((el) => {
+      el.onclick = async () => {
+        try {
+          const r = await api(`/papelera/${el.dataset.id}/restaurar`, { method: 'POST' });
+          toast(`Restaurada: ${nom(r.bloque.nombre) || r.bloque.rut || 'cita'}`);
+          cargar(); actualizarBadgePapelera();
+        } catch (e) { toast(e.message, 'err'); }
+      };
+    });
+    actualizarBadgePapelera();
+  };
+  cargar();
+}
+
 /* ================= tab: DATOS ================= */
 async function renderDatos() {
   view.innerHTML = `
@@ -929,10 +986,6 @@ async function renderDatos() {
       <div class="fila"><input type="date" id="fe-fecha"><input id="fe-nombre" placeholder="Nombre (opcional)"><button class="btn chico" id="fe-add">Agregar</button></div>
       <p class="muted">Tras cambiar feriados, volve a generar los bloques del periodo afectado.</p>
     </div>
-
-    <div class="panel"><h2>Papelera <span class="muted" style="font-weight:400">(citas liberadas o pisadas, ultimas 80)</span></h2>
-      <div class="tabla-scroll"><table><thead><tr><th class="c">Cuándo</th><th>Motivo</th><th class="c">Fecha / Hora</th><th>Nombre</th><th>RUT</th><th>Por</th><th class="c"></th></tr></thead>
-      <tbody id="pap-body"></tbody></table></div></div>
 
     <div class="panel"><h2>Listas desplegables</h2><div id="cat-cont"></div></div>
 
@@ -983,20 +1036,6 @@ async function renderDatos() {
     await api('/feriados', { method: 'POST', body: { fecha: $('#fe-fecha').value, nombre: $('#fe-nombre').value } });
     META = await api('/meta'); renderDatos();
   };
-
-  // papelera
-  const pap = await api('/papelera');
-  $('#pap-body').innerHTML = pap.length ? pap.map((p) => `<tr>
-    <td class="num c">${esc(fFechaHora(p.ts))}</td><td>${esc(p.motivo)}</td><td class="num c">${esc(fFecha(p.fecha))} ${esc(p.hora)}</td>
-    <td>${esc(nom(p.nombre) || p.bloqueo_motivo)}</td><td>${esc(p.rut)}</td><td>${esc(p.actor)}</td>
-    <td class="c"><button class="btn chico" data-id="${p.id}">Restaurar</button></td></tr>`).join('')
-    : '<tr><td colspan="7" class="muted">Vacia.</td></tr>';
-  $('#pap-body').querySelectorAll('button[data-id]').forEach((el) => {
-    el.onclick = async () => {
-      try { await api(`/papelera/${el.dataset.id}/restaurar`, { method: 'POST' }); toast('Restaurado'); renderDatos(); }
-      catch (e) { toast(e.message, 'err'); }
-    };
-  });
 
   // catalogos
   const cc = $('#cat-cont');
@@ -1066,6 +1105,7 @@ async function init() {
     if (salir) salir.onclick = async () => { await api('/logout', { method: 'POST' }); pantallaLogin(); };
     if (!location.hash) location.hash = 'agenda';
     ruta();
+    actualizarBadgePapelera();
   } catch (e) {
     if (e.message === 'Sesion requerida') return;
     view.innerHTML = `<div class="panel"><h2>No se pudo conectar</h2><p>${esc(e.message)}</p></div>`;
