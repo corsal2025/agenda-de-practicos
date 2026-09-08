@@ -53,6 +53,14 @@ function fFechaHora(v) {
 }
 // Nombres siempre en mayuscula al mostrar.
 const nom = (v) => String(v ?? '').toUpperCase();
+const DIAS_SEM = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+function fFechaLarga(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return fFecha(iso);
+  const d = new Date(`${iso}T12:00:00`);
+  return `${DIAS_SEM[d.getDay()]} ${Number(m[3])} de ${MESES[d.getMonth()]} de ${m[1]}`;
+}
 function sumarDias(iso, n) {
   const d = new Date(`${iso}T12:00:00`);
   d.setDate(d.getDate() + n);
@@ -635,31 +643,104 @@ async function renderErrores() {
   cargar();
 }
 
-/* ================= tab: AGENDA DEL DIA (imprimir) ================= */
+/* ================= tab: AGENDA DEL DIA (informe de impresion) ================= */
+const ESCUDO_SVG = `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="34" height="34">
+  <path d="M20 2l15 5v11c0 9.5-6.2 16.8-15 20-8.8-3.2-15-10.5-15-20V7l15-5z" fill="#1b3a75"></path>
+  <path d="M13 21l4.5 4.5L27 15" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+
 async function renderDia() {
   const fecha = (estadoAgenda.fecha || hoy());
   view.innerHTML = `
     <div class="panel no-print"><div class="fila">
       <div class="campo"><label>Fecha</label><input type="date" id="dd-fecha" value="${fecha}"></div>
-      <button class="btn" id="dd-print">Imprimir</button>
-      <span class="muted">Se imprime una hoja por examinador.</span>
+      <button class="btn" id="dd-print">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6V2h8v4M4 12H2V6h12v6h-2M4 10h8v4H4z"/></svg>
+        Imprimir informe
+      </button>
+      <span class="muted">Genera una hoja por examinador/a, lista para firmar.</span>
     </div></div>
-    <div id="dd-cont">Cargando...</div>`;
+    <div id="dd-cont" class="dd-cont">Cargando...</div>`;
   $('#dd-fecha').onchange = (e) => { estadoAgenda.fecha = e.target.value; renderDia(); };
   $('#dd-print').onclick = () => window.print();
+
   const data = await api(`/dia?fecha=${fecha}`);
   const exs = Object.keys(data.examinadores);
-  if (!exs.length) { $('#dd-cont').innerHTML = `<div class="panel">Sin bloques para ${esc(fFecha(fecha))}.</div>`; return; }
-  $('#dd-cont').innerHTML = exs.map((ex) => `
-    <div class="panel col-print">
-      <h3>${esc(ex)} — ${esc(fFecha(fecha))}</h3>
-      <table><thead><tr><th>Hora</th><th>RUT</th><th>Nombre</th><th>Clase</th><th>Tel.</th><th>Tipo</th></tr></thead>
-      <tbody>${data.examinadores[ex].map((r) => (r.bloqueado
-        ? `<tr class="muted"><td>${esc(r.hora)}</td><td colspan="5">&#128274; ${esc(r.bloqueo_motivo || 'BLOQUEADO')}</td></tr>`
-        : `<tr>
-        <td>${esc(r.hora)}</td><td>${esc(r.rut)}</td><td>${esc(nom(r.nombre))}</td>
-        <td>${esc(r.clase)}</td><td>${esc(r.contacto)}</td><td>${esc(r.tipo_cita)}</td></tr>`)).join('')}</tbody></table>
-    </div>`).join('');
+  if (!exs.length) {
+    $('#dd-cont').innerHTML = `<div class="panel">Sin bloques para ${esc(fFecha(fecha))}.</div>`;
+    return;
+  }
+  const generado = fFechaHora(new Date().toISOString());
+  const largaFecha = fFechaLarga(fecha);
+
+  $('#dd-cont').innerHTML = exs.map((ex, i) => {
+    const filas = data.examinadores[ex];
+    const citas = filas.filter((r) => !r.bloqueado && (r.rut || r.nombre));
+    const conf = citas.filter((r) => r.confirmo_asistencia === 1).length;
+    const bloq = filas.filter((r) => r.bloqueado).length;
+    let n = 0;
+    const cuerpo = filas.map((r) => {
+      if (r.bloqueado) {
+        return `<tr class="hd-bloq"><td>${esc(r.hora)}</td><td colspan="8">NO DISPONIBLE — ${esc(r.bloqueo_motivo || 'BLOQUEADO')}</td></tr>`;
+      }
+      const ocupada = r.rut || r.nombre;
+      if (!ocupada) {
+        return `<tr class="hd-libre"><td>${esc(r.hora)}</td><td colspan="8">Disponible</td></tr>`;
+      }
+      n += 1;
+      const res = r.resultado ? esc(r.resultado) : '';
+      return `<tr>
+        <td class="hd-n">${n}</td>
+        <td class="num">${esc(r.hora)}</td>
+        <td class="num">${esc(r.rut || '')}</td>
+        <td class="hd-nom">${esc(nom(r.nombre))}</td>
+        <td class="hd-c">${esc(r.clase || '')}</td>
+        <td class="num">${esc(r.contacto || '')}</td>
+        <td>${r.tipo_cita === 'REAGENDADO' ? 'Reagendado' : r.tipo_cita === 'TRASLADO EN TERRENO' ? 'Terreno' : ''}${r.pendiente_reagendar ? '<span class="hd-marca">Pend. reag.</span>' : ''}</td>
+        <td class="hd-res">${res}</td>
+        <td class="hd-obs"></td>
+      </tr>`;
+    }).join('');
+
+    return `<article class="hoja-dia">
+      <header class="hd-cab">
+        ${ESCUDO_SVG}
+        <div class="hd-org">
+          <span>Departamento de Licencias de Conducir</span>
+          <b>Agenda de Prácticos</b>
+        </div>
+        <div class="hd-folio">Hoja ${i + 1} de ${exs.length}</div>
+      </header>
+
+      <div class="hd-titulo">
+        <h2>Agenda diaria de exámenes prácticos</h2>
+        <div class="hd-datos">
+          <div><span>Examinador/a</span><b>${esc(nom(ex))}</b></div>
+          <div><span>Fecha</span><b>${esc(largaFecha)}</b></div>
+          <div><span>Citas</span><b>${citas.length}</b></div>
+          <div><span>Confirmadas</span><b>${conf}</b></div>
+          <div><span>Bloqueos</span><b>${bloq}</b></div>
+        </div>
+      </div>
+
+      <table class="hd-tabla">
+        <colgroup>
+          <col class="c-n"><col class="c-h"><col class="c-r"><col><col class="c-cl">
+          <col class="c-t"><col class="c-ti"><col class="c-re"><col class="c-o">
+        </colgroup>
+        <thead><tr>
+          <th>N°</th><th>Hora</th><th>RUT</th><th>Nombre</th><th>Clase</th>
+          <th>Teléfono</th><th>Tipo</th><th>Resultado</th><th>Observaciones</th>
+        </tr></thead>
+        <tbody>${cuerpo}</tbody>
+      </table>
+
+      <div class="hd-pie">
+        <div class="hd-firma"><div class="hd-linea"></div><span>Firma examinador/a</span></div>
+        <div class="hd-firma"><div class="hd-linea"></div><span>V°B° jefatura</span></div>
+        <div class="hd-gen">Generado ${esc(generado)}<br>Sistema de Agenda de Prácticos</div>
+      </div>
+    </article>`;
+  }).join('');
 }
 
 /* ================= tab: ANALITICA ================= */
