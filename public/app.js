@@ -408,9 +408,9 @@ function dialogoBloquearDia() {
 function slotCard(b) {
   if (!b) return '<div class="slot libre">—</div>';
   if (b.bloqueado) {
-    return `<button class="slot bloqueado" data-id="${b.id}">
+    return `<div class="slot bloqueado" role="button" tabindex="0" data-id="${b.id}">
       <span class="nombre">&#128274; ${esc(b.bloqueo_motivo || 'BLOQUEADO')}</span>
-      <span class="sub">No disponible</span></button>`;
+      <span class="sub">No disponible</span></div>`;
   }
   const ocupada = b.rut || b.nombre;
   const res = b.resultado === 'APROBADO' ? 'res-aprob'
@@ -419,10 +419,10 @@ function slotCard(b) {
     .filter(Boolean).join(' ');
 
   if (!ocupada) {
-    return `<button class="${cls}" data-id="${b.id}">
+    return `<div class="${cls}" role="button" tabindex="0" data-id="${b.id}">
       <span class="mas">+</span><span>Agendar</span>
       ${b.hora === META.hora_d_a5 ? '<span class="badges"><span class="badge dpesada">Bloque para D y A5</span></span>' : ''}
-    </button>`;
+    </div>`;
   }
 
   const badges = [];
@@ -441,7 +441,7 @@ function slotCard(b) {
     <span class="sr sr-n ${noAsiste ? 'on' : ''}" role="button" tabindex="0" data-r="NO ASISTIO">No asistió</span>
   </span>` : '';
 
-  return `<button class="${cls}" data-id="${b.id}">
+  return `<div class="${cls}" role="button" tabindex="0" data-id="${b.id}">
     <span class="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
     <span class="sub">
       <span class="clase-tag ${claseFamilia(b.clase)}">${esc(b.clase || '—')}</span>
@@ -449,7 +449,7 @@ function slotCard(b) {
     </span>
     ${badges.length ? `<span class="badges">${badges.join('')}</span>` : ''}
     ${acc}
-  </button>`;
+  </div>`;
 }
 // Familia de la clase de licencia (para el color del recuadro).
 function claseFamilia(c) {
@@ -488,7 +488,9 @@ function pintarGrilla(cont, filas, fecha) {
   }
   cont.innerHTML = html;
   cont.querySelectorAll('.slot[data-id]').forEach((el) => {
-    el.onclick = () => abrirSlotPorId(Number(el.dataset.id), recargar(renderAgenda));
+    const abrir = () => abrirSlotPorId(Number(el.dataset.id), recargar(renderAgenda));
+    el.onclick = (ev) => { if (!ev.target.closest('.slot-res')) abrir(); };
+    el.onkeydown = (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && !ev.target.closest('.slot-res')) { ev.preventDefault(); abrir(); } };
   });
   cont.querySelectorAll('.slot-res .sr').forEach((el) => {
     el.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); el.click(); } };
