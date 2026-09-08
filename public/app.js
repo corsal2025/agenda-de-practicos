@@ -429,9 +429,9 @@ async function renderDisponibles() {
     const q = new URLSearchParams(Object.fromEntries(Object.entries(filtDisp).filter(([, v]) => v)));
     const rows = await api(`/disponibles?${q}`);
     $('#d-body').innerHTML = rows.length ? rows.map((r) => `<tr>
-      <td>${esc(r.fecha)}</td><td>${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
-      <td>${r.apto_pesada ? '&#9989; ' : '&#128663; '}${esc(r.regla)}</td>
-      <td><button class="btn chico" data-id="${r.id}">Agendar</button></td></tr>`).join('')
+      <td class="num">${esc(r.fecha)}</td><td class="num">${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
+      <td><span class="regla ${r.apto_pesada ? 'ok' : ''}">${r.apto_pesada ? 'D · A5 permitidas' : 'B, C, A1-A4 · sin D/A5'}</span></td>
+      <td style="text-align:right"><button class="btn chico" data-id="${r.id}">Agendar</button></td></tr>`).join('')
       : `<tr><td colspan="5" class="muted">No hay bloques libres entre ${esc(filtDisp.desde)} y ${esc(filtDisp.hasta)}.
          Los primeros meses suelen estar llenos: ampliá la fecha "Hasta" o probá un mes mas adelante.</td></tr>`;
     $('#d-regla').textContent += rows.length ? ` — ${rows.length} bloque(s) libre(s).` : '';

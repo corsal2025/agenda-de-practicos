@@ -245,17 +245,23 @@ input:focus, select:focus, textarea:focus {
 .badge.noasiste{ background: var(--elev); color: var(--tinta-2); border-color: var(--linea); }
 
 /* ---------- tablas ---------- */
-.tabla-scroll { overflow-x: auto; border-radius: var(--r); }
+.tabla-scroll { overflow-x: auto; border: 1px solid var(--linea); border-radius: var(--r); }
+.tabla-scroll table { border: 0; }
 table { border-collapse: collapse; width: 100%; }
-th, td { padding: .55rem .7rem; text-align: left; vertical-align: middle; }
-th {
+th, td { padding: .6rem .75rem; text-align: left; vertical-align: middle; }
+thead th {
   background: var(--elev); border-bottom: 2px solid var(--azul);
   font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
-  color: var(--tinta-3); position: sticky; top: 100px; z-index: 4; white-space: nowrap;
+  color: var(--tinta-3); white-space: nowrap;
 }
 td { border-top: 1px solid var(--linea-2); font-size: 13px; }
 tbody tr:nth-child(even) { background: var(--elev); }
 tbody tr:hover { background: var(--azul-50); }
+tbody tr:first-child td { border-top: 0; }
+
+.regla { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+  padding: .14rem .5rem; border-radius: var(--r-sm); background: var(--elev); color: var(--tinta-2); border: 1px solid var(--linea); }
+.regla.ok { background: var(--pesada-bg); color: var(--pesada); border-color: var(--pesada-bd); }
 
 .sev { font-weight: 800; font-size: 10px; padding: .12rem .45rem; border-radius: var(--r-sm); text-transform: uppercase; letter-spacing: .04em; }
 .sev.error   { background: var(--error-bg); color: var(--error); }
