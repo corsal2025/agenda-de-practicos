@@ -247,10 +247,11 @@ input:focus, select:focus, textarea:focus {
 .slot.bloqueado .nombre { color: var(--alerta); font-weight: 800; font-size: 11.5px; letter-spacing: .02em; text-transform: uppercase; }
 
 /* ---------- badges / chips ---------- */
+.slot .badges { flex-direction: column; align-items: flex-start; gap: .2rem; }
 .badge {
   display: inline-flex; align-items: center;
-  font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
-  padding: .1rem .4rem; border-radius: var(--r-sm); border: 1px solid transparent;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .01em; line-height: 1.2;
+  padding: .12rem .42rem; border-radius: var(--r-sm); border: 1px solid transparent;
 }
 .badge.dpesada { background: var(--pesada-bg); color: var(--pesada); border-color: var(--pesada-bd); }
 .badge.reag    { background: var(--alerta-bg); color: var(--alerta); border-color: var(--alerta-bd); }
@@ -265,8 +266,8 @@ table { border-collapse: collapse; width: 100%; }
 th, td { padding: .6rem .75rem; text-align: left; vertical-align: middle; }
 thead th {
   background: var(--elev); border-bottom: 2px solid var(--azul);
-  font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
-  color: var(--tinta-3); white-space: nowrap;
+  font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--azul-900); white-space: nowrap; text-align: center;
 }
 td { border-top: 1px solid var(--linea-2); font-size: 13px; }
 tbody tr:nth-child(even) { background: var(--elev); }
@@ -398,8 +399,8 @@ tbody tr:first-child td { border-top: 0; }
 .hd-tabla { width: 100%; border-collapse: collapse; margin-top: 4px; table-layout: fixed; }
 .hd-tabla th {
   background: #eef2f8; border: 1px solid #c4cfe0; border-bottom: 1.5px solid var(--azul);
-  padding: 7px 7px; font-size: 9px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
-  color: #45526a; text-align: left;
+  padding: 8px 7px; font-size: 10.5px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase;
+  color: #1b3a75; text-align: center;
 }
 .hd-tabla td { border: 1px solid #d7dde8; padding: 6px 7px; vertical-align: middle; word-break: break-word; }
 .hd-tabla tbody tr:nth-child(even) { background: #f8fafc; }

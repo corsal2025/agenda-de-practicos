@@ -376,15 +376,15 @@ function slotCard(b) {
   if (!ocupada) {
     return `<button class="${cls}" data-id="${b.id}">
       <span class="mas">+</span><span>Agendar</span>
-      ${b.hora === META.hora_d_a5 ? '<span class="badges"><span class="badge dpesada">D/A5</span></span>' : ''}
+      ${b.hora === META.hora_d_a5 ? '<span class="badges"><span class="badge dpesada">Clases D · A5</span></span>' : ''}
     </button>`;
   }
 
   const badges = [];
-  if (b.hora === META.hora_d_a5) badges.push('<span class="badge dpesada">D · A5</span>');
+  if (b.hora === META.hora_d_a5) badges.push('<span class="badge dpesada">Clases D · A5</span>');
   if (b.tipo_cita === 'REAGENDADO') badges.push('<span class="badge reag">Reagendada</span>');
-  if (b.pendiente_reagendar) badges.push('<span class="badge reag">Pendiente</span>');
-  if (b.confirmo_asistencia === 1) badges.push('<span class="badge aprob">Confirmó</span>');
+  if (b.pendiente_reagendar) badges.push('<span class="badge reag">Pendiente de reagendar</span>');
+  if (b.confirmo_asistencia === 1) badges.push('<span class="badge aprob">Confirmó asistencia</span>');
   if (b.resultado === 'APROBADO') badges.push('<span class="badge aprob">Aprobó</span>');
   else if (b.resultado === 'REPROBADO') badges.push('<span class="badge reprob">Reprobó</span>');
   else if (b.resultado) badges.push('<span class="badge noasiste">' + esc(b.resultado) + '</span>');
@@ -468,7 +468,10 @@ async function renderDisponibles() {
       <td style="text-align:right"><button class="btn chico" data-id="${r.id}">Agendar</button></td></tr>`).join('')
       : `<tr><td colspan="5" class="muted">No hay bloques libres entre ${esc(filtDisp.desde)} y ${esc(filtDisp.hasta)}.
          Los primeros meses suelen estar llenos: ampliá la fecha "Hasta" o probá un mes mas adelante.</td></tr>`;
-    $('#d-regla').textContent += rows.length ? ` — ${rows.length} bloque(s) libre(s).` : '';
+    const base = $('#d-regla').textContent;
+    $('#d-regla').textContent = rows.length
+      ? `${base ? base + ' · ' : ''}${rows.length} bloque(s) libre(s) en el rango.`
+      : base;
     $('#d-body').querySelectorAll('button[data-id]').forEach((el) => {
       el.onclick = () => abrirSlotPorId(Number(el.dataset.id), buscar);
     });
@@ -587,7 +590,7 @@ async function renderBuscar() {
         const k = r.rut || r.nombre;
         if (rutsVistos.has(k)) continue;
         rutsVistos.add(k);
-        chips.push(`<button class="chip" data-rut="${esc(r.rut || '')}" data-nom="${esc(r.nombre || '')}" style="cursor:pointer">${esc(nom(r.nombre) || r.rut)} · ${esc(r.rut || 's/RUT')}</button>`);
+        chips.push(`<button class="chip" data-rut="${esc(r.rut || '')}" data-nom="${esc(r.nombre || '')}" style="cursor:pointer">${esc(nom(r.nombre) || r.rut)} · ${esc(r.rut || 'sin RUT')}</button>`);
       }
       $('#bx-res').innerHTML = chips.join('') || '<span class="muted">Sin resultados</span>';
       $('#bx-res').querySelectorAll('button').forEach((el) => {
@@ -729,7 +732,7 @@ async function renderDia() {
         <td class="hd-nom">${esc(nom(r.nombre))}</td>
         <td class="hd-c">${r.clase ? `<span class="clase-tag ${claseFamilia(r.clase)}">${esc(r.clase)}</span>` : ''}</td>
         <td class="num">${esc(r.contacto || '')}</td>
-        <td>${r.tipo_cita === 'REAGENDADO' ? 'Reagendado' : r.tipo_cita === 'TRASLADO EN TERRENO' ? 'Terreno' : ''}${r.pendiente_reagendar ? '<span class="hd-marca">Pend. reag.</span>' : ''}</td>
+        <td>${r.tipo_cita === 'REAGENDADO' ? 'Reagendado' : r.tipo_cita === 'TRASLADO EN TERRENO' ? 'Terreno' : ''}${r.pendiente_reagendar ? '<span class="hd-marca">Pendiente de reagendar</span>' : ''}</td>
         <td class="hd-res">${res}</td>
         <td class="hd-obs"></td>
       </tr>`;
@@ -770,7 +773,7 @@ async function renderDia() {
 
       <div class="hd-pie">
         <div class="hd-firma"><div class="hd-linea"></div><span>Firma examinador/a</span></div>
-        <div class="hd-firma"><div class="hd-linea"></div><span>V°B° jefatura</span></div>
+        <div class="hd-firma"><div class="hd-linea"></div><span>Visto bueno jefatura</span></div>
         <div class="hd-gen">Generado ${esc(generado)}<br>Sistema de Agenda de Prácticos</div>
       </div>
     </article>`;
