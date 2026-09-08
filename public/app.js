@@ -488,7 +488,7 @@ async function renderDisponibles() {
       <button class="btn" id="d-buscar">Buscar</button>
     </div><p class="muted" id="d-regla"></p></div>
     <div class="panel tabla-scroll"><table><thead><tr>
-      <th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th>Regla del bloque</th><th class="c"></th>
+      <th class="c">Fecha</th><th class="c">Hora</th><th class="c">Examinador</th><th class="c">Regla del bloque</th><th class="c"></th>
     </tr></thead><tbody id="d-body"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div>`;
   $('#d-clase').value = filtDisp.clase;
   $('#d-exam').value = filtDisp.examinador_id;
@@ -499,8 +499,8 @@ async function renderDisponibles() {
     const q = new URLSearchParams(Object.fromEntries(Object.entries(filtDisp).filter(([, v]) => v)));
     const rows = await api(`/disponibles?${q}`);
     $('#d-body').innerHTML = rows.length ? rows.map((r) => `<tr>
-      <td class="num c">${esc(fFecha(r.fecha))}</td><td class="num c">${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
-      <td><span class="regla ${r.apto_pesada ? 'ok' : ''}">${r.apto_pesada ? 'D · A5 permitidas' : 'B, C, A1-A4 · sin D/A5'}</span></td>
+      <td class="num c">${esc(fFecha(r.fecha))}</td><td class="num c">${esc(r.hora)}</td><td class="c">${esc(r.examinador)}</td>
+      <td class="c"><span class="regla ${r.apto_pesada ? 'ok' : ''}">${r.apto_pesada ? 'D · A5 permitidas' : 'B, C, A1-A4 · sin D/A5'}</span></td>
       <td class="c"><button class="btn chico" data-id="${r.id}">Agendar</button></td></tr>`).join('')
       : `<tr><td colspan="5" class="muted">No hay bloques libres entre ${esc(filtDisp.desde)} y ${esc(filtDisp.hasta)}.
          Los primeros meses suelen estar llenos: ampliá la fecha "Hasta" o probá un mes mas adelante.</td></tr>`;
