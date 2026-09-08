@@ -49,6 +49,22 @@ function resumen(desde, hasta) {
     GROUP BY dia ORDER BY dia
   `).all(desde, hasta);
 
+  // Resultados por examinador: cuantos aprueba, reprueba y no asisten con cada uno.
+  const porExamRes = db.prepare(`
+    SELECT e.nombre AS examinador,
+      SUM(CASE WHEN a.resultado = 'APROBADO' THEN 1 ELSE 0 END) AS aprobados,
+      SUM(CASE WHEN a.resultado = 'REPROBADO' THEN 1 ELSE 0 END) AS reprobados,
+      SUM(CASE WHEN a.resultado IN ('NO ASISTIO','REPROBADO INASISTENCIA') THEN 1 ELSE 0 END) AS no_asistio,
+      SUM(CASE WHEN a.resultado IS NOT NULL THEN 1 ELSE 0 END) AS con_resultado
+    FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
+    WHERE ${OCUPADA} AND a.fecha BETWEEN ? AND ?
+    GROUP BY e.nombre ORDER BY e.nombre
+  `).all(desde, hasta).map((r) => ({
+    ...r,
+    aprobacion: r.con_resultado ? +(r.aprobados / r.con_resultado * 100).toFixed(1) : 0,
+    reprobacion: r.con_resultado ? +((r.reprobados + r.no_asistio) / r.con_resultado * 100).toFixed(1) : 0,
+  }));
+
   return {
     rango: [desde === '2000-01-01' ? null : desde, hasta === '2100-01-01' ? null : hasta],
     kpis: {
@@ -68,6 +84,7 @@ function resumen(desde, hasta) {
     },
     por_resultado: porGrupo('a.resultado', desde, hasta, `AND a.resultado IS NOT NULL`),
     por_examinador: porGrupo('e.nombre', desde, hasta),
+    por_examinador_resultado: porExamRes,
     por_clase: porGrupo('a.clase', desde, hasta),
     por_funcionario: porGrupo('f.nombre', desde, hasta),
     por_tipo: porGrupo('a.tipo_cita', desde, hasta, `AND a.tipo_cita IS NOT NULL`),

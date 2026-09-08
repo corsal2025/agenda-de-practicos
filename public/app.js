@@ -854,6 +854,23 @@ function grafico(id, tipo, labels, datos, label) {
     },
   }));
 }
+function graficoStack(id, labels, series) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  const p = paletaInst();
+  charts.push(new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: series.map((s) => ({ label: s.label, data: s.data, backgroundColor: s.color, borderRadius: 2, maxBarThickness: 70 })) },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, position: 'bottom', labels: { color: p.texto, font: { family: 'Public Sans' }, boxWidth: 12 } } },
+      scales: {
+        x: { stacked: true, grid: { color: p.rejilla }, ticks: { color: p.texto, font: { family: 'Public Sans' } } },
+        y: { stacked: true, beginAtZero: true, grid: { color: p.rejilla }, ticks: { color: p.texto, font: { family: 'Public Sans' }, precision: 0 } },
+      },
+    },
+  }));
+}
 async function renderAnalitica() {
   const r = META.rango_agenda || {};
   view.innerHTML = `
@@ -866,6 +883,12 @@ async function renderAnalitica() {
     <div class="grid2">
       <div class="panel"><h3>Resultado de examenes</h3><div class="grafico"><canvas id="g-res"></canvas></div></div>
       <div class="panel"><h3>Citas por examinador</h3><div class="grafico"><canvas id="g-exam"></canvas></div></div>
+      <div class="panel"><h3>Resultados por examinador</h3>
+        <div class="grafico"><canvas id="g-exres"></canvas></div>
+        <div class="tabla-scroll" style="margin-top:.6rem"><table><thead><tr>
+          <th>Examinador</th><th class="c">Aprobó</th><th class="c">Reprobó</th><th class="c">No asistió</th><th class="c">% aprobación</th>
+        </tr></thead><tbody id="exres-tabla"></tbody></table></div>
+      </div>
       <div class="panel"><h3>Citas por clase</h3><div class="grafico"><canvas id="g-clase"></canvas></div></div>
       <div class="panel"><h3>Citas por funcionario/a</h3><div class="grafico"><canvas id="g-func"></canvas></div></div>
       <div class="panel"><h3>Tipo de cita</h3><div class="grafico"><canvas id="g-tipo"></canvas></div></div>
@@ -889,6 +912,19 @@ async function renderAnalitica() {
     const pares = (arr) => [arr.map((x) => x.k), arr.map((x) => x.n)];
     grafico('g-res', 'doughnut', ...pares(a.por_resultado));
     grafico('g-exam', 'bar', ...pares(a.por_examinador), 'Citas');
+    const exr = a.por_examinador_resultado || [];
+    graficoStack('g-exres', exr.map((x) => x.examinador), [
+      { label: 'Aprobó', data: exr.map((x) => x.aprobados), color: '#1f7a3d' },
+      { label: 'Reprobó', data: exr.map((x) => x.reprobados), color: '#ad2b2f' },
+      { label: 'No asistió', data: exr.map((x) => x.no_asistio), color: '#98a2b2' },
+    ]);
+    $('#exres-tabla').innerHTML = exr.length ? exr.map((x) => `<tr>
+      <td>${esc(x.examinador)}</td>
+      <td class="c" style="color:#1f7a3d;font-weight:700">${x.aprobados}</td>
+      <td class="c" style="color:#ad2b2f;font-weight:700">${x.reprobados}</td>
+      <td class="c">${x.no_asistio}</td>
+      <td class="c" style="font-weight:700">${x.aprobacion}%</td></tr>`).join('')
+      : '<tr><td colspan="5" class="muted">Sin resultados en el período.</td></tr>';
     grafico('g-clase', 'bar', ...pares(a.por_clase), 'Citas');
     grafico('g-func', 'bar', ...pares(a.por_funcionario), 'Citas');
     grafico('g-tipo', 'bar', ...pares(a.por_tipo), 'Citas');
