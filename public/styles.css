@@ -295,7 +295,7 @@ tbody tr:nth-child(even) { background: var(--elev); }
 tbody tr:hover { background: var(--azul-50); }
 tbody tr:first-child td { border-top: 0; }
 
-.regla { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+.regla { display: inline-block; white-space: nowrap; font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
   padding: .14rem .5rem; border-radius: var(--r-sm); background: var(--elev); color: var(--tinta-2); border: 1px solid var(--linea); }
 .regla.ok { background: var(--pesada-bg); color: var(--pesada); border-color: var(--pesada-bd); }
 
