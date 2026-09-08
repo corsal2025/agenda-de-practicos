@@ -51,6 +51,21 @@ function fFechaHora(v) {
   if (m) return `${m[3]}/${m[2]}/${m[1]} ${m[4]}`;
   return fFecha(v);
 }
+
+// Mantener la posicion del scroll cuando una accion vuelve a dibujar la vista.
+let _scrollY = null;
+const guardarScroll = () => { _scrollY = window.scrollY; };
+function restaurarScroll() {
+  if (_scrollY == null) return;
+  const y = _scrollY; _scrollY = null;
+  requestAnimationFrame(() => window.scrollTo(0, y));
+}
+// Envuelve un callback para que, tras redibujar, la pantalla quede donde estaba.
+const recargar = (fn) => async () => {
+  const y = window.scrollY;
+  await fn();
+  requestAnimationFrame(() => window.scrollTo(0, y));
+};
 // Nombres siempre en mayuscula al mostrar.
 const nom = (v) => String(v ?? '').toUpperCase();
 // Telefono chileno para mostrar: +56 9 1234 5678
@@ -328,6 +343,7 @@ async function renderAgenda() {
   $('#a-libres').textContent = `${libres} ${libres === 1 ? 'bloque libre' : 'bloques libres'}`;
   pintarGrilla($('#a-grid'), filas, estadoAgenda.fecha);
   actualizarBadgePapelera();
+  restaurarScroll();
 }
 
 async function dialogoPorConfirmar() {
@@ -343,7 +359,7 @@ async function dialogoPorConfirmar() {
           <button class="btn chico sec" data-no="${r.id}">No</button></td></tr>`).join('')
       : '<tr><td colspan="6" class="muted">Nada por confirmar.</td></tr>'}</tbody></table></div>
   `, `<button class="btn sec" id="pc-cerrar">Cerrar</button>`);
-  $('#pc-cerrar').onclick = () => { cerrarModal(); renderAgenda(); };
+  $('#pc-cerrar').onclick = () => { cerrarModal(); recargar(renderAgenda)(); };
   const marcar = async (id, val) => {
     const b = await api(`/agenda/${id}`);
     await api(`/agenda/${id}`, { method: 'PUT', body: {
@@ -379,13 +395,13 @@ function dialogoBloquearDia() {
         motivo: $('#bd-motivo').value, incluir_ocupados: $('#bd-ocupados').checked,
       } });
       toast(`${r.bloqueados} bloques bloqueados`);
-      cerrarModal(); renderAgenda();
+      cerrarModal(); recargar(renderAgenda)();
     } catch (e) { toast(e.message, 'err'); }
   };
   $('#bd-des').onclick = async () => {
     const r = await api('/desbloquear-dia', { method: 'POST', body: { fecha: $('#bd-fecha').value, examinador_id: $('#bd-exam').value || null } });
     toast(`${r.desbloqueados} bloques desbloqueados`);
-    cerrarModal(); renderAgenda();
+    cerrarModal(); recargar(renderAgenda)();
   };
 }
 
@@ -472,13 +488,15 @@ function pintarGrilla(cont, filas, fecha) {
   }
   cont.innerHTML = html;
   cont.querySelectorAll('.slot[data-id]').forEach((el) => {
-    el.onclick = () => abrirSlotPorId(Number(el.dataset.id), renderAgenda);
+    el.onclick = () => abrirSlotPorId(Number(el.dataset.id), recargar(renderAgenda));
   });
   cont.querySelectorAll('.slot-res .sr').forEach((el) => {
     el.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); el.click(); } };
     el.onclick = async (ev) => {
       ev.stopPropagation();
-      const id = Number(el.closest('.slot-res').dataset.id);
+      const box = el.closest('.slot-res');
+      const card = el.closest('.slot');
+      const id = Number(box.dataset.id);
       const quitar = el.classList.contains('on');
       try {
         const b = await api(`/agenda/${id}`);
@@ -492,8 +510,14 @@ function pintarGrilla(cont, filas, fecha) {
           resultado: quitar ? null : el.dataset.r,
         } });
         (r.avisos || []).forEach((a) => toast(a, 'err'));
+        // Actualiza la tarjeta en el lugar, sin recargar la grilla (no salta la pantalla).
+        box.querySelectorAll('.sr').forEach((s) => s.classList.remove('on'));
+        card.classList.remove('res-aprob', 'res-reprob');
+        if (!quitar) {
+          el.classList.add('on');
+          card.classList.add(el.dataset.r === 'APROBADO' ? 'res-aprob' : 'res-reprob');
+        }
         toast(quitar ? 'Resultado borrado' : `Marcado: ${el.dataset.r === 'NO ASISTIO' ? 'No asistió' : el.dataset.r === 'APROBADO' ? 'Aprobó' : 'Reprobó'}`);
-        renderAgenda();
       } catch (e) { toast(e.message, 'err'); }
     };
   });
@@ -535,7 +559,7 @@ async function renderDisponibles() {
       ? `${base ? base + ' · ' : ''}${rows.length} bloque(s) libre(s) en el rango.`
       : base;
     $('#d-body').querySelectorAll('button[data-id]').forEach((el) => {
-      el.onclick = () => abrirSlotPorId(Number(el.dataset.id), buscar);
+      el.onclick = () => abrirSlotPorId(Number(el.dataset.id), recargar(buscar));
     });
   };
   $('#d-buscar').onclick = buscar;
@@ -672,7 +696,7 @@ async function historial(rutv, nombre) {
       <td class="c"><button class="btn chico" data-id="${r.id}">Abrir</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">Sin citas.</td></tr>'}
     </tbody></table></div></div>`;
   $('#bx-hist').querySelectorAll('button[data-id]').forEach((el) => {
-    el.onclick = () => abrirSlotPorId(Number(el.dataset.id), () => historial(rutv, nombre));
+    el.onclick = () => abrirSlotPorId(Number(el.dataset.id), recargar(() => historial(rutv, nombre)));
   });
 }
 
@@ -712,7 +736,7 @@ async function renderErrores() {
       <td class="c">${x.agenda_id ? `<button class="btn chico" data-id="${x.agenda_id}">Abrir</button>` : ''}</td></tr>`).join('')
       : '<tr><td colspan="9" class="muted">Nada que mostrar.</td></tr>';
     $('#e-body').querySelectorAll('button[data-id]').forEach((el) => {
-      el.onclick = () => abrirSlotPorId(Number(el.dataset.id), cargar);
+      el.onclick = () => abrirSlotPorId(Number(el.dataset.id), recargar(cargar));
     });
   };
   $('#e-refresh').onclick = cargar;
