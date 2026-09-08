@@ -306,9 +306,9 @@ async function dialogoPorConfirmar() {
   const rows = (await api('/agenda?estado=porconfirmar'))
     .filter((r) => r.fecha <= hasta);
   modal('Citas por confirmar (proximos 7 dias)', `
-    <div class="ancho tabla-scroll"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Nombre</th><th>Telefono</th><th>Correo</th><th></th></tr></thead>
+    <div class="ancho tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Nombre</th><th>Teléfono</th><th>Correo</th><th class="c"></th></tr></thead>
     <tbody id="pc-body">${rows.length ? rows.map((r) => `<tr data-id="${r.id}">
-      <td>${esc(fFecha(r.fecha))}</td><td>${esc(r.hora)}</td><td>${esc(nom(r.nombre))}</td>
+      <td class="c">${esc(fFecha(r.fecha))}</td><td class="c">${esc(r.hora)}</td><td>${esc(nom(r.nombre))}</td>
       <td>${esc(r.contacto)}</td><td>${esc(r.correo)}</td>
       <td><button class="btn chico" data-si="${r.id}">Confirmo</button>
           <button class="btn chico sec" data-no="${r.id}">No</button></td></tr>`).join('')
@@ -388,6 +388,15 @@ function slotCard(b) {
   if (b.resultado === 'APROBADO') badges.push('<span class="badge aprob">Aprobó</span>');
   else if (b.resultado === 'REPROBADO') badges.push('<span class="badge reprob">Reprobó</span>');
   else if (b.resultado) badges.push('<span class="badge noasiste">' + esc(b.resultado) + '</span>');
+
+  // Marcado rapido de resultado (solo citas de hoy o pasadas)
+  const noAsiste = b.resultado === 'NO ASISTIO' || b.resultado === 'REPROBADO INASISTENCIA';
+  const acc = b.fecha <= META.hoy ? `<span class="slot-res" data-id="${b.id}">
+    <span class="sr sr-a ${b.resultado === 'APROBADO' ? 'on' : ''}" role="button" tabindex="0" data-r="APROBADO">Aprobó</span>
+    <span class="sr sr-r ${b.resultado === 'REPROBADO' ? 'on' : ''}" role="button" tabindex="0" data-r="REPROBADO">Reprobó</span>
+    <span class="sr sr-n ${noAsiste ? 'on' : ''}" role="button" tabindex="0" data-r="NO ASISTIO">No asistió</span>
+  </span>` : '';
+
   return `<button class="${cls}" data-id="${b.id}">
     <span class="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
     <span class="sub">
@@ -395,6 +404,7 @@ function slotCard(b) {
       <span class="cita-rut num">${esc(b.rut || 'sin RUT')}</span>
     </span>
     ${badges.length ? `<span class="badges">${badges.join('')}</span>` : ''}
+    ${acc}
   </button>`;
 }
 // Familia de la clase de licencia (para el color del recuadro).
@@ -436,6 +446,29 @@ function pintarGrilla(cont, filas, fecha) {
   cont.querySelectorAll('.slot[data-id]').forEach((el) => {
     el.onclick = () => abrirSlotPorId(Number(el.dataset.id), renderAgenda);
   });
+  cont.querySelectorAll('.slot-res .sr').forEach((el) => {
+    el.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); el.click(); } };
+    el.onclick = async (ev) => {
+      ev.stopPropagation();
+      const id = Number(el.closest('.slot-res').dataset.id);
+      const quitar = el.classList.contains('on');
+      try {
+        const b = await api(`/agenda/${id}`);
+        const r = await api(`/agenda/${id}`, { method: 'PUT', body: {
+          visto_en: b.actualizado_en,
+          rut: b.rut, nombre: b.nombre, clase: b.clase, contacto: b.contacto, correo: b.correo,
+          tipo_cita: b.tipo_cita, motivo_reagendamiento: b.motivo_reagendamiento,
+          lista_espera: b.lista_espera, intento: b.intento, funcionario_id: b.funcionario_id,
+          fecha_inicio_tramite: b.fecha_inicio_tramite, confirmo_asistencia: b.confirmo_asistencia,
+          comentarios: b.comentarios,
+          resultado: quitar ? null : el.dataset.r,
+        } });
+        (r.avisos || []).forEach((a) => toast(a, 'err'));
+        toast(quitar ? 'Resultado borrado' : `Marcado: ${el.dataset.r === 'NO ASISTIO' ? 'No asistió' : el.dataset.r === 'APROBADO' ? 'Aprobó' : 'Reprobó'}`);
+        renderAgenda();
+      } catch (e) { toast(e.message, 'err'); }
+    };
+  });
 }
 
 /* ================= tab: DISPONIBLES ================= */
@@ -452,7 +485,7 @@ async function renderDisponibles() {
       <button class="btn" id="d-buscar">Buscar</button>
     </div><p class="muted" id="d-regla"></p></div>
     <div class="panel tabla-scroll"><table><thead><tr>
-      <th>Fecha</th><th>Hora</th><th>Examinador</th><th>Regla del bloque</th><th></th>
+      <th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th>Regla del bloque</th><th class="c"></th>
     </tr></thead><tbody id="d-body"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div>`;
   $('#d-clase').value = filtDisp.clase;
   $('#d-exam').value = filtDisp.examinador_id;
@@ -463,9 +496,9 @@ async function renderDisponibles() {
     const q = new URLSearchParams(Object.fromEntries(Object.entries(filtDisp).filter(([, v]) => v)));
     const rows = await api(`/disponibles?${q}`);
     $('#d-body').innerHTML = rows.length ? rows.map((r) => `<tr>
-      <td class="num">${esc(fFecha(r.fecha))}</td><td class="num">${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
+      <td class="num c">${esc(fFecha(r.fecha))}</td><td class="num c">${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
       <td><span class="regla ${r.apto_pesada ? 'ok' : ''}">${r.apto_pesada ? 'D · A5 permitidas' : 'B, C, A1-A4 · sin D/A5'}</span></td>
-      <td style="text-align:right"><button class="btn chico" data-id="${r.id}">Agendar</button></td></tr>`).join('')
+      <td class="c"><button class="btn chico" data-id="${r.id}">Agendar</button></td></tr>`).join('')
       : `<tr><td colspan="5" class="muted">No hay bloques libres entre ${esc(filtDisp.desde)} y ${esc(filtDisp.hasta)}.
          Los primeros meses suelen estar llenos: ampliá la fecha "Hasta" o probá un mes mas adelante.</td></tr>`;
     const base = $('#d-regla').textContent;
@@ -484,7 +517,7 @@ async function renderDisponibles() {
 async function renderReagendar() {
   view.innerHTML = `
     <div class="panel"><h2>Pendientes de reagendar</h2>
-      <div class="tabla-scroll"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Examinador</th><th>Nombre</th><th>RUT</th><th>Nota</th><th></th></tr></thead>
+      <div class="tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th>Nombre</th><th>RUT</th><th>Nota</th><th class="c"></th></tr></thead>
       <tbody id="rp-body"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div></div>
     <div class="panel"><h2>Reagendar una cita</h2>
       <div class="campo" style="max-width:420px"><label>Buscar por RUT, nombre o telefono</label><input id="r-q" placeholder="minimo 3 caracteres"></div>
@@ -495,9 +528,9 @@ async function renderReagendar() {
   const cargarPend = async () => {
     const rows = await api('/agenda?estado=pendiente');
     $('#rp-body').innerHTML = rows.length ? rows.map((r) => `<tr>
-      <td>${esc(fFecha(r.fecha))}</td><td>${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
+      <td class="c">${esc(fFecha(r.fecha))}</td><td class="c">${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
       <td>${esc(nom(r.nombre))}</td><td>${esc(r.rut)}</td><td>${esc(r.pendiente_nota)}</td>
-      <td><button class="btn chico" data-id="${r.id}">Reagendar</button></td></tr>`).join('')
+      <td class="c"><button class="btn chico" data-id="${r.id}">Reagendar</button></td></tr>`).join('')
       : '<tr><td colspan="7" class="muted">Nada pendiente.</td></tr>';
     $('#rp-body').querySelectorAll('button[data-id]').forEach((el) => {
       el.onclick = () => detalleReagendar(Number(el.dataset.id));
@@ -542,7 +575,7 @@ async function detalleReagendar(id) {
       </div>
       ${pesada ? `<p class="muted">Clase ${esc(cita.clase)}: destino limitado al bloque ${esc(META.hora_d_a5)}.</p>` : ''}
       <div class="campo"><label>Motivo del reagendamiento</label><input id="rd-motivo" value="${esc(cita.motivo_reagendamiento)}"></div>
-      <div class="tabla-scroll"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Examinador</th><th></th></tr></thead>
+      <div class="tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th class="c"></th></tr></thead>
         <tbody id="rd-body"><tr><td colspan="4" class="muted">Elige un rango y busca.</td></tr></tbody></table></div>
     </div>`;
   $('#rd-buscar').onclick = async () => {
@@ -551,8 +584,8 @@ async function detalleReagendar(id) {
     if (pesada) q.set('clase', cita.clase);
     const libres = await api(`/disponibles?${q}`);
     $('#rd-body').innerHTML = libres.length ? libres.map((l) => `<tr>
-      <td>${esc(fFecha(l.fecha))}</td><td>${esc(l.hora)}</td><td>${esc(l.examinador)}</td>
-      <td><button class="btn chico" data-id="${l.id}">Mover aqui</button></td></tr>`).join('')
+      <td class="c">${esc(fFecha(l.fecha))}</td><td class="c">${esc(l.hora)}</td><td>${esc(l.examinador)}</td>
+      <td class="c"><button class="btn chico" data-id="${l.id}">Mover aquí</button></td></tr>`).join('')
       : '<tr><td colspan="4" class="muted">Sin bloques libres.</td></tr>';
     $('#rd-body').querySelectorAll('button[data-id]').forEach((el) => {
       el.onclick = async () => {
@@ -603,11 +636,11 @@ async function historial(rutv, nombre) {
   const rows = rutv ? await api(`/historial?rut=${encodeURIComponent(rutv)}`) : [];
   $('#bx-hist').innerHTML = `<div class="panel"><h3>${esc(nom(nombre) || rutv)}</h3>
     ${rutv ? '' : '<p class="muted">Sin RUT registrado; no se puede armar historial.</p>'}
-    <div class="tabla-scroll"><table><thead><tr><th>Fecha</th><th>Hora</th><th>Examinador</th><th>Clase</th><th>Tipo</th><th>Resultado</th><th></th></tr></thead>
+    <div class="tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th class="c">Clase</th><th>Tipo</th><th>Resultado</th><th class="c"></th></tr></thead>
     <tbody>${rows.map((r) => `<tr>
-      <td>${esc(fFecha(r.fecha))}</td><td>${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
-      <td>${esc(r.clase)}</td><td>${esc(r.tipo_cita)}</td><td>${esc(r.resultado)}</td>
-      <td><button class="btn chico" data-id="${r.id}">Abrir</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">Sin citas.</td></tr>'}
+      <td class="c">${esc(fFecha(r.fecha))}</td><td class="c">${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
+      <td class="c">${esc(r.clase)}</td><td>${esc(r.tipo_cita)}</td><td>${esc(r.resultado)}</td>
+      <td class="c"><button class="btn chico" data-id="${r.id}">Abrir</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">Sin citas.</td></tr>'}
     </tbody></table></div></div>`;
   $('#bx-hist').querySelectorAll('button[data-id]').forEach((el) => {
     el.onclick = () => abrirSlotPorId(Number(el.dataset.id), () => historial(rutv, nombre));
@@ -628,7 +661,7 @@ async function renderErrores() {
       <button class="btn sec" id="e-refresh">Recalcular</button></div>
     <div class="chips" id="e-chips" style="margin:.6rem 0"></div></div>
     <div class="panel tabla-scroll"><table><thead><tr>
-      <th>Sev</th><th>Tipo</th><th>Fecha</th><th>Hora</th><th>Examinador</th><th>RUT</th><th>Nombre</th><th>Detalle</th><th></th>
+      <th class="c">Sev</th><th>Tipo</th><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th>RUT</th><th>Nombre</th><th>Detalle</th><th class="c"></th>
     </tr></thead><tbody id="e-body"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div>`;
   const cargar = async () => {
     const rep = await api('/errores');
@@ -643,11 +676,11 @@ async function renderErrores() {
   const pintar = (rep) => {
     const rows = rep.hallazgos.filter((x) => (!filtErr.tipo || x.tipo === filtErr.tipo));
     $('#e-body').innerHTML = rows.length ? rows.slice(0, 600).map((x) => `<tr>
-      <td><span class="sev ${x.severidad}">${x.severidad}</span></td>
+      <td class="c"><span class="sev ${x.severidad}">${x.severidad}</span></td>
       <td>${esc(ETIQUETA[x.tipo] || x.tipo)}</td>
-      <td>${esc(fFecha(x.fecha))}</td><td>${esc(x.hora)}</td><td>${esc(x.examinador)}</td>
+      <td class="c">${esc(fFecha(x.fecha))}</td><td class="c">${esc(x.hora)}</td><td>${esc(x.examinador)}</td>
       <td>${esc(x.rut)}</td><td>${esc(nom(x.nombre))}</td><td>${esc(x.mensaje)}</td>
-      <td>${x.agenda_id ? `<button class="btn chico" data-id="${x.agenda_id}">Abrir</button>` : ''}</td></tr>`).join('')
+      <td class="c">${x.agenda_id ? `<button class="btn chico" data-id="${x.agenda_id}">Abrir</button>` : ''}</td></tr>`).join('')
       : '<tr><td colspan="9" class="muted">Nada que mostrar.</td></tr>';
     $('#e-body').querySelectorAll('button[data-id]').forEach((el) => {
       el.onclick = () => abrirSlotPorId(Number(el.dataset.id), cargar);
@@ -895,7 +928,7 @@ async function renderDatos() {
     </div>
 
     <div class="panel"><h2>Papelera <span class="muted" style="font-weight:400">(citas liberadas o pisadas, ultimas 80)</span></h2>
-      <div class="tabla-scroll"><table><thead><tr><th>Cuando</th><th>Motivo</th><th>Fecha/Hora</th><th>Nombre</th><th>RUT</th><th>Por</th><th></th></tr></thead>
+      <div class="tabla-scroll"><table><thead><tr><th class="c">Cuándo</th><th>Motivo</th><th class="c">Fecha / Hora</th><th>Nombre</th><th>RUT</th><th>Por</th><th class="c"></th></tr></thead>
       <tbody id="pap-body"></tbody></table></div></div>
 
     <div class="panel"><h2>Listas desplegables</h2><div id="cat-cont"></div></div>
@@ -908,7 +941,7 @@ async function renderDatos() {
     </div>
 
     <div class="panel"><h2>Ultimos movimientos</h2><div class="tabla-scroll"><table>
-      <thead><tr><th>Fecha</th><th>Accion</th><th>Por</th><th>Detalle</th></tr></thead><tbody id="mov-body"></tbody></table></div></div>`;
+      <thead><tr><th class="c">Fecha</th><th>Acción</th><th>Por</th><th>Detalle</th></tr></thead><tbody id="mov-body"></tbody></table></div></div>`;
 
   $('#im-btn').onclick = async () => {
     const f = $('#im-file').files[0];
@@ -951,9 +984,9 @@ async function renderDatos() {
   // papelera
   const pap = await api('/papelera');
   $('#pap-body').innerHTML = pap.length ? pap.map((p) => `<tr>
-    <td class="num">${esc(fFechaHora(p.ts))}</td><td>${esc(p.motivo)}</td><td class="num">${esc(fFecha(p.fecha))} ${esc(p.hora)}</td>
+    <td class="num c">${esc(fFechaHora(p.ts))}</td><td>${esc(p.motivo)}</td><td class="num c">${esc(fFecha(p.fecha))} ${esc(p.hora)}</td>
     <td>${esc(nom(p.nombre) || p.bloqueo_motivo)}</td><td>${esc(p.rut)}</td><td>${esc(p.actor)}</td>
-    <td><button class="btn chico" data-id="${p.id}">Restaurar</button></td></tr>`).join('')
+    <td class="c"><button class="btn chico" data-id="${p.id}">Restaurar</button></td></tr>`).join('')
     : '<tr><td colspan="7" class="muted">Vacia.</td></tr>';
   $('#pap-body').querySelectorAll('button[data-id]').forEach((el) => {
     el.onclick = async () => {
@@ -1016,7 +1049,7 @@ async function renderDatos() {
   };
 
   const mov = await api('/movimientos');
-  $('#mov-body').innerHTML = mov.map((m) => `<tr><td class="num">${esc(fFechaHora(m.ts))}</td><td>${esc(m.accion)}</td><td>${esc(m.actor)}</td><td>${esc(m.detalle)}</td></tr>`).join('');
+  $('#mov-body').innerHTML = mov.map((m) => `<tr><td class="num c">${esc(fFechaHora(m.ts))}</td><td>${esc(m.accion)}</td><td>${esc(m.actor)}</td><td>${esc(m.detalle)}</td></tr>`).join('');
 }
 
 /* ================= arranque ================= */

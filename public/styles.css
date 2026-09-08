@@ -219,6 +219,18 @@ input:focus, select:focus, textarea:focus {
 .clase-tag.prof    { background: #475569; }
 :root[data-tema="oscuro"] .clase-tag { color: #0d1526; }
 
+/* Marcado rapido de resultado en la tarjeta */
+.slot-res { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; padding-top: 5px; border-top: 1px dashed var(--linea); }
+.slot-res .sr {
+  font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; cursor: pointer;
+  border: 1px solid var(--linea); background: var(--papel); color: var(--tinta-2); user-select: none;
+}
+.slot-res .sr:hover { border-color: var(--tinta-3); color: var(--tinta); }
+.slot-res .sr:focus-visible { outline: 2px solid var(--azul); outline-offset: 1px; }
+.slot-res .sr-a.on { background: var(--ok); border-color: var(--ok); color: #fff; }
+.slot-res .sr-r.on { background: var(--error); border-color: var(--error); color: #fff; }
+.slot-res .sr-n.on { background: var(--tinta-2); border-color: var(--tinta-2); color: #fff; }
+
 .slot.ocupada { border-left-color: var(--azul); }
 .slot.ocupada:hover { border-color: var(--azul); box-shadow: var(--sh); }
 .slot.ocupada.res-aprob { border-left-color: var(--ok); }
@@ -267,8 +279,11 @@ th, td { padding: .6rem .75rem; text-align: left; vertical-align: middle; }
 thead th {
   background: var(--elev); border-bottom: 2px solid var(--azul);
   font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
-  color: var(--azul-900); white-space: nowrap; text-align: center;
+  color: var(--azul-900); white-space: nowrap;
 }
+/* Alineacion por columna: el encabezado sigue a los datos */
+th.c, td.c { text-align: center; }
+th.r, td.r { text-align: right; }
 td { border-top: 1px solid var(--linea-2); font-size: 13px; }
 tbody tr:nth-child(even) { background: var(--elev); }
 tbody tr:hover { background: var(--azul-50); }
@@ -400,8 +415,10 @@ tbody tr:first-child td { border-top: 0; }
 .hd-tabla th {
   background: #eef2f8; border: 1px solid #c4cfe0; border-bottom: 1.5px solid var(--azul);
   padding: 8px 7px; font-size: 10.5px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase;
-  color: #1b3a75; text-align: center;
+  color: #1b3a75; text-align: left;
 }
+.hd-tabla th:nth-child(1), .hd-tabla th:nth-child(2), .hd-tabla th:nth-child(5),
+.hd-tabla td:nth-child(2) { text-align: center; }
 .hd-tabla td { border: 1px solid #d7dde8; padding: 6px 7px; vertical-align: middle; word-break: break-word; }
 .hd-tabla tbody tr:nth-child(even) { background: #f8fafc; }
 .hd-tabla col.c-n   { width: 24px; }
