@@ -147,9 +147,12 @@ directo / marcador. **Nada que instalar.** Dejar el **login con PIN activo**.
 - **Manual**: pestaña Datos → "Crear backup", o `npm run backup`.
 - **Restaurar**: detener el servidor, copiar el `.db` deseado sobre
   `data\agenda.db`, volver a arrancar.
-- **Recomendado**: además copiar la carpeta `data\` completa a otro disco o a
-  la nube una vez por semana (Tarea Programada de Windows con
-  `xcopy /Y "C:\agenda-practicos\data" "D:\respaldos\agenda" /E /I`).
+- **Recomendado — automático, sin acordarse**: definir `AGENDA_BACKUP_OFFSITE` (en
+  `iniciar.bat`, por ejemplo `set AGENDA_BACKUP_OFFSITE=D:\respaldos\agenda` o una carpeta
+  sincronizada con OneDrive/Google Drive). Cada backup (al arrancar, diario o manual) se
+  copia también ahí solo, sin depender de una Tarea Programada aparte. Si el disco/carpeta
+  no está disponible en ese momento, el backup local igual se hace y solo se avisa en la
+  consola del servidor.
 
 ---
 

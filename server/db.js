@@ -19,6 +19,7 @@ asegurarColumna('agenda', 'bloqueado', 'bloqueado INTEGER NOT NULL DEFAULT 0');
 asegurarColumna('agenda', 'bloqueo_motivo', 'bloqueo_motivo TEXT');
 asegurarColumna('agenda', 'pendiente_reagendar', 'pendiente_reagendar INTEGER NOT NULL DEFAULT 0');
 asegurarColumna('agenda', 'pendiente_nota', 'pendiente_nota TEXT');
+asegurarColumna('agenda', 'recordatorio_enviado_en', 'recordatorio_enviado_en TEXT');
 asegurarColumna('movimientos', 'actor', 'actor TEXT');
 
 // --- Semillas (solo si faltan) ---

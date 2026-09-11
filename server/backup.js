@@ -5,27 +5,46 @@ const { DB_PATH, RAIZ } = require('./config');
 
 const DIR = path.join(RAIZ, 'data', 'backups');
 const CONSERVAR = Number(process.env.AGENDA_BACKUPS || 30);
+// Carpeta externa opcional (disco de red, o una carpeta sincronizada con la nube:
+// OneDrive, Google Drive, etc.) para no depender solo del disco del PC servidor.
+const OFFSITE_DIR = process.env.AGENDA_BACKUP_OFFSITE || null;
 
-// Copia el archivo de base de datos a data/backups/ con marca de tiempo.
+// Copia el archivo de base de datos a data/backups/ (y a AGENDA_BACKUP_OFFSITE si esta
+// configurada) con marca de tiempo.
 function backup(etiqueta) {
   if (!fs.existsSync(DB_PATH)) throw new Error('Todavia no existe la base de datos.');
   fs.mkdirSync(DIR, { recursive: true });
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const destino = path.join(DIR, `agenda-${ts}${etiqueta ? '-' + etiqueta : ''}.db`);
+  const nombre = `agenda-${ts}${etiqueta ? '-' + etiqueta : ''}.db`;
+  const destino = path.join(DIR, nombre);
   fs.copyFileSync(DB_PATH, destino);
-  podar();
+  podar(DIR);
+  copiarOffsite(destino, nombre);
   return destino;
 }
 
-// Deja solo los CONSERVAR backups mas recientes.
-function podar() {
-  if (!fs.existsSync(DIR)) return;
-  const archivos = fs.readdirSync(DIR)
+// Best-effort: si la carpeta externa no esta disponible (disco desconectado, sin
+// permisos), se avisa por consola pero no se interrumpe el backup local.
+function copiarOffsite(destino, nombre) {
+  if (!OFFSITE_DIR) return;
+  try {
+    fs.mkdirSync(OFFSITE_DIR, { recursive: true });
+    fs.copyFileSync(destino, path.join(OFFSITE_DIR, nombre));
+    podar(OFFSITE_DIR);
+  } catch (e) {
+    console.error('No se pudo copiar el backup a AGENDA_BACKUP_OFFSITE:', e.message);
+  }
+}
+
+// Deja solo los CONSERVAR backups mas recientes en la carpeta dada.
+function podar(dir) {
+  if (!fs.existsSync(dir)) return;
+  const archivos = fs.readdirSync(dir)
     .filter((f) => f.endsWith('.db'))
-    .map((f) => ({ f, t: fs.statSync(path.join(DIR, f)).mtimeMs }))
+    .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
     .sort((a, b) => b.t - a.t);
   for (const { f } of archivos.slice(CONSERVAR)) {
-    try { fs.unlinkSync(path.join(DIR, f)); } catch (_) { /* ignore */ }
+    try { fs.unlinkSync(path.join(dir, f)); } catch (_) { /* ignore */ }
   }
 }
 

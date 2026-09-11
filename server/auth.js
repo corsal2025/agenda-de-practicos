@@ -21,6 +21,15 @@ const middleware = cookieSession({
 // Rutas que no requieren sesion.
 const LIBRES = new Set(['/api/login', '/api/sesion']);
 
+// Limite de intentos de PIN por IP: evita probar los 10.000 PIN posibles por fuerza bruta.
+const MAX_INTENTOS = 5;
+const BLOQUEO_MS = Number(process.env.AGENDA_LOGIN_BLOQUEO_MS) || 60 * 1000;
+const intentos = new Map(); // ip -> { fallos, bloqueadoHasta }
+
+function estadoIntentos(ip) {
+  return intentos.get(ip) || { fallos: 0, bloqueadoHasta: 0 };
+}
+
 function guard(req, res, next) {
   if (SIN_LOGIN) {
     req.session = req.session || {};
@@ -36,7 +45,23 @@ function guard(req, res, next) {
 function login(req, res) {
   const { funcionario, pin } = req.body || {};
   if (SIN_LOGIN) { req.session.funcionario = funcionario || 'MODO SIN LOGIN'; return res.json({ ok: true, funcionario: req.session.funcionario }); }
-  if (String(pin) !== PIN) { res.status(401).json({ error: 'PIN incorrecto' }); return; }
+
+  const ip = req.ip || req.socket.remoteAddress || 'desconocida';
+  const estado = estadoIntentos(ip);
+  if (estado.bloqueadoHasta > Date.now()) {
+    const restante = Math.ceil((estado.bloqueadoHasta - Date.now()) / 1000);
+    res.status(429).json({ error: `Demasiados intentos. Espera ${restante} s antes de volver a probar.` });
+    return;
+  }
+
+  if (String(pin) !== PIN) {
+    estado.fallos += 1;
+    if (estado.fallos >= MAX_INTENTOS) { estado.bloqueadoHasta = Date.now() + BLOQUEO_MS; estado.fallos = 0; }
+    intentos.set(ip, estado);
+    res.status(401).json({ error: 'PIN incorrecto' });
+    return;
+  }
+  intentos.delete(ip);
   if (!funcionario || !String(funcionario).trim()) { res.status(400).json({ error: 'Indica tu nombre' }); return; }
   req.session.funcionario = String(funcionario).trim().toUpperCase();
   res.json({ ok: true, funcionario: req.session.funcionario });

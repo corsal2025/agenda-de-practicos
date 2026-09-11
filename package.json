@@ -17,6 +17,8 @@
     "cookie-session": "^2.1.1",
     "express": "^5.2.1",
     "multer": "^2.3.0",
+    "nodemailer": "^10.0.8",
+    "pdfkit": "^0.20.2",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }
