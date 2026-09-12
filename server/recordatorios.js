@@ -52,11 +52,13 @@ async function procesar(diasAntes = 1) {
   return { enviados, pendientes: citas.length - enviados, motivo: null };
 }
 
-// Corre procesar() una vez al dia mientras el servidor este arriba.
+// Corre procesar() una vez al dia mientras el servidor este arriba. Tambien lo corre
+// al arrancar: si no, tras un restart el primer envio quedaria colgado hasta la
+// primera marca de 24 h y las citas de manana no se avisarian a tiempo.
 function programar() {
-  setInterval(() => {
-    procesar(1).catch((e) => console.error('Recordatorios automaticos fallaron:', e.message));
-  }, 24 * 3600 * 1000).unref();
+  const correr = () => procesar(1).catch((e) => console.error('Recordatorios automaticos fallaron:', e.message));
+  correr();
+  setInterval(correr, 24 * 3600 * 1000).unref();
 }
 
 module.exports = { pendientes, mensaje, registrarProveedor, procesar, programar };

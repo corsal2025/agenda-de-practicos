@@ -36,11 +36,16 @@ function copiarOffsite(destino, nombre) {
   }
 }
 
-// Deja solo los CONSERVAR backups mas recientes en la carpeta dada.
+// Nombre que le damos a nuestros propios backups: agenda-<timestamp>[-etiqueta].db
+const NOMBRE_BACKUP = /^agenda-\d{4}-\d{2}-\d{2}T.*\.db$/;
+
+// Deja solo los CONSERVAR backups mas recientes en la carpeta dada. Solo toca archivos
+// con el patron de nombre de nuestros backups: en AGENDA_BACKUP_OFFSITE puede haber
+// otros .db (una carpeta compartida o sincronizada con la nube) que no hay que borrar.
 function podar(dir) {
   if (!fs.existsSync(dir)) return;
   const archivos = fs.readdirSync(dir)
-    .filter((f) => f.endsWith('.db'))
+    .filter((f) => NOMBRE_BACKUP.test(f))
     .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
     .sort((a, b) => b.t - a.t);
   for (const { f } of archivos.slice(CONSERVAR)) {
@@ -53,7 +58,7 @@ function podar(dir) {
 function programar() {
   const ultimo = () => {
     if (!fs.existsSync(DIR)) return 0;
-    const ts = fs.readdirSync(DIR).filter((f) => f.endsWith('.db'))
+    const ts = fs.readdirSync(DIR).filter((f) => NOMBRE_BACKUP.test(f))
       .map((f) => fs.statSync(path.join(DIR, f)).mtimeMs);
     return ts.length ? Math.max(...ts) : 0;
   };

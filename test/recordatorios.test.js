@@ -70,3 +70,39 @@ test('con un proveedor registrado, procesar() envia y marca la cita', async () =
   const { body: r } = await api('GET', `/api/recordatorios?dias=${dias}`);
   assert.equal(r.citas.length, 0, 'ya no debe pedir recordatorio de nuevo');
 });
+
+test('programar() procesa de inmediato al arrancar, no recien a las 24 h', async () => {
+  const diaHabilManana = esHabil(sumarDias(hoyISO(), 1)) ? sumarDias(hoyISO(), 1) : null;
+  if (!diaHabilManana) return; // mañana cae fin de semana: no hay nada que verificar hoy
+
+  generar(diaHabilManana, diaHabilManana);
+  const { body: libres } = await api('GET', `/api/agenda?fecha=${diaHabilManana}&estado=libre`);
+  await api('PUT', `/api/agenda/${libres[0].id}`, { nombre: 'PABLO RIOS', clase: 'B', tipo_cita: 'NORMAL', contacto: '911111111' });
+
+  const enviados = [];
+  recordatorios.registrarProveedor(async (tel, texto) => { enviados.push({ tel, texto }); });
+  recordatorios.programar();
+  // procesar() es async: dejamos correr los microtasks/timers ya encolados.
+  await new Promise((r) => setTimeout(r, 50));
+
+  assert.ok(enviados.some((e) => e.texto.includes('PABLO')), 'el recordatorio de manana deberia enviarse sin esperar 24 h');
+});
+
+test('al reemplazar la cita de un bloque, se resetea la marca de recordatorio enviado', async () => {
+  const otroDia = sumarDias(OBJETIVO, dias); // fecha nueva, sin usar en tests anteriores
+  const diaHabilSiguiente = esHabil(otroDia) ? otroDia : sumarDias(otroDia, dias);
+  generar(diaHabilSiguiente, diaHabilSiguiente);
+  const { body: libres } = await api('GET', `/api/agenda?fecha=${diaHabilSiguiente}&estado=libre`);
+  const id = libres[0].id;
+  await api('PUT', `/api/agenda/${id}`, { nombre: 'MARCO DIAZ', clase: 'B', tipo_cita: 'NORMAL', contacto: '922222222' });
+
+  // Simula que ya se le mando el recordatorio a MARCO DIAZ.
+  db.prepare("UPDATE agenda SET recordatorio_enviado_en = datetime('now','localtime') WHERE id = ?").run(id);
+
+  // Se pisa el bloque con otra persona (reagendamiento manual, error de carga, etc.).
+  await api('PUT', `/api/agenda/${id}`, { nombre: 'ELENA PAZ', clase: 'B', tipo_cita: 'NORMAL', contacto: '933333333' });
+
+  const bloque = await api('GET', `/api/agenda/${id}`);
+  assert.equal(bloque.body.nombre, 'ELENA PAZ');
+  assert.equal(bloque.body.recordatorio_enviado_en, null, 'la nueva persona no deberia heredar el recordatorio ya enviado');
+});

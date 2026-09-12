@@ -216,8 +216,10 @@ app.put('/api/agenda/:id', wrap((req, res) => {
   const estabaOcupada = Boolean(bloque.rut || bloque.nombre);
   const quedaOcupada = Boolean(rutFmt || nombre);
 
-  // Si se va a pisar una cita distinta, guardar la anterior en papelera.
-  if (estabaOcupada && (bloque.rut !== rutFmt || (bloque.nombre || '') !== (nombre || ''))) {
+  // Si se va a pisar una cita distinta, guardar la anterior en papelera y no arrastrar
+  // el "ya se le mando recordatorio" de la cita vieja a la nueva persona.
+  const nuevaIdentidad = estabaOcupada && (bloque.rut !== rutFmt || (bloque.nombre || '') !== (nombre || ''));
+  if (nuevaIdentidad) {
     papelera.guardar(bloque, 'sobrescribir', actorDe(req));
   }
 
@@ -238,10 +240,12 @@ app.put('/api/agenda/:id', wrap((req, res) => {
       resultado = @resultado, comentarios = @comentarios,
       pendiente_reagendar = @pendiente, pendiente_nota = @pnota,
       agendado_en = CASE WHEN @quedaOcupada = 1 THEN COALESCE(agendado_en, @agendado_en) ELSE NULL END,
+      recordatorio_enviado_en = CASE WHEN @nuevaIdentidad = 1 THEN NULL ELSE recordatorio_enviado_en END,
       actualizado_en = datetime('now','localtime')
     WHERE id = @id
   `).run({
     id,
+    nuevaIdentidad: nuevaIdentidad ? 1 : 0,
     rut: rutFmt,
     nombre,
     clase,
