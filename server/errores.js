@@ -1,6 +1,7 @@
 'use strict';
 const { db } = require('./db');
-const { HORA_D_A5, CLASES_PESADAS } = require('./config');
+const { CLASES_PESADAS } = require('./config');
+const { horasPesadas } = require('./catalogos');
 const { hoyISO, esHabil } = require('./fechas');
 const feriados = require('./feriados');
 const rut = require('./rut');
@@ -17,6 +18,7 @@ function reporte() {
   const hoy = hoyISO();
   const hace30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
   const fset = feriados.set();
+  const horasP = horasPesadas();
   const filas = db.prepare(`
     SELECT a.*, e.nombre AS examinador
     FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
@@ -62,9 +64,9 @@ function reporte() {
     }
 
     // 3) Clase pesada en bloque incorrecto
-    if (ocupada && CLASES_PESADAS.includes((f.clase || '').toUpperCase()) && f.hora !== HORA_D_A5) {
+    if (ocupada && CLASES_PESADAS.includes((f.clase || '').toUpperCase()) && !horasP.includes(f.hora)) {
       hallazgos.push({ ...base(f), tipo: 'CLASE_BLOQUE', severidad: 'warning',
-        mensaje: `Clase ${f.clase} agendada ${f.hora}; solo se permite en el bloque ${HORA_D_A5}` });
+        mensaje: `Clase ${f.clase} agendada ${f.hora}; solo se permite en ${horasP.join(' o ')}` });
     }
 
     // 4) Cita pasada reciente sin resultado (ultimos 30 dias; mas atras se asume cerrada)

@@ -200,7 +200,7 @@ window.addEventListener('hashchange', ruta);
 function editorSlot(b, alGuardar) {
   const c = META.catalogos;
   const funcs = META.funcionarios.filter((f) => f.activo);
-  const esPesadaFuera = b.clase && META.clases_pesadas.includes(b.clase) && b.hora !== META.hora_d_a5;
+  const esPesadaFuera = b.clase && META.clases_pesadas.includes(b.clase) && !META.horas_pesadas.includes(b.hora);
   modal(
     `${fFecha(b.fecha)}  ·  ${b.hora}  ·  ${b.examinador}`,
     `
@@ -233,7 +233,7 @@ function editorSlot(b, alGuardar) {
       <input id="f-pend-nota" placeholder="Nota (opcional)" value="${esc(b.pendiente_nota)}" ${b.pendiente_reagendar ? '' : 'hidden'}>
     </div>
     <div class="campo ancho" id="zona-forzar" ${esPesadaFuera ? '' : 'hidden'}>
-      <label><input type="checkbox" id="f-forzar"> Forzar: clase pesada fuera del bloque ${esc(META.hora_d_a5)}</label></div>
+      <label><input type="checkbox" id="f-forzar"> Forzar: clase pesada fuera de ${esc(META.horas_pesadas.join(' o '))}</label></div>
     `,
     `
     ${(b.rut || b.nombre || b.bloqueado) ? '<button class="btn peligro sec" id="btn-liberar">Liberar bloque</button>' : ''}
@@ -257,7 +257,7 @@ function editorSlot(b, alGuardar) {
   $('#f-pend').onchange = (e) => { $('#f-pend-nota').hidden = !e.target.checked; };
   const claseSel = $('#f-clase');
   claseSel.onchange = () => {
-    const pesadaFuera = META.clases_pesadas.includes(claseSel.value) && b.hora !== META.hora_d_a5;
+    const pesadaFuera = META.clases_pesadas.includes(claseSel.value) && !META.horas_pesadas.includes(b.hora);
     $('#zona-forzar').hidden = !pesadaFuera;
   };
   $('#btn-cancel').onclick = cerrarModal;
@@ -415,13 +415,14 @@ function slotCard(b) {
   const ocupada = b.rut || b.nombre;
   const res = b.resultado === 'APROBADO' ? 'res-aprob'
     : (b.resultado === 'REPROBADO' || b.resultado === 'REPROBADO INASISTENCIA') ? 'res-reprob' : '';
-  const cls = ['slot', ocupada ? 'ocupada' : 'libre', b.hora === META.hora_d_a5 ? 'pesada' : '', res]
+  const esPesada = META.horas_pesadas.includes(b.hora);
+  const cls = ['slot', ocupada ? 'ocupada' : 'libre', esPesada ? 'pesada' : '', res]
     .filter(Boolean).join(' ');
 
   if (!ocupada) {
     return `<div class="${cls}" role="button" tabindex="0" data-id="${b.id}">
       <span class="mas">+</span><span>Agendar</span>
-      ${b.hora === META.hora_d_a5 ? '<span class="badges"><span class="badge dpesada">Bloque para D y A5</span></span>' : ''}
+      ${esPesada ? '<span class="badges"><span class="badge dpesada">Bloque para D y A5</span></span>' : ''}
     </div>`;
   }
 
@@ -482,7 +483,7 @@ function pintarGrilla(cont, filas, fecha) {
   let html = `<div></div>` + exs.map((e) =>
     `<div class="g-head"><span class="gh-n">${esc(e.nombre)}</span><span class="gh-c">${cuenta[e.id] || 0} citas</span></div>`).join('');
   for (const hora of META.horas) {
-    const pesada = hora === META.hora_d_a5;
+    const pesada = META.horas_pesadas.includes(hora);
     html += `<div class="g-hora">${esc(hora)}${pesada ? '<span class="et">D · A5</span>' : ''}</div>`;
     for (const e of exs) html += `<div${pesada ? ' class="fila-pesada"' : ''}>${slotCard(porKey[`${hora}|${e.id}`])}</div>`;
   }
@@ -546,7 +547,7 @@ async function renderDisponibles() {
   const buscar = async () => {
     filtDisp = { desde: $('#d-desde').value, hasta: $('#d-hasta').value, clase: $('#d-clase').value, examinador_id: $('#d-exam').value };
     const pesada = META.clases_pesadas.includes(filtDisp.clase);
-    $('#d-regla').textContent = pesada ? `Clase ${filtDisp.clase}: solo bloques de las ${META.hora_d_a5}.` : '';
+    $('#d-regla').textContent = pesada ? `Clase ${filtDisp.clase}: solo bloques de ${META.horas_pesadas.join(' o ')}.` : '';
     const q = new URLSearchParams(Object.fromEntries(Object.entries(filtDisp).filter(([, v]) => v)));
     const rows = await api(`/disponibles?${q}`);
     rows.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hora.localeCompare(b.hora) || a.examinador.localeCompare(b.examinador));
@@ -628,7 +629,7 @@ async function detalleReagendar(id) {
           ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')}</select></div>
         <button class="btn" id="rd-buscar">Ver bloques libres</button>
       </div>
-      ${pesada ? `<p class="muted">Clase ${esc(cita.clase)}: destino limitado al bloque ${esc(META.hora_d_a5)}.</p>` : ''}
+      ${pesada ? `<p class="muted">Clase ${esc(cita.clase)}: destino limitado a ${esc(META.horas_pesadas.join(' o '))}.</p>` : ''}
       <div class="campo"><label>Motivo del reagendamiento</label><input id="rd-motivo" value="${esc(cita.motivo_reagendamiento)}"></div>
       <div class="tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th class="c"></th></tr></thead>
         <tbody id="rd-body"><tr><td colspan="4" class="muted">Elige un rango y busca.</td></tr></tbody></table></div>
@@ -713,6 +714,7 @@ let filtErr = { tipo: '' };
 async function renderErrores() {
   view.innerHTML = `<div class="panel"><div class="fila">
       <h2 style="margin:0;flex:1">Reporte de errores</h2>
+      <button class="btn sec" id="e-enviar">Enviar por correo</button>
       <button class="btn sec" id="e-refresh">Recalcular</button></div>
     <div class="chips" id="e-chips" style="margin:.6rem 0"></div></div>
     <div class="panel tabla-scroll"><table><thead><tr>
@@ -742,6 +744,12 @@ async function renderErrores() {
     });
   };
   $('#e-refresh').onclick = cargar;
+  $('#e-enviar').onclick = async () => {
+    try {
+      const r = await api('/errores/enviar', { method: 'POST' });
+      toast(`Reporte enviado a ${r.destinatarios.join(', ')}`);
+    } catch (e) { toast(e.message, 'err'); }
+  };
   cargar();
 }
 
@@ -781,6 +789,7 @@ async function renderDia() {
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6V2h8v4M4 12H2V6h12v6h-2M4 10h8v4H4z"/></svg>
         Imprimir informe
       </button>
+      <a class="btn sec" id="dd-pdf" href="/api/dia/pdf?fecha=${fecha}" target="_blank">Descargar PDF</a>
       <span class="muted">Una hoja por examinador/a, lista para firmar. Elegí el formato según el papel de la impresora.</span>
     </div></div>
     <div id="dd-cont" class="dd-cont">Cargando...</div>`;
@@ -1069,6 +1078,14 @@ async function renderDatos() {
       <p class="muted">Crea los bloques faltantes (dias habiles, 11 horarios, por examinador activo). No pisa lo existente.</p>
     </div>
 
+    <div class="panel"><h2>Recordatorios a contribuyentes</h2>
+      <p class="muted" id="rc-estado">Cargando...</p>
+      <div class="tabla-scroll"><table><thead><tr>
+        <th class="c">Hora</th><th>Nombre</th><th>Teléfono</th>
+      </tr></thead><tbody id="rc-body"></tbody></table></div>
+      <div class="fila"><button class="btn sec" id="rc-procesar">Procesar ahora</button></div>
+    </div>
+
     <div class="panel"><h2>Feriados / dias inhabiles</h2>
       <div class="chips" id="fe-cont" style="margin:.4rem 0"></div>
       <div class="fila"><input type="date" id="fe-fecha"><input id="fe-nombre" placeholder="Nombre (opcional)"><button class="btn chico" id="fe-add">Agregar</button></div>
@@ -1111,6 +1128,20 @@ async function renderDatos() {
     const r = await api('/agenda/generar', { method: 'POST', body: { desde: $('#gb-desde').value, hasta: $('#gb-hasta').value } });
     toast(`${r.creados} bloques nuevos en ${r.dias} dias habiles`);
     META = await api('/meta');
+  };
+
+  // recordatorios
+  const rc = await api('/recordatorios');
+  $('#rc-body').innerHTML = rc.citas.length
+    ? rc.citas.map((c) => `<tr><td class="c">${esc(c.hora)}</td><td>${esc(nom(c.nombre))}</td><td>${esc(fTel(c.contacto))}</td></tr>`).join('')
+    : '<tr><td colspan="3" class="muted">Nada pendiente para mañana.</td></tr>';
+  $('#rc-estado').textContent = rc.citas.length
+    ? `${rc.citas.length} cita(s) de mañana sin recordatorio enviado.`
+    : 'Sin citas pendientes de recordatorio para mañana.';
+  $('#rc-procesar').onclick = async () => {
+    const r = await api('/recordatorios/procesar', { method: 'POST' });
+    toast(r.motivo || `${r.enviados} recordatorio(s) enviado(s)`, r.motivo ? 'err' : undefined);
+    renderDatos();
   };
 
   // feriados

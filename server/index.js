@@ -6,13 +6,17 @@ const express = require('express');
 const multer = require('multer');
 
 const { db, tx, upsertFuncionario, upsertExaminador, log } = require('./db');
-const { PUERTO, RAIZ, HORAS, HORA_D_A5, CLASES_PESADAS } = require('./config');
+const { PUERTO, RAIZ, HORAS, CLASES_PESADAS } = require('./config');
+const { horasPesadas } = require('./catalogos');
 const { generar } = require('./slots');
 const { reporte } = require('./errores');
 const { resumen } = require('./analitica');
 const { generarXlsx, generarXlsxOriginal } = require('./export');
 const { importar } = require('./migrate');
 const backupMod = require('./backup');
+const recordatorios = require('./recordatorios');
+const reporteCorreo = require('./reporte-correo');
+const { generarPdfDia } = require('./pdf-dia');
 const { hoyISO } = require('./fechas');
 const feriados = require('./feriados');
 const papelera = require('./papelera');
@@ -50,8 +54,10 @@ app.post('/api/logout', (req, res) => auth.logout(req, res));
 app.use(auth.guard);
 
 const wrap = (fn) => (req, res, next) => {
-  try { fn(req, res, next); }
-  catch (e) { next(e); }
+  try {
+    const r = fn(req, res, next);
+    if (r && typeof r.then === 'function') r.catch(next);
+  } catch (e) { next(e); }
 };
 function bad(msg, status = 400) { const e = new Error(msg); e.status = status; return e; }
 const actorDe = (req) => auth.actor(req);
@@ -71,7 +77,7 @@ function enCatalogo(tipo, valor) {
 app.get('/api/meta', wrap((req, res) => {
   res.json({
     horas: HORAS,
-    hora_d_a5: HORA_D_A5,
+    horas_pesadas: horasPesadas(),
     clases_pesadas: CLASES_PESADAS,
     hoy: hoyISO(),
     usuario: actorDe(req),
@@ -83,6 +89,7 @@ app.get('/api/meta', wrap((req, res) => {
       resultado: catalogo('resultado'),
       intento: catalogo('intento'),
       lista_espera: catalogo('lista_espera'),
+      hora_pesada: catalogo('hora_pesada'),
     },
     feriados: feriados.listar(),
     rango_agenda: db.prepare('SELECT MIN(fecha) desde, MAX(fecha) hasta FROM agenda').get(),
@@ -151,8 +158,8 @@ function validarBloque(body, bloque) {
   if (!enCatalogo('intento', body.intento)) throw bad(`Intento no valido: ${body.intento}`);
   if (!enCatalogo('lista_espera', body.lista_espera)) throw bad(`Lista de espera no valida: ${body.lista_espera}`);
 
-  if (clase && CLASES_PESADAS.includes(clase) && bloque.hora !== HORA_D_A5 && !body.forzar) {
-    throw bad(`La clase ${clase} solo se agenda en el bloque ${HORA_D_A5}. Elige ese horario o marca "forzar".`);
+  if (clase && CLASES_PESADAS.includes(clase) && !horasPesadas().includes(bloque.hora) && !body.forzar) {
+    throw bad(`La clase ${clase} solo se agenda en ${horasPesadas().join(' o ')}. Elige ese horario o marca "forzar".`);
   }
   let rutFmt = null;
   if (body.rut && String(body.rut).trim()) {
@@ -209,8 +216,10 @@ app.put('/api/agenda/:id', wrap((req, res) => {
   const estabaOcupada = Boolean(bloque.rut || bloque.nombre);
   const quedaOcupada = Boolean(rutFmt || nombre);
 
-  // Si se va a pisar una cita distinta, guardar la anterior en papelera.
-  if (estabaOcupada && (bloque.rut !== rutFmt || (bloque.nombre || '') !== (nombre || ''))) {
+  // Si se va a pisar una cita distinta, guardar la anterior en papelera y no arrastrar
+  // el "ya se le mando recordatorio" de la cita vieja a la nueva persona.
+  const nuevaIdentidad = estabaOcupada && (bloque.rut !== rutFmt || (bloque.nombre || '') !== (nombre || ''));
+  if (nuevaIdentidad) {
     papelera.guardar(bloque, 'sobrescribir', actorDe(req));
   }
 
@@ -231,10 +240,12 @@ app.put('/api/agenda/:id', wrap((req, res) => {
       resultado = @resultado, comentarios = @comentarios,
       pendiente_reagendar = @pendiente, pendiente_nota = @pnota,
       agendado_en = CASE WHEN @quedaOcupada = 1 THEN COALESCE(agendado_en, @agendado_en) ELSE NULL END,
+      recordatorio_enviado_en = CASE WHEN @nuevaIdentidad = 1 THEN NULL ELSE recordatorio_enviado_en END,
       actualizado_en = datetime('now','localtime')
     WHERE id = @id
   `).run({
     id,
+    nuevaIdentidad: nuevaIdentidad ? 1 : 0,
     rut: rutFmt,
     nombre,
     clase,
@@ -266,6 +277,7 @@ const LIMPIAR_SQL = `
   motivo_reagendamiento=NULL, lista_espera=NULL, intento=NULL, funcionario_id=NULL,
   fecha_inicio_tramite=NULL, confirmo_asistencia=NULL, resultado=NULL, comentarios=NULL,
   bloqueado=0, bloqueo_motivo=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
+  recordatorio_enviado_en=NULL,
   agendado_en=NULL, actualizado_en=datetime('now','localtime')`;
 
 app.post('/api/agenda/:id/liberar', wrap((req, res) => {
@@ -300,8 +312,8 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
   if (!(origen.rut || origen.nombre)) throw bad('El bloque de origen no tiene una cita.');
   if (destino.rut || destino.nombre) throw bad('El bloque de destino ya esta ocupado.');
   if (destino.bloqueado) throw bad('El bloque de destino esta bloqueado.');
-  if (CLASES_PESADAS.includes((origen.clase || '').toUpperCase()) && destino.hora !== HORA_D_A5) {
-    throw bad(`La clase ${origen.clase} solo se agenda en el bloque ${HORA_D_A5}.`);
+  if (CLASES_PESADAS.includes((origen.clase || '').toUpperCase()) && !horasPesadas().includes(destino.hora)) {
+    throw bad(`La clase ${origen.clase} solo se agenda en ${horasPesadas().join(' o ')}.`);
   }
 
   tx(() => {
@@ -368,12 +380,16 @@ app.get('/api/disponibles', wrap((req, res) => {
   if (desde) { cond.push('a.fecha >= ?'); p.push(desde); }
   if (hasta) { cond.push('a.fecha <= ?'); p.push(hasta); }
   if (examinador_id) { cond.push('a.examinador_id = ?'); p.push(Number(examinador_id)); }
-  if (clase && CLASES_PESADAS.includes(String(clase).toUpperCase())) { cond.push('a.hora = ?'); p.push(HORA_D_A5); }
+  const horasP = horasPesadas();
+  if (clase && CLASES_PESADAS.includes(String(clase).toUpperCase()) && horasP.length) {
+    cond.push(`a.hora IN (${horasP.map(() => '?').join(',')})`);
+    p.push(...horasP);
+  }
   const rows = db.prepare(`${SELECT_BLOQUE} WHERE ${cond.join(' AND ')} ORDER BY a.fecha, a.hora, e.nombre LIMIT 3000`).all(...p);
   res.json(rows.map((r) => ({
     ...r,
-    apto_pesada: r.hora === HORA_D_A5,
-    regla: r.hora === HORA_D_A5 ? 'IDEAL para D y A5 (tambien B, C, profesionales)' : 'B, C, A1-A4 (PROHIBIDO D y A5)',
+    apto_pesada: horasP.includes(r.hora),
+    regla: horasP.includes(r.hora) ? 'IDEAL para D y A5 (tambien B, C, profesionales)' : 'B, C, A1-A4 (PROHIBIDO D y A5)',
   })));
 }));
 
@@ -412,8 +428,24 @@ app.get('/api/dia', wrap((req, res) => {
   res.json({ fecha, examinadores: porExaminador });
 }));
 
+app.get('/api/dia/pdf', wrap((req, res) => {
+  const fecha = req.query.fecha || hoyISO();
+  const organismo = process.env.AGENDA_ORGANISMO || 'Municipalidad de Valparaíso';
+  const unidad = process.env.AGENDA_UNIDAD || 'Departamento de Licencias de Conducir';
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="agenda-${fecha}.pdf"`);
+  const doc = generarPdfDia(fecha, organismo, unidad);
+  doc.pipe(res);
+  doc.end();
+}));
+
 // ---------- ERRORES ----------
 app.get('/api/errores', wrap((req, res) => res.json(reporte())));
+app.post('/api/errores/enviar', wrap(async (req, res) => {
+  const r = await reporteCorreo.enviarReporteDiario();
+  logReq(req, null, 'editar', `reporte de errores enviado a ${r.destinatarios.join(', ')} (${r.total})`);
+  res.json({ ok: true, ...r });
+}));
 
 // ---------- ANALITICA ----------
 app.get('/api/analitica', wrap((req, res) => res.json(resumen(req.query.desde, req.query.hasta))));
@@ -422,9 +454,13 @@ app.get('/api/analitica', wrap((req, res) => res.json(resumen(req.query.desde, r
 app.post('/api/catalogos', wrap((req, res) => {
   const { tipo, valor } = req.body || {};
   if (!tipo || !valor) throw bad('Indica tipo y valor');
+  const valorFmt = String(valor).trim().toUpperCase();
+  if (tipo === 'hora_pesada' && !HORAS.includes(valorFmt)) {
+    throw bad(`"${valorFmt}" no es un bloque horario valido. Usa uno de: ${HORAS.join(', ')}`);
+  }
   const orden = (db.prepare('SELECT COALESCE(MAX(orden),0)+1 n FROM catalogos WHERE tipo=?').get(tipo)).n;
   db.prepare('INSERT OR REPLACE INTO catalogos (tipo, valor, orden, activo) VALUES (?, ?, ?, 1)')
-    .run(tipo, String(valor).trim().toUpperCase(), orden);
+    .run(tipo, valorFmt, orden);
   res.json({ ok: true });
 }));
 app.delete('/api/catalogos', wrap((req, res) => {
@@ -499,6 +535,22 @@ app.get('/api/export', wrap((req, res) => {
 
 app.post('/api/backup', wrap((req, res) => res.json({ ok: true, archivo: backupMod.backup('manual') })));
 
+// ---------- RECORDATORIOS ----------
+// Manana (por defecto) suena a "un dia antes"; se puede pedir otro horizonte con ?dias=N.
+app.get('/api/recordatorios', wrap((req, res) => {
+  const dias = Number(req.query.dias) || 1;
+  const citas = recordatorios.pendientes(dias);
+  res.json({
+    citas,
+    mensaje_ejemplo: citas[0] ? recordatorios.mensaje(citas[0]) : null,
+  });
+}));
+app.post('/api/recordatorios/procesar', wrap(async (req, res) => {
+  const r = await recordatorios.procesar(Number(req.body && req.body.dias) || 1);
+  logReq(req, null, 'editar', `recordatorios: ${r.enviados} enviados, ${r.pendientes} pendientes`);
+  res.json({ ok: true, ...r });
+}));
+
 app.get('/api/movimientos', wrap((req, res) => {
   res.json(db.prepare('SELECT * FROM movimientos ORDER BY id DESC LIMIT 300').all());
 }));
@@ -522,12 +574,18 @@ function ipsLan() {
   return out;
 }
 
-app.listen(PUERTO, () => {
-  console.log(`\n  Agenda de Practicos`);
-  console.log(`  Este PC:        http://localhost:${PUERTO}`);
-  for (const ip of ipsLan()) console.log(`  Otros PC (LAN): http://${ip}:${PUERTO}`);
-  console.log(auth.SIN_LOGIN ? '  Modo sin login\n' : '  Login con PIN\n');
-  const n = db.prepare('SELECT COUNT(*) n FROM agenda').get().n;
-  if (!n) console.log('  Base vacia. Importa el Excel desde "Datos" o corre: npm run migrar\n');
-  backupMod.programar();
-});
+if (require.main === module) {
+  app.listen(PUERTO, () => {
+    console.log(`\n  Agenda de Practicos`);
+    console.log(`  Este PC:        http://localhost:${PUERTO}`);
+    for (const ip of ipsLan()) console.log(`  Otros PC (LAN): http://${ip}:${PUERTO}`);
+    console.log(auth.SIN_LOGIN ? '  Modo sin login\n' : '  Login con PIN\n');
+    const n = db.prepare('SELECT COUNT(*) n FROM agenda').get().n;
+    if (!n) console.log('  Base vacia. Importa el Excel desde "Datos" o corre: npm run migrar\n');
+    backupMod.programar();
+    recordatorios.programar();
+    reporteCorreo.programar();
+  });
+}
+
+module.exports = { app };

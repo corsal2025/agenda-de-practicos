@@ -7,8 +7,9 @@ const HORAS = [
   '11:30', '12:00', '12:30', '13:00', '13:30',
 ];
 
-// Unico bloque donde se admiten las clases D y A5 (vehiculos pesados).
-// El resto de los bloques: PROHIBIDO D y A5.
+// Bloque(s) donde se admiten las clases D y A5 (vehiculos pesados); el resto: PROHIBIDO.
+// Semilla inicial del catalogo "hora_pesada" (editable luego desde la pestana Datos,
+// igual que feriados: no hace falta redeployar para agregar/quitar un bloque pesado).
 const HORA_D_A5 = '12:30';
 const CLASES_PESADAS = ['D', 'A5'];
 
@@ -22,6 +23,7 @@ const CATALOGOS = {
   resultado:    ['APROBADO', 'REPROBADO', 'REPROBADO INASISTENCIA', 'NO ASISTIO'],
   intento:      ['1° VEZ', '2° VEZ'],
   lista_espera: ['SI', 'NO'],
+  hora_pesada:  [HORA_D_A5],
 };
 
 const RAIZ = path.join(__dirname, '..');
@@ -30,7 +32,7 @@ const DB_PATH = process.env.AGENDA_DB || path.join(RAIZ, 'data', 'agenda.db');
 const PUERTO = Number(process.env.PORT) || 4900;
 
 module.exports = {
-  HORAS, HORA_D_A5, CLASES_PESADAS,
+  HORAS, CLASES_PESADAS,
   EXAMINADORES, FUNCIONARIOS, CATALOGOS,
   RAIZ, DB_PATH, PUERTO,
 };
