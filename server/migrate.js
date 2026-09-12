@@ -4,6 +4,7 @@ const path = require('node:path');
 const XLSX = require('xlsx');
 const { db, tx, upsertExaminador, upsertFuncionario, log } = require('./db');
 const { generar } = require('./slots');
+const pesada = require('./pesada');
 const N = require('./normalizar');
 const { aISO, aHora } = require('./fechas');
 const { RAIZ } = require('./config');
@@ -199,7 +200,13 @@ function importar(rutaXlsx, { limpiar = false } = {}) {
     }
   }
 
-  const resumen = { leidas, saltadas, ocupadas, rescatadas, bloques_generados: gen.creados, rango: [desde, hasta] };
+  // 5) Clases pesadas (D/A5) a las 12:30: bloquear automaticamente 13:00 y 13:30.
+  const sync = pesada.sincronizarTodo();
+
+  const resumen = {
+    leidas, saltadas, ocupadas, rescatadas, bloques_generados: gen.creados, rango: [desde, hasta],
+    pesadas_sincronizadas: sync.procesados,
+  };
   log(null, 'importar', JSON.stringify(resumen));
   return resumen;
 }

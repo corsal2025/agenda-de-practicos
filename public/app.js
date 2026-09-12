@@ -37,6 +37,40 @@ function h(html) {
   return tpl.content.firstElementChild;
 }
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Digito verificador de un RUT (formato limpio, solo digitos + K final).
+function rutDvEsperado(cuerpo) {
+  let suma = 0, factor = 2;
+  for (let i = cuerpo.length - 1; i >= 0; i--) {
+    suma += Number(cuerpo[i]) * factor;
+    factor = factor === 7 ? 2 : factor + 1;
+  }
+  const resto = 11 - (suma % 11);
+  return resto === 11 ? '0' : resto === 10 ? 'K' : String(resto);
+}
+// true solo si "parece" un RUT (7-9 digitos/K) y el digito verificador calza.
+function rutEsValido(v) {
+  const c = String(v || '').toUpperCase().replace(/[^0-9K]/g, '');
+  if (c.length < 7 || c.length > 9 || !/^\d+[0-9K]$/.test(c)) return false;
+  return rutDvEsperado(c.slice(0, -1)) === c.slice(-1);
+}
+// Si el texto es un RUT chileno valido (digito verificador correcto), lo
+// devuelve formateado "12.345.678-9". Si no, devuelve el texto tal cual
+// (asi no confunde un telefono u otro numero con un RUT).
+function formatearSiEsRut(v) {
+  if (!rutEsValido(v)) return v;
+  const c = String(v).toUpperCase().replace(/[^0-9K]/g, '');
+  const cuerpo = c.slice(0, -1);
+  return `${cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}-${c.slice(-1)}`;
+}
+// Autocompleta puntos y guion al salir del campo, solo si el RUT es valido.
+function autoformatoRut(input) {
+  if (!input) return;
+  input.addEventListener('blur', () => {
+    const f = formatearSiEsRut(input.value.trim());
+    if (f && f !== input.value) input.value = f;
+  });
+}
 const hoy = () => (META ? META.hoy : new Date().toISOString().slice(0, 10));
 
 // Fecha en formato dia/mes/año para MOSTRAR. Los <input type="date"> siguen usando ISO.
@@ -88,6 +122,23 @@ function sumarDias(iso, n) {
   const d = new Date(`${iso}T12:00:00`);
   d.setDate(d.getDate() + n);
   return d.toISOString().slice(0, 10);
+}
+// Avanza/retrocede un dia (n = 1 o -1) saltandose fines de semana y feriados
+// sin bloques generados: domingo siempre se salta, sabado y feriado solo si
+// estan vacios.
+async function proximoDiaConAgenda(desde, n) {
+  const feriados = new Set((META && META.feriados || []).map((f) => f.fecha));
+  let fecha = sumarDias(desde, n);
+  for (let i = 0; i < 30; i++) {
+    const dow = new Date(`${fecha}T12:00:00`).getDay();
+    if (dow === 0) { fecha = sumarDias(fecha, n); continue; }
+    if (dow === 6 || feriados.has(fecha)) {
+      const rows = await api(`/agenda?fecha=${fecha}`);
+      if (!rows.length) { fecha = sumarDias(fecha, n); continue; }
+    }
+    break;
+  }
+  return fecha;
 }
 const opt = (arr, sel) => ['<option value="">--</option>']
   .concat(arr.map((v) => `<option ${v === sel ? 'selected' : ''}>${esc(v)}</option>`)).join('');
@@ -156,9 +207,8 @@ async function pantallaLogin() {
       <div class="caja">
         <h2>Ingreso al sistema</h2>
         <p class="intro">Identifícate para registrar tus cambios en la bitácora.</p>
-        <div class="campo"><label>Nombre del funcionario/a</label><input id="lg-nombre" autocomplete="off"></div>
-        <div class="campo"><label>Clave de acceso</label><input id="lg-pin" type="password" autocomplete="off">
-          <span class="muted" style="font-size:11.5px">Clave compartida definida por el administrador del equipo.</span></div>
+        <div class="campo"><label>Usuario</label><input id="lg-nombre" autocomplete="username"></div>
+        <div class="campo"><label>Contraseña</label><input id="lg-pin" type="password" autocomplete="current-password"></div>
         <button class="btn" id="lg-ok">Entrar
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8h9M8 4l4 4-4 4"/></svg></button>
         <div class="login-nota">Departamento de Licencias de Conducir · uso interno</div>
@@ -168,7 +218,7 @@ async function pantallaLogin() {
   root.appendChild(ov);
   const entrar = async () => {
     try {
-      await api('/login', { method: 'POST', body: { funcionario: $('#lg-nombre').value, pin: $('#lg-pin').value } });
+      await api('/login', { method: 'POST', body: { usuario: $('#lg-nombre').value, clave: $('#lg-pin').value } });
       cerrarModal();
       init();
     } catch (e) { toast(e.message, 'err'); }
@@ -189,18 +239,40 @@ function irA(tab) {
   if (location.hash !== `#${tab}`) { location.hash = tab; return; }
   ruta();
 }
+// Mide la altura real del header y del panel de filtros fijo, y las deja en
+// variables CSS para que .panel-fijo y .g-head se enganchen justo debajo
+// (sin dejar hueco ni tapar contenido), sin depender de numeros fijos.
+function ajustarOffsetsFijos() {
+  const header = document.querySelector('header.top');
+  const panelFijo = document.querySelector('.panel-fijo');
+  const raiz = document.documentElement.style;
+  if (header) raiz.setProperty('--alto-header', `${Math.round(header.getBoundingClientRect().height)}px`);
+  if (panelFijo) raiz.setProperty('--alto-panel-fijo', `${Math.round(panelFijo.getBoundingClientRect().height)}px`);
+}
 function ruta() {
   const tab = (location.hash.slice(1) || 'agenda').split('?')[0];
   document.querySelectorAll('#nav button').forEach((b) => b.classList.toggle('activo', b.dataset.tab === tab));
   (tabs[tab] || renderAgenda)();
+  requestAnimationFrame(ajustarOffsetsFijos);
 }
+window.addEventListener('resize', () => requestAnimationFrame(ajustarOffsetsFijos));
 window.addEventListener('hashchange', ruta);
 
+function textoForzar(b) {
+  return b.hora === META.hora_d_a5
+    ? 'Forzar: ya hay citas a las horas siguientes (13:00/13:30 no se van a bloquear)'
+    : `Forzar: clase pesada fuera del bloque ${META.hora_d_a5}`;
+}
+
 /* ================= editor de bloque ================= */
+// "B,A2" -> ['B','A2']. Acepta tanto el valor guardado (con comas) como uno solo.
+const clasesDe = (v) => String(v || '').split(',').map((s) => s.trim()).filter(Boolean);
+
 function editorSlot(b, alGuardar) {
   const c = META.catalogos;
   const funcs = META.funcionarios.filter((f) => f.activo);
-  const esPesadaFuera = b.clase && META.clases_pesadas.includes(b.clase) && b.hora !== META.hora_d_a5;
+  const clasesIniciales = clasesDe(b.clase);
+  const esPesada = clasesIniciales.some((cl) => META.clases_pesadas.includes(cl));
   modal(
     `${fFecha(b.fecha)}  ·  ${b.hora}  ·  ${b.examinador}`,
     `
@@ -210,7 +282,10 @@ function editorSlot(b, alGuardar) {
     </div>
     <div class="campo"><label>RUT</label><input id="f-rut" value="${esc(b.rut)}" placeholder="12.345.678-9"></div>
     <div class="campo"><label>Nombre</label><input id="f-nombre" value="${esc(nom(b.nombre))}" style="text-transform:uppercase"></div>
-    <div class="campo"><label>Clase</label><select id="f-clase">${opt(c.clase, b.clase)}</select></div>
+    <div class="campo ancho"><label>Clase (podés marcar más de una)</label>
+      <div class="chk-clases" id="f-clase">${c.clase.map((cl) => `
+        <label class="chk-clase"><input type="checkbox" value="${esc(cl)}" ${clasesIniciales.includes(cl) ? 'checked' : ''}> ${esc(cl)}</label>
+      `).join('')}</div></div>
     <div class="campo"><label>Teléfono</label><input id="f-contacto" value="${esc(fTel(b.contacto))}" placeholder="9 1234 5678" inputmode="tel"></div>
     <div class="campo"><label>Correo</label><input id="f-correo" value="${esc(b.correo)}"></div>
     <div class="campo"><label>Tipo de cita</label><select id="f-tipo">${opt(c.tipo_cita, b.tipo_cita)}</select></div>
@@ -232,8 +307,8 @@ function editorSlot(b, alGuardar) {
       <label><input type="checkbox" id="f-pend" ${b.pendiente_reagendar ? 'checked' : ''}> Marcar como pendiente de reagendar</label>
       <input id="f-pend-nota" placeholder="Nota (opcional)" value="${esc(b.pendiente_nota)}" ${b.pendiente_reagendar ? '' : 'hidden'}>
     </div>
-    <div class="campo ancho" id="zona-forzar" ${esPesadaFuera ? '' : 'hidden'}>
-      <label><input type="checkbox" id="f-forzar"> Forzar: clase pesada fuera del bloque ${esc(META.hora_d_a5)}</label></div>
+    <div class="campo ancho" id="zona-forzar" ${esPesada ? '' : 'hidden'}>
+      <label><input type="checkbox" id="f-forzar"> <span id="f-forzar-txt">${esc(textoForzar(b))}</span></label></div>
     `,
     `
     ${(b.rut || b.nombre || b.bloqueado) ? '<button class="btn peligro sec" id="btn-liberar">Liberar bloque</button>' : ''}
@@ -242,6 +317,25 @@ function editorSlot(b, alGuardar) {
     `
   );
 
+  autoformatoRut($('#f-rut'));
+  // Si el bloque esta libre y el RUT ya tiene citas anteriores, autocompleta
+  // nombre/telefono/correo con lo mas reciente (sin pisar datos ya escritos).
+  if (!b.rut && !b.nombre) {
+    $('#f-rut').addEventListener('blur', async () => {
+      const val = $('#f-rut').value.trim();
+      if (!val) return;
+      try {
+        const hist = await api(`/historial?rut=${encodeURIComponent(val)}`);
+        if (!hist.length) return;
+        const ultimo = hist[hist.length - 1];
+        let completo = false;
+        if (!$('#f-nombre').value && ultimo.nombre) { $('#f-nombre').value = nom(ultimo.nombre); completo = true; }
+        if (!$('#f-contacto').value && ultimo.contacto) { $('#f-contacto').value = fTel(ultimo.contacto); completo = true; }
+        if (!$('#f-correo').value && ultimo.correo) { $('#f-correo').value = ultimo.correo; completo = true; }
+        if (completo) toast('Datos autocompletados de una cita anterior');
+      } catch (_) { /* sin conexion o sin resultados: no interrumpe el agendamiento */ }
+    });
+  }
   $('#f-func').onchange = async (e) => {
     if (e.target.value !== '__nuevo') return;
     const nombre = prompt('Nombre del nuevo funcionario/a:');
@@ -255,11 +349,12 @@ function editorSlot(b, alGuardar) {
   };
   $('#f-bloq').onchange = (e) => { $('#f-bloq-motivo').hidden = !e.target.checked; };
   $('#f-pend').onchange = (e) => { $('#f-pend-nota').hidden = !e.target.checked; };
-  const claseSel = $('#f-clase');
-  claseSel.onchange = () => {
-    const pesadaFuera = META.clases_pesadas.includes(claseSel.value) && b.hora !== META.hora_d_a5;
-    $('#zona-forzar').hidden = !pesadaFuera;
-  };
+  const clasesMarcadas = () => [...$('#f-clase').querySelectorAll('input:checked')].map((i) => i.value);
+  $('#f-clase').addEventListener('change', () => {
+    const esPesadaSel = clasesMarcadas().some((cl) => META.clases_pesadas.includes(cl));
+    $('#zona-forzar').hidden = !esPesadaSel;
+    if (esPesadaSel) $('#f-forzar-txt').textContent = textoForzar({ hora: b.hora });
+  });
   $('#btn-cancel').onclick = cerrarModal;
   if ($('#btn-liberar')) $('#btn-liberar').onclick = async () => {
     if (!confirm('Liberar el bloque? Los datos quedan en la papelera (pestana Datos) por si hay que recuperarlos.')) return;
@@ -279,7 +374,7 @@ function editorSlot(b, alGuardar) {
       } else {
         const body = {
           ...comun,
-          rut: $('#f-rut').value, nombre: $('#f-nombre').value, clase: $('#f-clase').value,
+          rut: $('#f-rut').value, nombre: $('#f-nombre').value, clase: clasesMarcadas().join(','),
           contacto: $('#f-contacto').value, correo: $('#f-correo').value, tipo_cita: $('#f-tipo').value,
           motivo_reagendamiento: $('#f-motivo').value, lista_espera: $('#f-lista').value,
           intento: $('#f-intento').value,
@@ -311,7 +406,7 @@ let estadoAgenda = { fecha: null, examinador_id: '', filtro: '' };
 async function renderAgenda() {
   if (!estadoAgenda.fecha) estadoAgenda.fecha = hoy();
   view.innerHTML = `
-    <div class="panel no-print">
+    <div class="panel no-print panel-fijo">
       <div class="fila">
         <button class="btn sec" id="dia-prev">&#8592;</button>
         <div class="campo"><label>Fecha</label><input type="date" id="a-fecha" value="${estadoAgenda.fecha}"></div>
@@ -330,8 +425,8 @@ async function renderAgenda() {
 
   $('#a-fecha').onchange = (e) => { estadoAgenda.fecha = e.target.value; renderAgenda(); };
   $('#a-exam').onchange = (e) => { estadoAgenda.examinador_id = e.target.value; renderAgenda(); };
-  $('#dia-prev').onclick = () => { estadoAgenda.fecha = sumarDias(estadoAgenda.fecha, -1); renderAgenda(); };
-  $('#dia-next').onclick = () => { estadoAgenda.fecha = sumarDias(estadoAgenda.fecha, 1); renderAgenda(); };
+  $('#dia-prev').onclick = async () => { estadoAgenda.fecha = await proximoDiaConAgenda(estadoAgenda.fecha, -1); renderAgenda(); };
+  $('#dia-next').onclick = async () => { estadoAgenda.fecha = await proximoDiaConAgenda(estadoAgenda.fecha, 1); renderAgenda(); };
   $('#a-hoy').onclick = () => { estadoAgenda.fecha = hoy(); renderAgenda(); };
   $('#a-bloqdia').onclick = () => dialogoBloquearDia();
   $('#a-porconfirmar').onclick = () => dialogoPorConfirmar();
@@ -343,7 +438,9 @@ async function renderAgenda() {
   $('#a-libres').textContent = `${libres} ${libres === 1 ? 'bloque libre' : 'bloques libres'}`;
   pintarGrilla($('#a-grid'), filas, estadoAgenda.fecha);
   actualizarBadgePapelera();
+  actualizarBadgeErrores();
   restaurarScroll();
+  requestAnimationFrame(ajustarOffsetsFijos);
 }
 
 async function dialogoPorConfirmar() {
@@ -405,6 +502,14 @@ function dialogoBloquearDia() {
   };
 }
 
+// Motivo corto si a la cita le falta algun dato clave, o null si esta bien.
+// Mismo criterio que el Reporte de errores, pero visible directo en la tarjeta.
+function problemaDatos(b) {
+  if (b.rut && !rutEsValido(b.rut)) return 'RUT con dígito verificador inválido';
+  if (!b.contacto && !b.correo) return 'Sin teléfono ni correo: no se puede avisar ni confirmar';
+  if (b.contacto && b.contacto.replace(/\D/g, '').length !== 9) return 'Teléfono incompleto';
+  return null;
+}
 function slotCard(b) {
   if (!b) return '<div class="slot libre">—</div>';
   if (b.bloqueado) {
@@ -441,10 +546,12 @@ function slotCard(b) {
     <span class="sr sr-n ${noAsiste ? 'on' : ''}" role="button" tabindex="0" data-r="NO ASISTIO">No asistió</span>
   </span>` : '';
 
+  const problema = problemaDatos(b);
   return `<div class="${cls}" role="button" tabindex="0" data-id="${b.id}">
+    ${problema ? `<span class="alerta-dato" title="${esc(problema)}">⚠</span>` : ''}
     <span class="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
     <span class="sub">
-      <span class="clase-tag ${claseFamilia(b.clase)}">${esc(b.clase || '—')}</span>
+      ${clasesTagsHtml(b.clase)}
       <span class="cita-rut num">${esc(b.rut || 'sin RUT')}</span>
     </span>
     ${badges.length ? `<span class="badges">${badges.join('')}</span>` : ''}
@@ -458,6 +565,12 @@ function claseFamilia(c) {
   if (x === 'E') return 'prof';
   if (x.startsWith('A')) return 'moto';
   return 'liviana';
+}
+// Una cita puede tener varias clases marcadas ("B,A2"): una etiqueta por cada una.
+function clasesTagsHtml(clase) {
+  const lista = clasesDe(clase);
+  if (!lista.length) return '—';
+  return lista.map((cl) => `<span class="clase-tag ${claseFamilia(cl)}">${esc(cl)}</span>`).join(' ');
 }
 
 function pintarGrilla(cont, filas, fecha) {
@@ -479,11 +592,11 @@ function pintarGrilla(cont, filas, fecha) {
   });
   cont.className = 'grilla';
   cont.style.gridTemplateColumns = `58px repeat(${exs.length}, minmax(0, 1fr))`;
-  let html = `<div></div>` + exs.map((e) =>
+  let html = `<div class="g-esquina"><span class="gh-n">&nbsp;</span><span class="gh-c">Hora</span></div>` + exs.map((e) =>
     `<div class="g-head"><span class="gh-n">${esc(e.nombre)}</span><span class="gh-c">${cuenta[e.id] || 0} citas</span></div>`).join('');
   for (const hora of META.horas) {
     const pesada = hora === META.hora_d_a5;
-    html += `<div class="g-hora">${esc(hora)}${pesada ? '<span class="et">D · A5</span>' : ''}</div>`;
+    html += `<div class="g-hora" data-hora="${esc(hora)}">${esc(hora)}${pesada ? '<span class="et">D · A5</span>' : ''}</div>`;
     for (const e of exs) html += `<div${pesada ? ' class="fila-pesada"' : ''}>${slotCard(porKey[`${hora}|${e.id}`])}</div>`;
   }
   cont.innerHTML = html;
@@ -501,17 +614,7 @@ function pintarGrilla(cont, filas, fecha) {
       const id = Number(box.dataset.id);
       const quitar = el.classList.contains('on');
       try {
-        const b = await api(`/agenda/${id}`);
-        const r = await api(`/agenda/${id}`, { method: 'PUT', body: {
-          visto_en: b.actualizado_en,
-          rut: b.rut, nombre: b.nombre, clase: b.clase, contacto: b.contacto, correo: b.correo,
-          tipo_cita: b.tipo_cita, motivo_reagendamiento: b.motivo_reagendamiento,
-          lista_espera: b.lista_espera, intento: b.intento, funcionario_id: b.funcionario_id,
-          fecha_inicio_tramite: b.fecha_inicio_tramite, confirmo_asistencia: b.confirmo_asistencia,
-          comentarios: b.comentarios,
-          resultado: quitar ? null : el.dataset.r,
-        } });
-        (r.avisos || []).forEach((a) => toast(a, 'err'));
+        await marcarResultado(id, quitar ? null : el.dataset.r);
         // Actualiza la tarjeta en el lugar, sin recargar la grilla (no salta la pantalla).
         box.querySelectorAll('.sr').forEach((s) => s.classList.remove('on'));
         card.classList.remove('res-aprob', 'res-reprob');
@@ -523,6 +626,22 @@ function pintarGrilla(cont, filas, fecha) {
       } catch (e) { toast(e.message, 'err'); }
     };
   });
+}
+// Marca (o borra, con resultado=null) el resultado de una cita preservando
+// el resto de sus datos. Compartido entre la grilla y el check-in del dia.
+async function marcarResultado(id, resultado) {
+  const b = await api(`/agenda/${id}`);
+  const r = await api(`/agenda/${id}`, { method: 'PUT', body: {
+    visto_en: b.actualizado_en,
+    rut: b.rut, nombre: b.nombre, clase: b.clase, contacto: b.contacto, correo: b.correo,
+    tipo_cita: b.tipo_cita, motivo_reagendamiento: b.motivo_reagendamiento,
+    lista_espera: b.lista_espera, intento: b.intento, funcionario_id: b.funcionario_id,
+    fecha_inicio_tramite: b.fecha_inicio_tramite, confirmo_asistencia: b.confirmo_asistencia,
+    comentarios: b.comentarios,
+    resultado,
+  } });
+  (r.avisos || []).forEach((a) => toast(a, 'err'));
+  return r.bloque;
 }
 
 /* ================= tab: DISPONIBLES ================= */
@@ -594,6 +713,7 @@ async function renderReagendar() {
   cargarPend();
 
   const qi = $('#r-q');
+  autoformatoRut(qi);
   let tmr;
   qi.oninput = () => {
     clearTimeout(tmr);
@@ -665,6 +785,7 @@ async function renderBuscar() {
     </div>
     <div id="bx-hist"></div>`;
   const qi = $('#bx-q');
+  autoformatoRut(qi);
   let tmr;
   qi.oninput = () => {
     clearTimeout(tmr);
@@ -720,6 +841,7 @@ async function renderErrores() {
     </tr></thead><tbody id="e-body"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div>`;
   const cargar = async () => {
     const rep = await api('/errores');
+    actualizarBadgeErrores();
     $('#e-chips').innerHTML = [`<button class="chip" data-t="">Todos (${rep.total})</button>`]
       .concat(Object.entries(rep.resumen).sort((a, b) => b[1] - a[1])
         .map(([t, n]) => `<button class="chip" data-t="${t}">${esc(ETIQUETA[t] || t)} (${n})</button>`)).join('');
@@ -818,7 +940,7 @@ async function renderDia() {
         <td class="num">${esc(r.hora)}</td>
         <td class="num">${esc(r.rut || '')}</td>
         <td class="hd-nom">${esc(nom(r.nombre))}</td>
-        <td class="hd-c">${r.clase ? `<span class="clase-tag ${claseFamilia(r.clase)}">${esc(r.clase)}</span>` : ''}</td>
+        <td class="hd-c">${r.clase ? clasesTagsHtml(r.clase) : ''}</td>
         <td class="num">${esc(fTel(r.contacto))}</td>
         <td>${r.tipo_cita === 'REAGENDADO' ? 'Reagendado' : r.tipo_cita === 'TRASLADO EN TERRENO' ? 'Terreno' : ''}${r.pendiente_reagendar ? '<span class="hd-marca">Pendiente de reagendar</span>' : ''}</td>
         <td class="hd-res">${res}</td>
@@ -1003,16 +1125,32 @@ async function actualizarBadgePapelera() {
     if (n === 0) b.textContent = '';
   } catch (_) { b.hidden = true; }
 }
+// Cuenta solo error+warning (los que valen la pena mirar); "info" queda fuera
+// para no saturar el numerito con avisos de rutina (ej. citas sin resultado).
+async function actualizarBadgeErrores() {
+  const b = document.getElementById('badge-errores');
+  if (!b) return;
+  try {
+    const rep = await api('/errores');
+    const n = rep.hallazgos.filter((h) => h.severidad !== 'info').length;
+    b.textContent = n > 99 ? '99+' : String(n);
+    b.hidden = n === 0;
+    if (n === 0) b.textContent = '';
+  } catch (_) { b.hidden = true; }
+}
 async function renderPapelera() {
   view.innerHTML = `
     <div class="panel">
-      <h2>Papelera</h2>
+      <div class="fila" style="align-items:center">
+        <h2 style="margin:0;flex:1">Papelera</h2>
+        <button class="btn peligro sec" id="pap-vaciar">Vaciar papelera</button>
+      </div>
       <p class="muted">Citas retiradas de un bloque al <b>liberarlo</b>, <b>bloquearlo</b>, <b>pisarlo</b> con otra cita
         o <b>reagendarlo</b>. Se conservan las últimas 200; se listan las 80 más recientes.
         Restaurar solo funciona si el bloque original sigue libre.</p>
       <div class="tabla-scroll"><table><thead><tr>
         <th class="c">Cuándo</th><th class="c">Motivo</th><th class="c">Bloque original</th>
-        <th>Nombre</th><th>RUT</th><th class="c">Clase</th><th>Por</th><th class="c"></th>
+        <th class="c">Nombre</th><th class="c">RUT</th><th class="c">Clase</th><th class="c">Por</th><th class="c"></th>
       </tr></thead><tbody id="pap-body"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
     </div>`;
 
@@ -1024,9 +1162,12 @@ async function renderPapelera() {
       <td class="num c">${esc(fFecha(p.fecha))} · ${esc(p.hora)}</td>
       <td>${esc(nom(p.nombre) || p.bloqueo_motivo || '—')}</td>
       <td class="num">${esc(p.rut || '—')}</td>
-      <td class="c">${p.clase ? `<span class="clase-tag ${claseFamilia(p.clase)}">${esc(p.clase)}</span>` : '—'}</td>
+      <td class="c">${p.clase ? clasesTagsHtml(p.clase) : '—'}</td>
       <td>${esc(p.actor || '—')}</td>
-      <td class="c"><button class="btn chico" data-id="${p.id}">Restaurar</button></td></tr>`).join('')
+      <td class="c">
+        <button class="btn chico" data-id="${p.id}">Restaurar</button>
+        <button class="btn chico peligro sec" data-del="${p.id}">Eliminar</button>
+      </td></tr>`).join('')
       : '<tr><td colspan="8" class="muted">La papelera está vacía.</td></tr>';
     $('#pap-body').querySelectorAll('button[data-id]').forEach((el) => {
       el.onclick = async () => {
@@ -1037,14 +1178,34 @@ async function renderPapelera() {
         } catch (e) { toast(e.message, 'err'); }
       };
     });
+    $('#pap-body').querySelectorAll('button[data-del]').forEach((el) => {
+      el.onclick = async () => {
+        if (!confirm('Eliminar esta entrada de la papelera? No se puede deshacer.')) return;
+        try {
+          await api(`/papelera/${el.dataset.del}/eliminar`, { method: 'POST' });
+          toast('Entrada eliminada');
+          cargar(); actualizarBadgePapelera();
+        } catch (e) { toast(e.message, 'err'); }
+      };
+    });
     actualizarBadgePapelera();
+  };
+  $('#pap-vaciar').onclick = async () => {
+    if (!confirm('Vaciar toda la papelera? Se pierden todas las citas retiradas guardadas ahi. No se puede deshacer.')) return;
+    try {
+      const r = await api('/papelera/vaciar', { method: 'POST' });
+      toast(`Papelera vaciada (${r.eliminadas} entradas)`);
+      cargar(); actualizarBadgePapelera();
+    } catch (e) { toast(e.message, 'err'); }
   };
   cargar();
 }
 
 /* ================= tab: DATOS ================= */
 async function renderDatos() {
+  const esAdmin = META.rol === 'admin';
   view.innerHTML = `
+    ${esAdmin ? '' : '<div class="panel aviso">Esta sección es de solo lectura. Los cambios de configuración los hace un administrador.</div>'}
     <div class="panel"><h2>Importar / Exportar</h2>
       <div class="fila">
         <div class="campo"><label>Archivo Excel de origen (.xlsx)</label><input type="file" id="im-file" accept=".xlsx"></div>
@@ -1080,7 +1241,9 @@ async function renderDatos() {
     <div class="grid2">
       <div class="panel"><h2>Examinadores</h2><div id="ex-cont"></div>
         <div class="fila"><input id="ex-nuevo" placeholder="Nombre"><button class="btn chico" id="ex-add">Agregar</button></div></div>
-      <div class="panel"><h2>Funcionarios/as</h2><div id="fu-cont"></div>
+      <div class="panel"><h2>Funcionarios/as</h2>
+        <p class="muted" style="margin-top:-.4rem">Cuenta individual para entrar al sistema (usuario + contraseña propia).</p>
+        <div id="fu-cont"></div>
         <div class="fila"><input id="fu-nuevo" placeholder="Nombre"><button class="btn chico" id="fu-add">Agregar</button></div></div>
     </div>
 
@@ -1166,7 +1329,49 @@ async function renderDatos() {
     });
   };
   listar($('#ex-cont'), META.examinadores, 'examinadores');
-  listar($('#fu-cont'), META.funcionarios, 'funcionarios');
+  const listarFuncionarios = (cont, arr) => {
+    cont.innerHTML = arr.map((x) => `<div class="fila" style="margin-bottom:.4rem;align-items:center">
+      <span style="flex:1">${esc(x.nombre)}</span>
+      <input class="fu-usuario" data-id="${x.id}" value="${esc(x.usuario)}" placeholder="usuario" style="max-width:140px">
+      <button class="btn chico sec" data-clave="${x.id}">Contraseña</button>
+      <label><input type="checkbox" class="fu-admin" ${x.rol === 'admin' ? 'checked' : ''} data-id="${x.id}"> admin</label>
+      <label><input type="checkbox" class="fu-activo" ${x.activo ? 'checked' : ''} data-id="${x.id}"> activo</label></div>`).join('');
+    cont.querySelectorAll('.fu-activo').forEach((el) => {
+      el.onchange = async () => {
+        await api(`/funcionarios/${el.dataset.id}`, { method: 'PUT', body: { activo: el.checked } });
+        META = await api('/meta');
+      };
+    });
+    cont.querySelectorAll('.fu-admin').forEach((el) => {
+      el.onchange = async () => {
+        try {
+          await api(`/funcionarios/${el.dataset.id}`, { method: 'PUT', body: { rol: el.checked ? 'admin' : 'staff' } });
+          toast(el.checked ? 'Ahora es administrador' : 'Ya no es administrador');
+          META = await api('/meta');
+        } catch (e) { toast(e.message, 'err'); el.checked = !el.checked; }
+      };
+    });
+    cont.querySelectorAll('.fu-usuario').forEach((el) => {
+      el.addEventListener('blur', async () => {
+        try {
+          await api(`/funcionarios/${el.dataset.id}`, { method: 'PUT', body: { usuario: el.value.trim() } });
+          toast('Usuario guardado');
+          META = await api('/meta');
+        } catch (e) { toast(e.message, 'err'); }
+      });
+    });
+    cont.querySelectorAll('button[data-clave]').forEach((el) => {
+      el.onclick = async () => {
+        const clave = prompt('Nueva contraseña (mínimo 4 caracteres):');
+        if (!clave) return;
+        try {
+          await api(`/funcionarios/${el.dataset.clave}`, { method: 'PUT', body: { clave } });
+          toast('Contraseña actualizada');
+        } catch (e) { toast(e.message, 'err'); }
+      };
+    });
+  };
+  listarFuncionarios($('#fu-cont'), META.funcionarios);
   $('#ex-add').onclick = async () => {
     const nombre = $('#ex-nuevo').value.trim(); if (!nombre) return;
     await api('/examinadores', { method: 'POST', body: { nombre } });
@@ -1180,6 +1385,21 @@ async function renderDatos() {
 
   const mov = await api('/movimientos');
   $('#mov-body').innerHTML = mov.map((m) => `<tr><td class="num c">${esc(fFechaHora(m.ts))}</td><td>${esc(m.accion)}</td><td>${esc(m.actor)}</td><td>${esc(m.detalle)}</td></tr>`).join('');
+
+  // Solo lectura para quien no sea administrador: se deja ver todo, pero no
+  // se puede tocar nada de configuracion (el servidor igual lo rechazaria).
+  if (!esAdmin) {
+    const soloLectura = [
+      '#im-file', '#im-limpiar', '#im-btn',
+      '#gb-desde', '#gb-hasta', '#gb-btn',
+      '#fe-fecha', '#fe-nombre', '#fe-add',
+      '#cat-cont input', '#cat-cont button',
+      '#ex-nuevo', '#ex-add', '#ex-cont input', '#ex-cont button',
+      '#fu-nuevo', '#fu-add', '#fu-cont input', '#fu-cont button',
+      '#fe-cont button',
+    ];
+    soloLectura.forEach((sel) => document.querySelectorAll(sel).forEach((el) => { el.disabled = true; }));
+  }
 }
 
 /* ================= arranque ================= */
@@ -1200,6 +1420,7 @@ async function init() {
     if (!location.hash) location.hash = 'agenda';
     ruta();
     actualizarBadgePapelera();
+    actualizarBadgeErrores();
   } catch (e) {
     if (e.message === 'Sesion requerida') return;
     view.innerHTML = `<div class="panel"><h2>No se pudo conectar</h2><p>${esc(e.message)}</p></div>`;

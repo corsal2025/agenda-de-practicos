@@ -53,4 +53,16 @@ function restaurar(id) {
   return db.prepare('SELECT * FROM agenda WHERE id = ?').get(row.agenda_id);
 }
 
-module.exports = { guardar, listar, restaurar };
+// Borra una entrada puntual (no se puede deshacer).
+function eliminar(id) {
+  const r = db.prepare('DELETE FROM papelera WHERE id = ?').run(id);
+  if (!r.changes) throw new Error('Entrada de papelera no encontrada');
+}
+
+// Vacia toda la papelera (no se puede deshacer).
+function vaciar() {
+  const r = db.prepare('DELETE FROM papelera').run();
+  return Number(r.changes);
+}
+
+module.exports = { guardar, listar, restaurar, eliminar, vaciar };

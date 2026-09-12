@@ -2,6 +2,7 @@
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const express = require('express');
 const multer = require('multer');
 
@@ -16,7 +17,11 @@ const backupMod = require('./backup');
 const { hoyISO } = require('./fechas');
 const feriados = require('./feriados');
 const papelera = require('./papelera');
+const pesada = require('./pesada');
+const correo = require('./correo');
+const recordatorios = require('./recordatorios');
 const auth = require('./auth');
+const usuarios = require('./usuarios');
 const rut = require('./rut');
 const telefono = require('./telefono');
 
@@ -47,6 +52,57 @@ app.get('/api/sesion', (req, res) => {
 });
 app.post('/api/logout', (req, res) => auth.logout(req, res));
 
+// ---------- confirmar / rechazar por correo (publico, sin login) ----------
+function paginaPublica(titulo, mensaje, ok) {
+  return `<!doctype html><html lang="es"><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>${titulo}</title>
+    <body style="font-family:sans-serif;background:#f1f5f9;margin:0;padding:2.5rem 1.2rem;color:#1e293b">
+      <div style="max-width:420px;margin:0 auto;background:#fff;border-radius:10px;padding:2rem 1.6rem;box-shadow:0 1px 3px rgba(0,0,0,.1);text-align:center">
+        <div style="font-size:2.2rem">${ok ? '✅' : '⚠️'}</div>
+        <h1 style="font-size:1.2rem;margin:.8rem 0 .4rem">${titulo}</h1>
+        <p style="color:#475569;margin:0">${mensaje}</p>
+      </div>
+    </body></html>`;
+}
+function tokenValido(bloque, token) {
+  if (!bloque || !bloque.token_confirmacion || !token) return false;
+  const a = Buffer.from(bloque.token_confirmacion);
+  const b = Buffer.from(String(token));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+app.get('/confirmar/:id/:token', (req, res) => {
+  try {
+    const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(Number(req.params.id));
+    if (!tokenValido(bloque, req.params.token)) {
+      return res.status(404).send(paginaPublica('Link no válido', 'Este link ya se usó o no es válido.', false));
+    }
+    db.prepare("UPDATE agenda SET confirmo_asistencia = 1, token_confirmacion = NULL, actualizado_en = datetime('now','localtime') WHERE id = ?").run(bloque.id);
+    log(bloque.id, 'confirmar', `${bloque.fecha} ${bloque.hora} confirmado por correo`);
+    res.send(paginaPublica('¡Listo, tu hora quedó confirmada!', 'Te esperamos el día y la hora agendada. Gracias por confirmar.', true));
+  } catch (e) {
+    res.status(500).send(paginaPublica('Ocurrió un error', 'No pudimos procesar tu confirmación. Contacta a la oficina.', false));
+  }
+});
+app.get('/rechazar/:id/:token', (req, res) => {
+  try {
+    const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(Number(req.params.id));
+    if (!tokenValido(bloque, req.params.token)) {
+      return res.status(404).send(paginaPublica('Link no válido', 'Este link ya se usó o no es válido.', false));
+    }
+    db.prepare(`
+      UPDATE agenda SET confirmo_asistencia = 0, pendiente_reagendar = 1,
+        pendiente_nota = 'No puede asistir (avisado por correo automatico)',
+        token_confirmacion = NULL, actualizado_en = datetime('now','localtime')
+      WHERE id = ?
+    `).run(bloque.id);
+    log(bloque.id, 'rechazar', `${bloque.fecha} ${bloque.hora} avisó que no puede asistir (correo)`);
+    res.send(paginaPublica('Gracias por avisar', 'Registramos que no puedes asistir. El equipo te contactará para reagendar tu hora.', true));
+  } catch (e) {
+    res.status(500).send(paginaPublica('Ocurrió un error', 'No pudimos procesar tu aviso. Contacta a la oficina.', false));
+  }
+});
+
 app.use(auth.guard);
 
 const wrap = (fn) => (req, res, next) => {
@@ -75,8 +131,9 @@ app.get('/api/meta', wrap((req, res) => {
     clases_pesadas: CLASES_PESADAS,
     hoy: hoyISO(),
     usuario: actorDe(req),
+    rol: (req.session && req.session.rol) || null,
     examinadores: db.prepare('SELECT id, nombre, activo FROM examinadores ORDER BY nombre').all(),
-    funcionarios: db.prepare('SELECT id, nombre, activo FROM funcionarios ORDER BY nombre').all(),
+    funcionarios: db.prepare('SELECT id, nombre, activo, usuario, rol FROM funcionarios ORDER BY nombre').all(),
     catalogos: {
       clase: catalogo('clase'),
       tipo_cita: catalogo('tipo_cita'),
@@ -134,7 +191,7 @@ app.get('/api/agenda/:id', wrap((req, res) => {
   res.json(row);
 }));
 
-app.post('/api/agenda/generar', wrap((req, res) => {
+app.post('/api/agenda/generar', auth.soloAdmin, wrap((req, res) => {
   const { desde, hasta } = req.body || {};
   if (!desde || !hasta) throw bad('Indica desde y hasta (YYYY-MM-DD)');
   const r = generar(desde, hasta);
@@ -144,15 +201,29 @@ app.post('/api/agenda/generar', wrap((req, res) => {
 
 function validarBloque(body, bloque) {
   const avisos = [];
-  const clase = (body.clase || '').toUpperCase().trim() || null;
-  if (!enCatalogo('clase', clase)) throw bad(`Clase no valida: ${clase}`);
+  // Una cita puede tener varias clases marcadas a la vez: "B,A2". Se valida
+  // cada una por separado y se guarda como lista normalizada.
+  const clases = [...new Set(String(body.clase || '').toUpperCase().split(',').map((s) => s.trim()).filter(Boolean))];
+  for (const cl of clases) if (!enCatalogo('clase', cl)) throw bad(`Clase no valida: ${cl}`);
+  const clase = clases.length ? clases.join(',') : null;
+  const tienePesada = clases.some((cl) => CLASES_PESADAS.includes(cl));
   if (!enCatalogo('tipo_cita', body.tipo_cita)) throw bad(`Tipo de cita no valido: ${body.tipo_cita}`);
   if (!enCatalogo('resultado', body.resultado)) throw bad(`Resultado no valido: ${body.resultado}`);
   if (!enCatalogo('intento', body.intento)) throw bad(`Intento no valido: ${body.intento}`);
   if (!enCatalogo('lista_espera', body.lista_espera)) throw bad(`Lista de espera no valida: ${body.lista_espera}`);
 
-  if (clase && CLASES_PESADAS.includes(clase) && bloque.hora !== HORA_D_A5 && !body.forzar) {
-    throw bad(`La clase ${clase} solo se agenda en el bloque ${HORA_D_A5}. Elige ese horario o marca "forzar".`);
+  if (tienePesada && bloque.hora !== HORA_D_A5 && !body.forzar) {
+    throw bad(`Las clases D/A5 solo se agendan en el bloque ${HORA_D_A5}. Elige ese horario o marca "forzar".`);
+  }
+  if (tienePesada && bloque.hora === HORA_D_A5 && !body.forzar) {
+    const ocupados = pesada.ocupadosDependientes(bloque.fecha, bloque.examinador_id);
+    if (ocupados.length) {
+      const detalle = ocupados.map((o) => `${o.hora} (${o.nombre || o.rut})`).join(' y ');
+      throw bad(
+        `No se puede agendar clase D/A5 a las ${HORA_D_A5}: el examinador ya tiene cita en ${detalle}. `
+        + 'Libera esas horas primero o marca "forzar" para agendar igual (esas horas no quedaran bloqueadas).'
+      );
+    }
   }
   let rutFmt = null;
   if (body.rut && String(body.rut).trim()) {
@@ -191,6 +262,9 @@ app.put('/api/agenda/:id', wrap((req, res) => {
         comentarios=@com, agendado_en=NULL, actualizado_en=datetime('now','localtime')
       WHERE id = @id
     `).run({ id, motivo, com: body.comentarios ? String(body.comentarios).trim() : null });
+    if (pesada.esPesadaEnHoraValida(bloque) && (bloque.rut || bloque.nombre)) {
+      pesada.liberar(bloque.fecha, bloque.examinador_id);
+    }
     logReq(req, id, 'bloquear', `${bloque.fecha} ${bloque.hora} (${motivo})`);
     return res.json({ ok: true, avisos: [], bloque: traer(id) });
   }
@@ -258,7 +332,25 @@ app.put('/api/agenda/:id', wrap((req, res) => {
   const accion = !estabaOcupada && quedaOcupada ? 'agendar'
     : estabaOcupada && !quedaOcupada ? 'liberar' : 'editar';
   logReq(req, id, accion, `${bloque.fecha} ${bloque.hora} ${nombre || bloque.nombre || ''}`);
-  res.json({ ok: true, avisos, bloque: traer(id) });
+
+  // Clase pesada (D/A5) a las 12:30: bloquea/libera automaticamente los
+  // bloques siguientes del mismo examinador ese dia.
+  const eraPesada = pesada.esPesadaEnHoraValida(bloque) && estabaOcupada;
+  const esPesadaAhora = pesada.esPesadaEnHoraValida({ hora: bloque.hora, clase }) && quedaOcupada;
+  if (esPesadaAhora && !eraPesada) {
+    avisos.push(...pesada.aplicar(bloque.fecha, bloque.examinador_id));
+  } else if (eraPesada && !esPesadaAhora) {
+    pesada.liberar(bloque.fecha, bloque.examinador_id);
+  }
+
+  const bloqueFinal = traer(id);
+  if (accion === 'agendar' && bloqueFinal.correo) {
+    correo.confirmacion(bloqueFinal)
+      .then((ok) => { if (ok) db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').run(id); })
+      .catch((e) => console.error('Correo de confirmacion fallo:', e.message));
+  }
+
+  res.json({ ok: true, avisos, bloque: bloqueFinal });
 }));
 
 const LIMPIAR_SQL = `
@@ -274,6 +366,9 @@ app.post('/api/agenda/:id/liberar', wrap((req, res) => {
   if (!bloque) throw bad('Bloque no encontrado', 404);
   papelera.guardar(bloque, 'liberar', actorDe(req));
   db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL} WHERE id = ?`).run(id);
+  if (pesada.esPesadaEnHoraValida(bloque) && (bloque.rut || bloque.nombre)) {
+    pesada.liberar(bloque.fecha, bloque.examinador_id);
+  }
   logReq(req, id, 'liberar', `${bloque.fecha} ${bloque.hora} ${bloque.nombre || bloque.bloqueo_motivo || ''}`);
   res.json({ ok: true });
 }));
@@ -292,7 +387,7 @@ app.post('/api/agenda/:id/pendiente', wrap((req, res) => {
 
 app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
   const origenId = Number(req.params.id);
-  const { destino_id, motivo } = req.body || {};
+  const { destino_id, motivo, forzar } = req.body || {};
   const origen = db.prepare('SELECT * FROM agenda WHERE id = ?').get(origenId);
   const destino = db.prepare('SELECT * FROM agenda WHERE id = ?').get(Number(destino_id));
   if (!origen) throw bad('Cita de origen no encontrada', 404);
@@ -300,8 +395,20 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
   if (!(origen.rut || origen.nombre)) throw bad('El bloque de origen no tiene una cita.');
   if (destino.rut || destino.nombre) throw bad('El bloque de destino ya esta ocupado.');
   if (destino.bloqueado) throw bad('El bloque de destino esta bloqueado.');
-  if (CLASES_PESADAS.includes((origen.clase || '').toUpperCase()) && destino.hora !== HORA_D_A5) {
+  const origenTienePesada = String(origen.clase || '').toUpperCase().split(',').map((s) => s.trim())
+    .some((cl) => CLASES_PESADAS.includes(cl));
+  if (origenTienePesada && destino.hora !== HORA_D_A5) {
     throw bad(`La clase ${origen.clase} solo se agenda en el bloque ${HORA_D_A5}.`);
+  }
+  if (origenTienePesada && destino.hora === HORA_D_A5 && !forzar) {
+    const ocupados = pesada.ocupadosDependientes(destino.fecha, destino.examinador_id);
+    if (ocupados.length) {
+      const detalle = ocupados.map((o) => `${o.hora} (${o.nombre || o.rut})`).join(' y ');
+      throw bad(
+        `No se puede reagendar aqui: el examinador ya tiene cita en ${detalle}. `
+        + 'Libera esas horas primero o marca "forzar" para reagendar igual.'
+      );
+    }
   }
 
   tx(() => {
@@ -324,8 +431,23 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
     db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL.replace('comentarios=NULL', 'comentarios=@c')} WHERE id=@id`)
       .run({ id: origen.id, c: `Reagendada a ${destino.fecha} ${destino.hora} (${motivo || 'sin motivo'})` });
   });
+
+  const avisos = [];
+  if (pesada.esPesadaEnHoraValida(origen)) pesada.liberar(origen.fecha, origen.examinador_id);
+  if (pesada.esPesadaEnHoraValida({ hora: destino.hora, clase: origen.clase })) {
+    avisos.push(...pesada.aplicar(destino.fecha, destino.examinador_id));
+  }
+
   logReq(req, origen.id, 'reagendar', `${origen.fecha} ${origen.hora} -> ${destino.fecha} ${destino.hora}`);
-  res.json({ ok: true, destino: traer(destino.id) });
+
+  const destinoFinal = traer(destino.id);
+  if (destinoFinal.correo) {
+    correo.confirmacion(destinoFinal)
+      .then((ok) => { if (ok) db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').run(destino.id); })
+      .catch((e) => console.error('Correo de confirmacion fallo:', e.message));
+  }
+
+  res.json({ ok: true, avisos, destino: destinoFinal });
 }));
 
 // ---------- BLOQUEAR / DESBLOQUEAR DIA ----------
@@ -419,7 +541,7 @@ app.get('/api/errores', wrap((req, res) => res.json(reporte())));
 app.get('/api/analitica', wrap((req, res) => res.json(resumen(req.query.desde, req.query.hasta))));
 
 // ---------- CATALOGOS ----------
-app.post('/api/catalogos', wrap((req, res) => {
+app.post('/api/catalogos', auth.soloAdmin, wrap((req, res) => {
   const { tipo, valor } = req.body || {};
   if (!tipo || !valor) throw bad('Indica tipo y valor');
   const orden = (db.prepare('SELECT COALESCE(MAX(orden),0)+1 n FROM catalogos WHERE tipo=?').get(tipo)).n;
@@ -427,43 +549,57 @@ app.post('/api/catalogos', wrap((req, res) => {
     .run(tipo, String(valor).trim().toUpperCase(), orden);
   res.json({ ok: true });
 }));
-app.delete('/api/catalogos', wrap((req, res) => {
+app.delete('/api/catalogos', auth.soloAdmin, wrap((req, res) => {
   db.prepare('UPDATE catalogos SET activo = 0 WHERE tipo = ? AND valor = ?').run(req.query.tipo, req.query.valor);
   res.json({ ok: true });
 }));
 
 // ---------- FERIADOS ----------
 app.get('/api/feriados', wrap((req, res) => res.json(feriados.listar())));
-app.post('/api/feriados', wrap((req, res) => {
+app.post('/api/feriados', auth.soloAdmin, wrap((req, res) => {
   const { fecha, nombre } = req.body || {};
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha || '')) throw bad('Fecha invalida (YYYY-MM-DD)');
   feriados.agregar(fecha, nombre);
   logReq(req, null, 'editar', `feriado + ${fecha}`);
   res.json({ ok: true });
 }));
-app.delete('/api/feriados', wrap((req, res) => {
+app.delete('/api/feriados', auth.soloAdmin, wrap((req, res) => {
   feriados.quitar(req.query.fecha);
   logReq(req, null, 'editar', `feriado - ${req.query.fecha}`);
   res.json({ ok: true });
 }));
 
 // ---------- EXAMINADORES / FUNCIONARIOS ----------
-app.post('/api/examinadores', wrap((req, res) => {
+app.post('/api/examinadores', auth.soloAdmin, wrap((req, res) => {
   res.json({ ok: true, id: upsertExaminador(String((req.body || {}).nombre || '').trim().toUpperCase()) });
 }));
-app.put('/api/examinadores/:id', wrap((req, res) => {
+app.put('/api/examinadores/:id', auth.soloAdmin, wrap((req, res) => {
   const { nombre, activo } = req.body || {};
   db.prepare('UPDATE examinadores SET nombre = COALESCE(?, nombre), activo = COALESCE(?, activo) WHERE id = ?')
     .run(nombre ? nombre.toUpperCase() : null, activo == null ? null : (activo ? 1 : 0), Number(req.params.id));
   res.json({ ok: true });
 }));
-app.post('/api/funcionarios', wrap((req, res) => {
+app.post('/api/funcionarios', auth.soloAdmin, wrap((req, res) => {
   res.json({ ok: true, id: upsertFuncionario(String((req.body || {}).nombre || '').trim().toUpperCase()) });
 }));
-app.put('/api/funcionarios/:id', wrap((req, res) => {
-  const { nombre, activo } = req.body || {};
+app.put('/api/funcionarios/:id', auth.soloAdmin, wrap((req, res) => {
+  const id = Number(req.params.id);
+  const { nombre, activo, usuario, clave, rol } = req.body || {};
   db.prepare('UPDATE funcionarios SET nombre = COALESCE(?, nombre), activo = COALESCE(?, activo) WHERE id = ?')
-    .run(nombre ? nombre.toUpperCase() : null, activo == null ? null : (activo ? 1 : 0), Number(req.params.id));
+    .run(nombre ? nombre.toUpperCase() : null, activo == null ? null : (activo ? 1 : 0), id);
+  if (usuario != null) {
+    const limpio = String(usuario).trim();
+    if (limpio && !usuarios.usuarioDisponible(limpio, id)) throw bad('Ese usuario ya esta en uso por otra persona.');
+    db.prepare('UPDATE funcionarios SET usuario = ? WHERE id = ?').run(limpio || null, id);
+  }
+  if (clave) {
+    if (String(clave).length < 4) throw bad('La contraseña debe tener al menos 4 caracteres.');
+    db.prepare('UPDATE funcionarios SET clave_hash = ? WHERE id = ?').run(usuarios.hashClave(clave), id);
+  }
+  if (rol) {
+    if (!['admin', 'staff'].includes(rol)) throw bad('Rol no valido');
+    db.prepare('UPDATE funcionarios SET rol = ? WHERE id = ?').run(rol, id);
+  }
   res.json({ ok: true });
 }));
 
@@ -474,9 +610,19 @@ app.post('/api/papelera/:id/restaurar', wrap((req, res) => {
   logReq(req, b.id, 'editar', `restaurado desde papelera: ${b.fecha} ${b.hora}`);
   res.json({ ok: true, bloque: traer(b.id) });
 }));
+app.post('/api/papelera/:id/eliminar', wrap((req, res) => {
+  papelera.eliminar(Number(req.params.id));
+  logReq(req, null, 'editar', `eliminada entrada de papelera #${req.params.id}`);
+  res.json({ ok: true });
+}));
+app.post('/api/papelera/vaciar', wrap((req, res) => {
+  const n = papelera.vaciar();
+  logReq(req, null, 'editar', `papelera vaciada: ${n} entradas`);
+  res.json({ ok: true, eliminadas: n });
+}));
 
 // ---------- IMPORT / EXPORT / BACKUP ----------
-app.post('/api/import', subir.single('archivo'), wrap((req, res) => {
+app.post('/api/import', auth.soloAdmin, subir.single('archivo'), wrap((req, res) => {
   if (!req.file) throw bad('Sube un archivo .xlsx en el campo "archivo"');
   const limpiar = String(req.body.limpiar) === 'true' || req.body.limpiar === '1';
   try {
@@ -530,4 +676,6 @@ app.listen(PUERTO, () => {
   const n = db.prepare('SELECT COUNT(*) n FROM agenda').get().n;
   if (!n) console.log('  Base vacia. Importa el Excel desde "Datos" o corre: npm run migrar\n');
   backupMod.programar();
+  if (correo.habilitado) recordatorios.programar();
+  else console.log('  Correos deshabilitados (falta configurar SMTP_HOST/SMTP_USER/SMTP_PASS)\n');
 });

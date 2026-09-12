@@ -29,8 +29,25 @@ const DB_PATH = process.env.AGENDA_DB || path.join(RAIZ, 'data', 'agenda.db');
 // 4900: puerto propio de la agenda. Se evita 4173/5173 (los usa la app de estetica / Vite).
 const PUERTO = Number(process.env.PORT) || 4900;
 
+// Correo de confirmacion (al agendar) y recordatorio (un dia antes).
+// Sin SMTP_HOST configurado, el envio de correos queda deshabilitado solo.
+const SMTP = {
+  host: process.env.SMTP_HOST || null,
+  port: Number(process.env.SMTP_PORT) || 587,
+  secure: String(process.env.SMTP_SECURE || '') === '1',
+  user: process.env.SMTP_USER || null,
+  pass: process.env.SMTP_PASS || null,
+  from: process.env.SMTP_FROM || process.env.SMTP_USER || null,
+};
+
+// URL por la que alguien de afuera puede llegar a este servidor (dominio propio
+// o un tunel tipo Cloudflare Tunnel / ngrok). Sin esto, los links de
+// confirmar/rechazar del correo recordatorio no se pueden generar: el servidor
+// corre local (ver README) y un celular fuera de la red no lo alcanza.
+const URL_PUBLICA = (process.env.AGENDA_URL_PUBLICA || '').replace(/\/$/, '') || null;
+
 module.exports = {
   HORAS, HORA_D_A5, CLASES_PESADAS,
   EXAMINADORES, FUNCIONARIOS, CATALOGOS,
-  RAIZ, DB_PATH, PUERTO,
+  RAIZ, DB_PATH, PUERTO, SMTP, URL_PUBLICA,
 };

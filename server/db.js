@@ -19,7 +19,13 @@ asegurarColumna('agenda', 'bloqueado', 'bloqueado INTEGER NOT NULL DEFAULT 0');
 asegurarColumna('agenda', 'bloqueo_motivo', 'bloqueo_motivo TEXT');
 asegurarColumna('agenda', 'pendiente_reagendar', 'pendiente_reagendar INTEGER NOT NULL DEFAULT 0');
 asegurarColumna('agenda', 'pendiente_nota', 'pendiente_nota TEXT');
+asegurarColumna('agenda', 'correo_confirmacion_enviado', 'correo_confirmacion_enviado INTEGER NOT NULL DEFAULT 0');
+asegurarColumna('agenda', 'correo_recordatorio_enviado', 'correo_recordatorio_enviado INTEGER NOT NULL DEFAULT 0');
+asegurarColumna('agenda', 'token_confirmacion', 'token_confirmacion TEXT');
 asegurarColumna('movimientos', 'actor', 'actor TEXT');
+asegurarColumna('funcionarios', 'usuario', 'usuario TEXT');
+asegurarColumna('funcionarios', 'clave_hash', 'clave_hash TEXT');
+asegurarColumna('funcionarios', 'rol', "rol TEXT NOT NULL DEFAULT 'staff'");
 
 // --- Semillas (solo si faltan) ---
 function seed() {

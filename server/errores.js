@@ -61,8 +61,9 @@ function reporte() {
         mensaje: `RUT con digito verificador invalido: ${f.rut}` });
     }
 
-    // 3) Clase pesada en bloque incorrecto
-    if (ocupada && CLASES_PESADAS.includes((f.clase || '').toUpperCase()) && f.hora !== HORA_D_A5) {
+    // 3) Clase pesada en bloque incorrecto (puede venir mas de una clase, ej. "B,D")
+    const clasesF = String(f.clase || '').toUpperCase().split(',').map((s) => s.trim());
+    if (ocupada && clasesF.some((cl) => CLASES_PESADAS.includes(cl)) && f.hora !== HORA_D_A5) {
       hallazgos.push({ ...base(f), tipo: 'CLASE_BLOQUE', severidad: 'warning',
         mensaje: `Clase ${f.clase} agendada ${f.hora}; solo se permite en el bloque ${HORA_D_A5}` });
     }

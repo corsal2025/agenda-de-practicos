@@ -96,10 +96,10 @@ header.top {
 }
 .marca { display: flex; align-items: center; gap: 13px; }
 .escudo { width: 40px; height: 40px; flex: none; }
-.marca img.es-img { width: auto; height: 42px; max-width: 220px; flex: none; }
+.marca img.es-img { width: auto; height: 68px; max-width: 300px; flex: none; }
 .marca-txt { display: flex; flex-direction: column; gap: 1px; }
 .marca-org { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--tinta-2); }
-.marca-titulo { font-family: var(--serif); font-size: 20px; font-weight: 700; color: var(--azul-900); line-height: 1.1; }
+.marca-titulo { font-family: var(--serif); font-size: 32px; font-weight: 700; color: var(--azul-900); line-height: 1.1; }
 
 .top-right { justify-self: end; display: flex; align-items: center; gap: .7rem; }
 .estado { font-size: 12px; color: var(--tinta-2); }
@@ -128,17 +128,24 @@ header.top nav button.activo { color: var(--azul-900); border-bottom-color: var(
 }
 
 /* ---------- layout ---------- */
-main { padding: 1.4rem 2rem 2.5rem; max-width: 1240px; margin: 0 auto; }
+:root { --alto-header: 114px; --alto-panel-fijo: 99px; }
+main { padding: .5rem 2rem 2.5rem; max-width: 1240px; margin: 0 auto; }
 .panel {
   background: var(--papel); border: 1px solid var(--linea); border-radius: var(--r);
   padding: 1.15rem 1.2rem; margin-bottom: 1rem; box-shadow: var(--sh);
 }
 .fila { display: flex; gap: .8rem; flex-wrap: wrap; align-items: flex-end; }
+.panel-fijo { position: sticky; top: var(--alto-header); z-index: 20; }
+.panel-fijo .campo { align-items: center; }
 .campo { display: flex; flex-direction: column; gap: .35rem; }
 .campo label {
   font-size: 11px; font-weight: 700; letter-spacing: .06em;
   text-transform: uppercase; color: var(--tinta-3);
 }
+.chk-clases { display: flex; flex-wrap: wrap; gap: .4rem .9rem; padding: .5rem .1rem; }
+.chk-clase { display: inline-flex; align-items: center; gap: .35rem; font-weight: 600; font-size: 13.5px; color: var(--tinta); cursor: pointer; text-transform: none; letter-spacing: normal; }
+.chk-clase input { width: auto; height: auto; }
+
 input, select, textarea {
   font: inherit; padding: .5rem .6rem; height: 38px;
   border: 1px solid var(--linea); border-radius: var(--r-sm);
@@ -184,12 +191,17 @@ input:focus, select:focus, textarea:focus {
 /* ---------- grilla de agenda ---------- */
 .grilla { display: grid; gap: var(--gap); align-items: stretch; }
 .g-head {
-  position: sticky; top: 100px; z-index: 5; background: var(--papel);
+  position: sticky; top: calc(var(--alto-header) + var(--alto-panel-fijo)); z-index: 5; background: var(--papel);
   text-align: center; padding: .5rem .3rem .55rem;
   border-bottom: 2px solid var(--azul);
 }
-.g-head .gh-n { font-family: var(--serif); font-weight: 700; font-size: 15px; color: var(--azul-900); }
-.g-head .gh-c { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-3); margin-top: 2px; }
+.g-esquina {
+  position: sticky; top: calc(var(--alto-header) + var(--alto-panel-fijo)); z-index: 6; background: var(--papel);
+  text-align: center; padding: .5rem .3rem .55rem;
+  border-bottom: 2px solid var(--azul);
+}
+.g-head .gh-n, .g-esquina .gh-n { font-family: var(--serif); font-weight: 700; font-size: 19px; color: var(--azul-900); }
+.g-head .gh-c, .g-esquina .gh-c { display: block; font-size: 12.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-3); margin-top: 3px; }
 .g-hora {
   align-self: center; text-align: right; padding-right: .4rem;
   font-weight: 700; font-size: 13px; color: var(--tinta-3); font-variant-numeric: tabular-nums;
@@ -198,6 +210,7 @@ input:focus, select:focus, textarea:focus {
 .g-hora .et { font-size: 9px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--pesada); }
 
 .slot {
+  position: relative;
   display: flex; flex-direction: column; gap: .28rem;
   width: 100%; height: 100%; min-height: 56px;
   padding: .5rem .65rem .5rem .7rem;
@@ -205,6 +218,10 @@ input:focus, select:focus, textarea:focus {
   border-radius: var(--r-sm); background: var(--papel); color: var(--tinta);
   text-align: left; cursor: pointer; font: inherit;
   transition: border-color .12s, box-shadow .12s, background .12s;
+}
+.alerta-dato {
+  position: absolute; top: 6px; right: 7px; font-size: 13px; line-height: 1;
+  color: var(--alerta, #b45309); cursor: help;
 }
 .slot:focus-visible { outline: 2px solid var(--azul); outline-offset: 1px; }
 .slot:focus:not(:focus-visible) { outline: none; }
