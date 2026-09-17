@@ -502,6 +502,27 @@ function dialogoBloquearDia() {
   };
 }
 
+function dialogoMiPerfil() {
+  modal('Mi perfil', `
+    <p class="muted" style="margin-top:-.2rem">Usuario: <b>${esc(META.usuario || '')}</b></p>
+    <div class="campo"><label>Contraseña actual</label><input id="mp-actual" type="password" autocomplete="current-password"></div>
+    <div class="campo"><label>Contraseña nueva</label><input id="mp-nueva" type="password" autocomplete="new-password"></div>
+    <div class="campo"><label>Repetir contraseña nueva</label><input id="mp-repetir" type="password" autocomplete="new-password"></div>
+  `, `<button class="btn sec" id="mp-cancel">Cancelar</button>
+      <button class="btn" id="mp-ok">Cambiar contraseña</button>`);
+  $('#mp-cancel').onclick = cerrarModal;
+  $('#mp-ok').onclick = async () => {
+    const nueva = $('#mp-nueva').value;
+    if (nueva.length < 4) return toast('La contraseña nueva debe tener al menos 4 caracteres.', 'err');
+    if (nueva !== $('#mp-repetir').value) return toast('Las contraseñas nuevas no coinciden.', 'err');
+    try {
+      await api('/mi-clave', { method: 'PUT', body: { clave_actual: $('#mp-actual').value, clave_nueva: nueva } });
+      toast('Contraseña actualizada');
+      cerrarModal();
+    } catch (e) { toast(e.message, 'err'); }
+  };
+}
+
 // Motivo corto si a la cita le falta algun dato clave, o null si esta bien.
 // Mismo criterio que el Reporte de errores, pero visible directo en la tarjeta.
 function problemaDatos(b) {
@@ -1414,9 +1435,13 @@ async function init() {
           <span class="marca-titulo">Agenda de Prácticos</span></span>`;
     const r = META.rango_agenda || {};
     $('#estado').innerHTML = `${r.desde ? `Agenda ${fFecha(r.desde)} – ${fFecha(r.hasta)} · ` : ''}hoy ${fFecha(META.hoy)}
-      ${META.usuario ? `· <b>${esc(META.usuario)}</b> <button id="salir" class="btn chico sec" style="padding:.1rem .4rem">salir</button>` : ''}`;
+      ${META.usuario ? `· <b>${esc(META.usuario)}</b>
+        <button id="mi-perfil" class="btn chico sec" style="padding:.1rem .4rem">mi perfil</button>
+        <button id="salir" class="btn chico sec" style="padding:.1rem .4rem">salir</button>` : ''}`;
     const salir = $('#salir');
     if (salir) salir.onclick = async () => { await api('/logout', { method: 'POST' }); pantallaLogin(); };
+    const miPerfil = $('#mi-perfil');
+    if (miPerfil) miPerfil.onclick = dialogoMiPerfil;
     if (!location.hash) location.hash = 'agenda';
     ruta();
     actualizarBadgePapelera();

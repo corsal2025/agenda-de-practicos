@@ -603,6 +603,21 @@ app.put('/api/funcionarios/:id', auth.soloAdmin, wrap((req, res) => {
   res.json({ ok: true });
 }));
 
+// Self-service: cualquier persona logueada con cuenta individual puede
+// cambiar su propia contraseña (sin necesitar rol admin).
+app.put('/api/mi-clave', wrap((req, res) => {
+  const id = req.session && req.session.funcionario_id;
+  if (!id) throw bad('Tu sesión no tiene una cuenta individual asociada. Pide a un administrador que te cree un usuario en Datos → Funcionarios.');
+  const { clave_actual, clave_nueva } = req.body || {};
+  if (!clave_nueva || String(clave_nueva).length < 4) throw bad('La contraseña nueva debe tener al menos 4 caracteres.');
+  const u = db.prepare('SELECT * FROM funcionarios WHERE id = ?').get(id);
+  if (!u) throw bad('Cuenta no encontrada', 404);
+  if (u.clave_hash && !usuarios.verificarClave(clave_actual, u.clave_hash)) throw bad('La contraseña actual no es correcta.');
+  db.prepare('UPDATE funcionarios SET clave_hash = ? WHERE id = ?').run(usuarios.hashClave(clave_nueva), id);
+  logReq(req, null, 'editar', 'cambió su propia contraseña');
+  res.json({ ok: true });
+}));
+
 // ---------- PAPELERA ----------
 app.get('/api/papelera', wrap((req, res) => res.json(papelera.listar(80))));
 app.post('/api/papelera/:id/restaurar', wrap((req, res) => {
