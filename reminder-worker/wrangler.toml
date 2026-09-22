@@ -1,0 +1,43 @@
+name = "agenda-practicos-recordatorios"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Mismo cadencia que el setInterval horario de server/recordatorios.js.
+[triggers]
+crons = ["0 * * * *"]
+
+# ############################################################################
+# #  OJO -- LEER ANTES DE DESPLEGAR ESTE WORKER                             #
+# #                                                                          #
+# #  El database_id de abajo DEBE ser EXACTAMENTE EL MISMO que el de        #
+# #  [[d1_databases]] en el wrangler.toml de la RAIZ del proyecto (el del   #
+# #  Pages principal). Los dos Workers apuntan a la MISMA base D1.          #
+# #                                                                          #
+# #  Si no coinciden, este cron NO falla ni avisa: simplemente consulta una #
+# #  base vacia o equivocada y "funciona" reportando 0 recordatorios        #
+# #  enviados para siempre, en silencio.                                    #
+# #                                                                          #
+# #  Pasos al desplegar:                                                    #
+# #    1. Copia el database_id TAL CUAL del wrangler.toml de la raiz.       #
+# #    2. Pegalo aca abajo, reemplazando el placeholder.                    #
+# #    3. Confirma con `wrangler d1 list` que corresponde a la base         #
+# #       "agenda-practicos-db".                                            #
+# ############################################################################
+[[d1_databases]]
+binding = "DB"
+database_name = "agenda-practicos-db"
+database_id = "7f0b5ae1-e5e3-4c72-8727-8d931110d837"
+
+# Este Worker satelite (solo corre el cron de recordatorios) necesita SUS PROPIOS
+# secrets -- los secrets de un Worker NO se comparten automaticamente con el
+# proyecto Pages principal, aunque ambos lean/escriban la misma base D1. Sin
+# esto configurado, habilitado(env) da false: el cron sigue corriendo cada hora
+# pero no manda ningun correo (se deja un aviso en `wrangler tail`/el dashboard,
+# no falla en silencio total).
+#
+# Configurar SIEMPRE con `wrangler secret put <NOMBRE>` (nunca como [vars] en
+# texto plano aca, porque son credenciales):
+#   wrangler secret put RESEND_API_KEY      # misma API key de Resend que usa worker/lib/correo.js
+#   wrangler secret put RESEND_FROM         # remitente, ej. "Agenda de Practicos <onboarding@resend.dev>"
+#   wrangler secret put AGENDA_URL_PUBLICA  # URL publica del sitio, para armar los links confirmar/rechazar
