@@ -20,8 +20,9 @@ import * as telefono from '../lib/telefono.js';
 import {
   bad, actorDe, logReq, catalogo, SELECT_BLOQUE, traer,
   LIMPIAR_SQL, LIMPIAR_SQL_BLOQUEAR, LIMPIAR_SQL_REAGENDAR_ORIGEN,
-  validarBloque, logoDisponible,
+  validarBloque, logoDisponible, exigirCorreo, correoValido,
 } from '../lib/comun.js';
+import * as cola from '../lib/cola.js';
 
 export const agendaRoutes = new Hono();
 
@@ -125,6 +126,9 @@ agendaRoutes.put('/agenda/:id', async (c) => {
   if (body.bloqueado) {
     await papelera.guardar(db, bloque, 'bloquear', actor);
     const motivo = String(body.bloqueo_motivo || 'BLOQUEADO').trim().toUpperCase();
+    // Si el bloque tenia una persona, pasa a la cola de reagendamiento.
+    const teniaPersona = Boolean(bloque.rut || bloque.nombre);
+    if (teniaPersona) await cola.sentenciaEncolar(db, bloque, motivo, actor).run();
     await db.prepare(`
       UPDATE agenda SET bloqueado = 1, bloqueo_motivo = ?,
         rut=NULL, nombre=NULL, clase=NULL, contacto=NULL, correo=NULL, tipo_cita=NULL,
@@ -138,7 +142,9 @@ agendaRoutes.put('/agenda/:id', async (c) => {
       await pesada.liberar(db, bloque.fecha, bloque.examinador_id);
     }
     await logReq(c, db, id, 'bloquear', `${bloque.fecha} ${bloque.hora} (${motivo})`);
-    return c.json({ ok: true, avisos: [], bloque: await traer(db, id) });
+    const avisosBloq = teniaPersona
+      ? [`${bloque.nombre || bloque.rut} pasó a la lista de reagendamiento.`] : [];
+    return c.json({ ok: true, avisos: avisosBloq, bloque: await traer(db, id) });
   }
 
   const { avisos, rutFmt, clase } = await validarBloque(db, body, bloque);
@@ -148,12 +154,21 @@ agendaRoutes.put('/agenda/:id', async (c) => {
     throw bad('Teléfono incompleto. Un número chileno tiene 9 dígitos (celular: 9 XXXX XXXX). Se guarda como +56.');
   }
 
+  // Regla principal: dar hora (bloque libre -> ocupado, o cambiar la persona)
+  // exige correo valido. Citas antiguas importadas sin correo se pueden seguir
+  // editando, pero si se escribe un correo tiene que ser valido.
+  const nombreNuevo = body.nombre ? String(body.nombre).trim().replace(/\s+/g, ' ').toUpperCase() : null;
+  const personaNueva = Boolean(rutFmt || nombreNuevo)
+    && (bloque.rut !== rutFmt || (bloque.nombre || '') !== (nombreNuevo || ''));
+  if (personaNueva) exigirCorreo(body.correo);
+  else if (body.correo && !correoValido(body.correo)) throw bad(`Correo con formato inválido: ${String(body.correo).trim()}`);
+
   let funcionario_id = body.funcionario_id ? Number(body.funcionario_id) : null;
   if (!funcionario_id && body.funcionario_nombre) {
     funcionario_id = await upsertFuncionario(db, String(body.funcionario_nombre).trim().toUpperCase());
   }
 
-  const nombre = body.nombre ? String(body.nombre).trim().replace(/\s+/g, ' ').toUpperCase() : null;
+  const nombre = nombreNuevo;
   const estabaOcupada = Boolean(bloque.rut || bloque.nombre);
   const quedaOcupada = Boolean(rutFmt || nombre);
 
@@ -271,6 +286,8 @@ agendaRoutes.post('/agenda/:id/reagendar', async (c) => {
   if (!(origen.rut || origen.nombre)) throw bad('El bloque de origen no tiene una cita.');
   if (destino.rut || destino.nombre) throw bad('El bloque de destino ya esta ocupado.');
   if (destino.bloqueado) throw bad('El bloque de destino esta bloqueado.');
+  // Regla principal: la nueva hora exige correo (el de la cita o uno nuevo).
+  origen.correo = exigirCorreo(body.correo || origen.correo);
   const origenTienePesada = String(origen.clase || '').toUpperCase().split(',').map((s) => s.trim())
     .some((cl) => CLASES_PESADAS.includes(cl));
   if (origenTienePesada && destino.hora !== HORA_D_A5) {
@@ -359,7 +376,11 @@ agendaRoutes.post('/bloquear-dia', async (c) => {
   const stmts = [];
   let aPapelera = 0;
   for (const b of objetivo) {
-    if (b.rut || b.nombre) { stmts.push(papelera.sentenciaGuardar(db, b, 'bloquear-dia', actor)); aPapelera++; }
+    if (b.rut || b.nombre) {
+      stmts.push(papelera.sentenciaGuardar(db, b, 'bloquear-dia', actor));
+      stmts.push(cola.sentenciaEncolar(db, b, rango.motivo, actor));
+      aPapelera++;
+    }
     stmts.push(db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL_BLOQUEAR} WHERE id=?`).bind(rango.motivo, ts, b.id));
   }
   for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50));
@@ -368,7 +389,7 @@ agendaRoutes.post('/bloquear-dia', async (c) => {
   const quien = rango.examinador_id ? 'exam ' + rango.examinador_id : 'todos';
   await logReq(c, db, null, 'bloquear',
     `${rango.desde}..${rango.hasta} ${quien}: ${objetivo.length} bloques (${rango.motivo})`);
-  return c.json({ ok: true, bloqueados: objetivo.length, a_papelera: aPapelera });
+  return c.json({ ok: true, bloqueados: objetivo.length, a_papelera: aPapelera, a_reagendar: aPapelera });
 });
 
 // Desbloquea el rango. Sin motivo quita TODOS los bloqueos del rango; con
@@ -413,6 +434,75 @@ agendaRoutes.get('/disponibles', async (c) => {
     apto_pesada: r.hora === HORA_D_A5,
     regla: r.hora === HORA_D_A5 ? 'IDEAL para D y A5 (tambien B, C, profesionales)' : 'B, C, A1-A4 (PROHIBIDO D y A5)',
   })));
+});
+
+// ---------- COLA DE REAGENDAMIENTO ----------
+// Personas desplazadas por un bloqueo, esperando hora nueva.
+agendaRoutes.get('/cola-reagendar', async (c) => c.json(await cola.listarPendientes(c.env.DB)));
+
+agendaRoutes.post('/cola-reagendar/:id/asignar', async (c) => {
+  const db = c.env.DB;
+  const body = (await c.req.json().catch(() => ({}))) || {};
+  const item = await cola.traerPendiente(db, c.req.param('id'));
+  if (!item) throw bad('Esta persona ya no está pendiente de reagendar.', 404);
+  const destino = await db.prepare('SELECT * FROM agenda WHERE id = ?').bind(Number(body.destino_id)).first();
+  if (!destino) throw bad('Bloque de destino no encontrado', 404);
+  if (destino.rut || destino.nombre) throw bad('El bloque de destino ya esta ocupado.');
+  if (destino.bloqueado) throw bad('El bloque de destino esta bloqueado.');
+  const correoFinal = exigirCorreo(body.correo || item.correo);
+
+  const tienePesada = String(item.clase || '').toUpperCase().split(',').map((s) => s.trim())
+    .some((cl) => CLASES_PESADAS.includes(cl));
+  if (tienePesada && destino.hora !== HORA_D_A5) throw bad(`La clase ${item.clase} solo se agenda en el bloque ${HORA_D_A5}.`);
+  if (tienePesada && !body.forzar) {
+    const ocupados = await pesada.ocupadosDependientes(db, destino.fecha, destino.examinador_id);
+    if (ocupados.length) {
+      throw bad(`No se puede asignar aqui: el examinador ya tiene cita en ${ocupados.map((o) => o.hora).join(' y ')}.`);
+    }
+  }
+
+  const ts = ahoraChile();
+  const motivo = body.motivo || `Bloqueo ${item.origen_fecha} ${item.origen_hora} (${item.motivo})`;
+  const comentarios = [item.comentarios, `Reagendada desde ${item.origen_fecha} ${item.origen_hora} por bloqueo`].filter(Boolean).join(' | ');
+  await db.batch([
+    db.prepare(`
+      UPDATE agenda SET rut=?, nombre=?, clase=?, contacto=?, correo=?, tipo_cita='REAGENDADO',
+        motivo_reagendamiento=?, lista_espera=?, intento=?, funcionario_id=?, fecha_inicio_tramite=?,
+        confirmo_asistencia=NULL, resultado=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
+        comentarios=?, agendado_en=?, actualizado_en=?
+      WHERE id=? AND rut IS NULL AND nombre IS NULL AND bloqueado = 0
+    `).bind(item.rut, item.nombre, item.clase, item.contacto, correoFinal, motivo, item.lista_espera,
+      item.intento, item.funcionario_id, item.fecha_inicio_tramite, comentarios, ts, ts, destino.id),
+    db.prepare(`UPDATE cola_reagendar SET estado='reagendado', destino_agenda_id=?, correo=?, resuelto_en=? WHERE id=?`)
+      .bind(destino.id, correoFinal, ts, item.id),
+  ]);
+
+  const avisos = [];
+  if (pesada.esPesadaEnHoraValida({ hora: destino.hora, clase: item.clase })) {
+    avisos.push(...await pesada.aplicar(db, destino.fecha, destino.examinador_id));
+  }
+  await logReq(c, db, destino.id, 'reagendar',
+    `${item.nombre || item.rut}: bloqueo ${item.origen_fecha} ${item.origen_hora} -> ${destino.fecha} ${destino.hora}`);
+
+  const destinoFinal = await traer(db, destino.id);
+  c.executionCtx.waitUntil(
+    correo.confirmacion(c.env, db, destinoFinal)
+      .then(async (ok) => { if (ok) await db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').bind(destino.id).run(); })
+      .catch(() => {})
+  );
+  return c.json({ ok: true, avisos, destino: destinoFinal });
+});
+
+agendaRoutes.post('/cola-reagendar/:id/descartar', async (c) => {
+  const db = c.env.DB;
+  const body = (await c.req.json().catch(() => ({}))) || {};
+  const item = await cola.traerPendiente(db, c.req.param('id'));
+  if (!item) throw bad('Esta persona ya no está pendiente de reagendar.', 404);
+  await db.prepare(`UPDATE cola_reagendar SET estado='descartado', comentarios=?, resuelto_en=? WHERE id=?`)
+    .bind([item.comentarios, body.nota && `Descartado: ${String(body.nota).trim()}`].filter(Boolean).join(' | ') || null,
+      ahoraChile(), item.id).run();
+  await logReq(c, db, null, 'editar', `cola reagendar: descartado ${item.nombre || item.rut}`);
+  return c.json({ ok: true });
 });
 
 // ---------- BUSCAR / HISTORIAL ----------
