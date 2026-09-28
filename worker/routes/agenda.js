@@ -7,7 +7,7 @@
 import { Hono } from 'hono';
 import * as auth from '../lib/auth.js';
 import { HORAS, HORA_D_A5, CLASES_PESADAS } from '../lib/config.js';
-import { hoyISOChile, ahoraChile } from '../lib/fechas.js';
+import { hoyISOChile, ahoraChile, mananaISOChile } from '../lib/fechas.js';
 import { upsertFuncionario } from '../lib/db.js';
 import { generar } from '../lib/slots.js';
 import * as feriados from '../lib/feriados.js';
@@ -401,7 +401,9 @@ agendaRoutes.get('/disponibles', async (c) => {
   const { desde, hasta, clase, examinador_id } = c.req.query();
   const cond = ['a.rut IS NULL', 'a.nombre IS NULL', 'a.bloqueado = 0'];
   const p = [];
-  if (desde) { cond.push('a.fecha >= ?'); p.push(desde); }
+  // Igual que "Actualizar Citas Disponibles" del Apps Script: sin fecha
+  // indicada, los cupos se ofrecen desde manana (hoy ya no se agenda).
+  cond.push('a.fecha >= ?'); p.push(desde || mananaISOChile());
   if (hasta) { cond.push('a.fecha <= ?'); p.push(hasta); }
   if (examinador_id) { cond.push('a.examinador_id = ?'); p.push(Number(examinador_id)); }
   if (clase && CLASES_PESADAS.includes(String(clase).toUpperCase())) { cond.push('a.hora = ?'); p.push(HORA_D_A5); }
