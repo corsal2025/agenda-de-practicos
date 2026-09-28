@@ -28,6 +28,7 @@
   --error:  #ad2b2f;  --error-bg:  #fbebeb;  --error-bd:  #edc7c7;
   --info:   #1b4f8f;  --info-bg:   #e9f1fa;
   --pesada: #5a3fae;  --pesada-bg: #efeafb;  --pesada-bd: #d3c6f2;
+  --teal:    #0e7c86;  --rosa: #b83280;  --pizarra: #5b6b82;
 
   --ring: rgba(27, 58, 117, .28);
   --sh:   0 1px 2px rgba(16, 24, 40, .05);
@@ -60,6 +61,7 @@
   --error: #ef7c7c; --error-bg: rgba(239, 124, 124, .12); --error-bd: rgba(239, 124, 124, .3);
   --info: #79b8f0; --info-bg: rgba(121, 184, 240, .12);
   --pesada: #a98bf5; --pesada-bg: rgba(169, 139, 245, .13); --pesada-bd: rgba(169, 139, 245, .3);
+  --teal: #4cc9d4; --rosa: #f07ab8; --pizarra: #9fb0c8;
 
   --ring: rgba(109, 139, 255, .4);
   --sh: 0 1px 2px rgba(0, 0, 0, .35);
@@ -101,6 +103,42 @@ header.top {
 .marca-org { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--tinta-2); }
 .marca-titulo { font-family: var(--serif); font-size: 32px; font-weight: 700; color: var(--azul-900); line-height: 1.1; }
 
+/* buscador global: ultimo item del nav, despues de "Reporte de errores" */
+/* En reposo es angosto para caber en la fila de pestañas; al enfocarlo el input
+   crece hacia la izquierda por encima de las pestañas (sin mover el layout). */
+.buscador {
+  position: relative; flex: 1 1 130px; min-width: 120px; max-width: 280px; height: 34px;
+  margin-left: auto; align-self: center; margin-bottom: 3px;
+}
+.buscador input {
+  position: absolute; right: 0; top: 0;
+  width: 100%; height: 34px; padding-left: 2rem; font-size: 13px;
+  background: var(--elev); border-radius: 999px;
+  transition: width .15s ease;
+}
+.buscador:focus-within input { background: var(--papel); width: 340px; z-index: 1; }
+.buscador:focus-within .buscador-ico { left: calc(100% - 340px + .7rem); }
+.buscador .buscador-res { left: auto; width: 340px; }
+.buscador-ico {
+  position: absolute; left: .7rem; top: 50%; transform: translateY(-50%); z-index: 2;
+  width: 15px; height: 15px; pointer-events: none; transition: left .15s ease;
+  fill: none; stroke: var(--tinta-3); stroke-width: 1.8; stroke-linecap: round;
+}
+.buscador-res {
+  position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40;
+  background: var(--papel); border: 1px solid var(--linea); border-radius: var(--r);
+  box-shadow: 0 12px 32px rgba(16, 24, 40, .18);
+  max-height: 360px; overflow-y: auto; padding: 4px;
+}
+.buscador-res .bq-item {
+  display: flex; justify-content: space-between; gap: .75rem; width: 100%;
+  background: transparent; border: 0; border-radius: var(--r-sm);
+  padding: .5rem .65rem; text-align: left; color: var(--tinta);
+}
+.buscador-res .bq-item small { color: var(--tinta-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.buscador-res .bq-item:hover, .buscador-res .bq-item.sel { background: var(--azul-50); color: var(--azul-900); }
+.buscador-res .bq-vacio { padding: .55rem .65rem; color: var(--tinta-2); font-size: 13px; }
+
 .top-right { justify-self: end; display: flex; align-items: center; gap: .7rem; }
 .estado { font-size: 12px; color: var(--tinta-2); }
 .estado b { color: var(--tinta); font-weight: 700; }
@@ -115,9 +153,23 @@ header.top nav {
 }
 header.top nav button {
   background: transparent; border: 0; border-bottom: 3px solid transparent;
-  padding: 10px 13px 12px; font-size: 13.5px; font-weight: 600; color: var(--tinta-2);
+  padding: 10px 10px 12px; font-size: 13.5px; font-weight: 600; color: var(--tinta-2);
   transition: color .12s, border-color .12s;
+  display: inline-flex; align-items: center; gap: 6px;
 }
+.nav-ico {
+  width: 16px; height: 16px; flex: none;
+  fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+/* un color por pestaña (tokens con variante para tema oscuro) */
+header.top nav button[data-tab="agenda"] .nav-ico      { color: var(--azul-linea); }
+header.top nav button[data-tab="disponibles"] .nav-ico { color: var(--ok); }
+header.top nav button[data-tab="reagendar"] .nav-ico   { color: var(--pesada); }
+header.top nav button[data-tab="dia"] .nav-ico         { color: var(--teal); }
+header.top nav button[data-tab="analitica"] .nav-ico   { color: var(--alerta); }
+header.top nav button[data-tab="papelera"] .nav-ico    { color: var(--rosa); }
+header.top nav button[data-tab="datos"] .nav-ico       { color: var(--pizarra); }
+header.top nav button[data-tab="errores"] .nav-ico     { color: var(--error); }
 header.top nav button:hover { color: var(--tinta); }
 header.top nav button.activo { color: var(--azul-900); border-bottom-color: var(--azul); font-weight: 700; }
 .nav-badge {
@@ -126,6 +178,10 @@ header.top nav button.activo { color: var(--azul-900); border-bottom-color: var(
   border-radius: 8px; background: var(--alerta); color: #fff;
   font-size: 10px; font-weight: 800; line-height: 1;
 }
+/* Cualquier regla con display (flex, inline-flex...) le gana al atributo hidden
+   del navegador: con esto, hidden siempre oculta (ej. el circulo vacio de la
+   Papelera con 0 elementos, o campos opcionales de un dialogo). */
+[hidden] { display: none !important; }
 
 /* ---------- layout ---------- */
 :root { --alto-header: 114px; --alto-panel-fijo: 99px; }
@@ -189,7 +245,10 @@ input:focus, select:focus, textarea:focus {
 .kpi .t { font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tinta-3); margin-top: .2rem; }
 
 /* ---------- grilla de agenda ---------- */
-.grilla { display: grid; gap: var(--gap); align-items: stretch; }
+/* Primera fila (encabezados) a su medida; todas las filas de horas iguales a la
+   mas alta (1fr sin alto fijo = alto de la fila mas grande). Sin esto, una hora
+   solo con bloques libres/bloqueados quedaba mas baja que una con citas. */
+.grilla { display: grid; gap: var(--gap); align-items: stretch; grid-template-rows: auto; grid-auto-rows: 1fr; }
 .g-head {
   position: sticky; top: calc(var(--alto-header) + var(--alto-panel-fijo)); z-index: 5; background: var(--papel);
   text-align: center; padding: .5rem .3rem .55rem;
@@ -416,6 +475,9 @@ tbody tr:first-child td { border-top: 0; }
   .modal .cuerpo, .grid2 { grid-template-columns: 1fr; }
   th, .g-head { position: static; }
   header.top nav button { font-size: 12px; padding: .4rem .5rem; }
+  .buscador { flex-basis: 100%; max-width: none; margin: .4rem 0 .5rem; }
+  .buscador:focus-within input, .buscador .buscador-res { width: 100%; }
+  .buscador:focus-within .buscador-ico { left: .7rem; }
   main { padding: 1rem; }
 }
 

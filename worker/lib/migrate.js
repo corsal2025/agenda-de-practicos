@@ -1,11 +1,12 @@
-// Reemplaza server/migrate.js. XLSX.readFile(ruta) -> XLSX.read(arrayBuffer,
-// {type:'array', cellDates:true}) leyendo el archivo subido via c.req.formData()
-// (ver worker/routes/importExport.js). El UPSERT y el rescate de "CITAS
-// DISPONIBLES" pasan de named params (@campo) a `?` posicionales. Sin modo CLI:
-// no existe filesystem/CLI local en Workers: el mismo camino de codigo se
-// prueba subiendo el Excel desde la pantalla Datos (tambien sirve en
-// `wrangler pages dev` local).
-import * as XLSX from 'xlsx';
+// Reemplaza server/migrate.js. El .xlsx YA NO se parsea aca: un archivo real
+// (cientos de KB) tarda mas CPU parseandolo de lo que el plan gratis de
+// Workers permite por request (10ms) -- Cloudflare mataba el request a mitad
+// de camino con su propio error HTML (1102). Por eso XLSX.read()/sheet_to_json
+// se movieron al navegador (public/app.js, sin ese limite de CPU); aca llega
+// `hojas` ya como `{ [nombreHoja]: filas[][] }` -- exactamente lo que
+// sheet_to_json(ws,{header:1,...}) devolvia antes, solo que armado del otro
+// lado. El UPSERT y el rescate de "CITAS DISPONIBLES" siguen en `?`
+// posicionales (sin cambios ahi).
 import { upsertExaminador, upsertFuncionario, log } from './db.js';
 import { generar } from './slots.js';
 import * as pesada from './pesada.js';
@@ -141,9 +142,7 @@ async function ejecutarPorLotes(db, statements) {
   }
 }
 
-export async function importar(db, arrayBuffer, { limpiar = false } = {}) {
-  const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
-
+export async function importar(db, hojas, { limpiar = false } = {}) {
   if (limpiar) {
     await db.batch([db.prepare('DELETE FROM agenda'), db.prepare('DELETE FROM movimientos')]);
   }
@@ -154,9 +153,8 @@ export async function importar(db, arrayBuffer, { limpiar = false } = {}) {
   let saltadas = 0;
 
   for (const hoja of HOJAS_MAESTRAS) {
-    const ws = wb.Sheets[hoja];
-    if (!ws) continue;
-    const filas = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, cellDates: true, defval: null });
+    const filas = hojas[hoja];
+    if (!filas) continue;
     for (let i = 1; i < filas.length; i++) {
       const b = filaABloque(filas[i]);
       if (!b) { if (filas[i] && filas[i].some((c) => c != null && c !== '')) saltadas++; continue; }
@@ -213,9 +211,9 @@ export async function importar(db, arrayBuffer, { limpiar = false } = {}) {
 
   // 4) Rescatar reservas sueltas de CITAS DISPONIBLES (solo si el bloque esta libre).
   let rescatadas = 0;
-  const wsCD = wb.Sheets['CITAS DISPONIBLES'];
-  if (wsCD) {
-    const filas = XLSX.utils.sheet_to_json(wsCD, { header: 1, raw: true, cellDates: true, defval: null });
+  const filasCD = hojas['CITAS DISPONIBLES'];
+  if (filasCD) {
+    const filas = filasCD;
     const tsRescate = ahoraChile();
 
     // Resolver examinador_id/funcionario_id distintos una sola vez (mismo motivo

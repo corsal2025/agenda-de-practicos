@@ -12,6 +12,7 @@ import { upsertFuncionario } from '../lib/db.js';
 import { generar } from '../lib/slots.js';
 import * as feriados from '../lib/feriados.js';
 import * as papelera from '../lib/papelera.js';
+import { leerRangoBloqueo, filtroBloqueo, MOTIVOS_BLOQUEO } from '../lib/bloqueo.js';
 import * as pesada from '../lib/pesada.js';
 import * as correo from '../lib/correo.js';
 import * as rut from '../lib/rut.js';
@@ -28,27 +29,35 @@ export const agendaRoutes = new Hono();
 agendaRoutes.get('/meta', async (c) => {
   const db = c.env.DB;
   const sesion = await auth.obtenerSesion(c);
-  const { results: examinadores } = await db.prepare('SELECT id, nombre, activo FROM examinadores ORDER BY nombre').all();
-  const { results: funcionarios } = await db.prepare('SELECT id, nombre, activo, usuario, rol FROM funcionarios ORDER BY nombre').all();
+  // Consultas independientes en paralelo: una tras otra sumaban ~9 viajes a D1
+  // antes de poder dibujar la primera pantalla.
+  const [
+    { results: examinadores }, { results: funcionarios },
+    clase, tipo_cita, resultado, intento, lista_espera,
+    listaFeriados, rango_agenda, logo,
+  ] = await Promise.all([
+    db.prepare('SELECT id, nombre, activo FROM examinadores ORDER BY nombre').all(),
+    db.prepare('SELECT id, nombre, activo, usuario, rol FROM funcionarios ORDER BY nombre').all(),
+    catalogo(db, 'clase'), catalogo(db, 'tipo_cita'), catalogo(db, 'resultado'),
+    catalogo(db, 'intento'), catalogo(db, 'lista_espera'),
+    feriados.listar(db),
+    db.prepare('SELECT MIN(fecha) desde, MAX(fecha) hasta FROM agenda').first(),
+    logoDisponible(c.env, c.req.url),
+  ]);
   return c.json({
     horas: HORAS,
     hora_d_a5: HORA_D_A5,
     clases_pesadas: CLASES_PESADAS,
+    motivos_bloqueo: MOTIVOS_BLOQUEO,
     hoy: hoyISOChile(),
     usuario: (sesion && sesion.funcionario) || null,
     rol: (sesion && sesion.rol) || null,
     examinadores,
     funcionarios,
-    catalogos: {
-      clase: await catalogo(db, 'clase'),
-      tipo_cita: await catalogo(db, 'tipo_cita'),
-      resultado: await catalogo(db, 'resultado'),
-      intento: await catalogo(db, 'intento'),
-      lista_espera: await catalogo(db, 'lista_espera'),
-    },
-    feriados: await feriados.listar(db),
-    rango_agenda: await db.prepare('SELECT MIN(fecha) desde, MAX(fecha) hasta FROM agenda').first(),
-    logo: await logoDisponible(c.env, c.req.url),
+    catalogos: { clase, tipo_cita, resultado, intento, lista_espera },
+    feriados: listaFeriados,
+    rango_agenda,
+    logo,
     organismo: c.env.AGENDA_ORGANISMO || 'Municipalidad de Valparaíso',
     unidad: c.env.AGENDA_UNIDAD || 'Departamento de Licencias de Conducir',
   });
@@ -320,42 +329,69 @@ agendaRoutes.post('/agenda/:id/reagendar', async (c) => {
   return c.json({ ok: true, avisos, destino: destinoFinal });
 });
 
-// ---------- BLOQUEAR / DESBLOQUEAR DIA ----------
+// ---------- BLOQUEAR / DESBLOQUEAR DIAS (uno o un rango) ----------
+// Acepta { desde, hasta } o { fecha } (un dia). Con simular:true no escribe
+// nada: devuelve cuantos bloques se bloquearian y cuantos tienen cita, para
+// mostrarlo en el dialogo antes de confirmar.
 agendaRoutes.post('/bloquear-dia', async (c) => {
   const db = c.env.DB;
-  const body = await c.req.json().catch(() => ({}));
-  const { fecha, examinador_id, motivo, incluir_ocupados } = body || {};
-  if (!fecha) throw bad('Indica la fecha');
-  const cond = ['fecha = ?', 'bloqueado = 0'];
-  const p = [fecha];
-  if (examinador_id) { cond.push('examinador_id = ?'); p.push(Number(examinador_id)); }
-  if (!incluir_ocupados) cond.push('rut IS NULL AND nombre IS NULL');
-  const m = String(motivo || 'BLOQUEADO').trim().toUpperCase();
-  const { results: objetivo } = await db.prepare(`SELECT * FROM agenda WHERE ${cond.join(' AND ')}`).bind(...p).all();
+  const body = (await c.req.json().catch(() => ({}))) || {};
+  const rango = leerRangoBloqueo(body);
+  const incluirOcupados = !!body.incluir_ocupados;
 
+  if (body.simular) {
+    const { where, params } = filtroBloqueo(rango, { bloqueado: 0, incluirOcupados: true });
+    const r = await db.prepare(`SELECT COUNT(*) total,
+        SUM(CASE WHEN rut IS NOT NULL OR nombre IS NOT NULL THEN 1 ELSE 0 END) con_cita
+      FROM agenda WHERE ${where}`).bind(...params).first();
+    const total = Number(r?.total || 0);
+    const conCita = Number(r?.con_cita || 0);
+    return c.json({ ok: true, bloqueables: incluirOcupados ? total : total - conCita, con_cita: conCita });
+  }
+
+  const { where, params } = filtroBloqueo(rango, { bloqueado: 0, incluirOcupados });
+  const { results: objetivo } = await db.prepare(`SELECT * FROM agenda WHERE ${where}`).bind(...params).all();
+
+  // Todo en db.batch() por lotes: D1 limita la cantidad de consultas por request,
+  // y un rango largo con citas haria cientos de consultas sueltas.
   const actor = await actorDe(c);
   const ts = ahoraChile();
   const stmts = [];
+  let aPapelera = 0;
   for (const b of objetivo) {
-    if (b.rut || b.nombre) await papelera.guardar(db, b, 'bloquear-dia', actor);
-    stmts.push(db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL_BLOQUEAR} WHERE id=?`).bind(m, ts, b.id));
+    if (b.rut || b.nombre) { stmts.push(papelera.sentenciaGuardar(db, b, 'bloquear-dia', actor)); aPapelera++; }
+    stmts.push(db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL_BLOQUEAR} WHERE id=?`).bind(rango.motivo, ts, b.id));
   }
-  if (stmts.length) await db.batch(stmts);
-  await logReq(c, db, null, 'bloquear', `dia ${fecha} ${examinador_id ? 'exam ' + examinador_id : 'todos'}: ${objetivo.length} bloques (${m})`);
-  return c.json({ ok: true, bloqueados: objetivo.length });
+  for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50));
+  if (aPapelera) await papelera.recortar(db);
+
+  const quien = rango.examinador_id ? 'exam ' + rango.examinador_id : 'todos';
+  await logReq(c, db, null, 'bloquear',
+    `${rango.desde}..${rango.hasta} ${quien}: ${objetivo.length} bloques (${rango.motivo})`);
+  return c.json({ ok: true, bloqueados: objetivo.length, a_papelera: aPapelera });
 });
 
+// Desbloquea el rango. Sin motivo quita TODOS los bloqueos del rango; con
+// motivo solo los de ese motivo (ej. terminar antes una licencia sin tocar un
+// feriado del mismo periodo). Con simular:true devuelve el conteo por motivo.
 agendaRoutes.post('/desbloquear-dia', async (c) => {
   const db = c.env.DB;
-  const body = await c.req.json().catch(() => ({}));
-  const { fecha, examinador_id } = body || {};
-  if (!fecha) throw bad('Indica la fecha');
-  const cond = ['fecha = ?', 'bloqueado = 1'];
-  const p = [fecha];
-  if (examinador_id) { cond.push('examinador_id = ?'); p.push(Number(examinador_id)); }
-  const r = await db.prepare(`UPDATE agenda SET bloqueado=0, bloqueo_motivo=NULL, actualizado_en=? WHERE ${cond.join(' AND ')}`)
-    .bind(ahoraChile(), ...p).run();
-  await logReq(c, db, null, 'editar', `desbloquear dia ${fecha}: ${r.meta.changes}`);
+  const body = (await c.req.json().catch(() => ({}))) || {};
+  const rango = leerRangoBloqueo(body);
+  const { where, params } = filtroBloqueo(rango, { bloqueado: 1, incluirOcupados: true });
+  const soloMotivo = body.motivo ? ' AND bloqueo_motivo = ?' : '';
+  const pMotivo = soloMotivo ? [rango.motivo] : [];
+
+  if (body.simular) {
+    const { results } = await db.prepare(`SELECT COALESCE(bloqueo_motivo, 'BLOQUEADO') motivo, COUNT(*) n
+      FROM agenda WHERE ${where}${soloMotivo} GROUP BY 1 ORDER BY n DESC`).bind(...params, ...pMotivo).all();
+    const total = results.reduce((s, x) => s + Number(x.n), 0);
+    return c.json({ ok: true, desbloqueables: total, por_motivo: results });
+  }
+
+  const r = await db.prepare(`UPDATE agenda SET bloqueado=0, bloqueo_motivo=NULL, actualizado_en=? WHERE ${where}${soloMotivo}`)
+    .bind(ahoraChile(), ...params, ...pMotivo).run();
+  await logReq(c, db, null, 'editar', `desbloquear ${rango.desde}..${rango.hasta}: ${r.meta.changes}`);
   return c.json({ ok: true, desbloqueados: Number(r.meta.changes) });
 });
 

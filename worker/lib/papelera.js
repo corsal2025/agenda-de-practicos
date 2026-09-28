@@ -26,6 +26,23 @@ export async function guardar(db, bloque, motivo, actor) {
   await db.prepare('DELETE FROM papelera WHERE id NOT IN (SELECT id FROM papelera ORDER BY id DESC LIMIT 200)').run();
 }
 
+// Variante para operaciones masivas (bloquear un rango): devuelve la sentencia
+// INSERT sin ejecutarla, para mandarla en un db.batch() junto con los UPDATE.
+// Quien la use debe llamar a recortar() una vez al final.
+export function sentenciaGuardar(db, bloque, motivo, actor) {
+  const datos = {};
+  for (const c of CAMPOS) datos[c] = bloque[c] ?? null;
+  datos._fecha = bloque.fecha;
+  datos._hora = bloque.hora;
+  datos._examinador_id = bloque.examinador_id;
+  return db.prepare('INSERT INTO papelera (agenda_id, datos, motivo, actor, ts) VALUES (?, ?, ?, ?, ?)')
+    .bind(bloque.id, JSON.stringify(datos), motivo || null, actor || null, ahoraChile());
+}
+
+export async function recortar(db) {
+  await db.prepare('DELETE FROM papelera WHERE id NOT IN (SELECT id FROM papelera ORDER BY id DESC LIMIT 200)').run();
+}
+
 export async function listar(db, limite = 50) {
   const { results } = await db.prepare('SELECT * FROM papelera ORDER BY id DESC LIMIT ?').bind(limite).all();
   return results.map((r) => {

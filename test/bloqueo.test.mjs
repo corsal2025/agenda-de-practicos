@@ -1,0 +1,47 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { MOTIVOS_BLOQUEO, leerRangoBloqueo, filtroBloqueo } from '../worker/lib/bloqueo.js';
+
+test('motivos de bloqueo incluyen los administrativos pedidos', () => {
+  for (const m of ['PERMISO ADMINISTRATIVO', 'LICENCIA MEDICA', 'FERIADO LEGAL', 'COMPENSATORIO']) {
+    assert.ok(MOTIVOS_BLOQUEO.includes(m), m);
+  }
+});
+
+test('leerRangoBloqueo acepta un rango y normaliza el motivo', () => {
+  assert.deepEqual(
+    leerRangoBloqueo({ desde: '2026-09-01', hasta: '2026-09-15', examinador_id: '3', motivo: ' licencia medica ' }),
+    { desde: '2026-09-01', hasta: '2026-09-15', examinador_id: 3, motivo: 'LICENCIA MEDICA' },
+  );
+});
+
+test('leerRangoBloqueo mantiene compatibilidad con un solo dia (fecha)', () => {
+  assert.deepEqual(
+    leerRangoBloqueo({ fecha: '2026-09-23' }),
+    { desde: '2026-09-23', hasta: '2026-09-23', examinador_id: null, motivo: 'BLOQUEADO' },
+  );
+  // sin "hasta" => un solo dia
+  assert.equal(leerRangoBloqueo({ desde: '2026-09-23' }).hasta, '2026-09-23');
+});
+
+test('leerRangoBloqueo rechaza rangos invalidos con status 400', () => {
+  const falla = (body, texto) => assert.throws(() => leerRangoBloqueo(body), (e) => e.status === 400 && texto.test(e.message));
+  falla({}, /fecha/i);
+  falla({ desde: '23/09/2026' }, /fecha/i);
+  falla({ desde: '2026-09-10', hasta: '2026-09-01' }, /anterior/i);
+  falla({ desde: '2026-01-01', hasta: '2027-02-01' }, /366/);
+});
+
+test('filtroBloqueo arma condiciones por rango, examinador y ocupados', () => {
+  assert.deepEqual(
+    filtroBloqueo({ desde: '2026-09-01', hasta: '2026-09-05', examinador_id: 2 }, { bloqueado: 0, incluirOcupados: false }),
+    {
+      where: 'fecha BETWEEN ? AND ? AND bloqueado = ? AND examinador_id = ? AND rut IS NULL AND nombre IS NULL',
+      params: ['2026-09-01', '2026-09-05', 0, 2],
+    },
+  );
+  assert.deepEqual(
+    filtroBloqueo({ desde: '2026-09-01', hasta: '2026-09-01', examinador_id: null }, { bloqueado: 1, incluirOcupados: true }),
+    { where: 'fecha BETWEEN ? AND ? AND bloqueado = ?', params: ['2026-09-01', '2026-09-01', 1] },
+  );
+});
