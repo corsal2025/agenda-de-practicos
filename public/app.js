@@ -798,35 +798,30 @@ function pintarGrilla(cont, filas, fecha) {
       const card = el.closest('.slot');
       const id = Number(box.dataset.id);
       const quitar = el.classList.contains('on');
+      // Se pinta al instante; si el guardado falla se vuelve al estado anterior.
+      const antes = { on: [...box.querySelectorAll('.sr.on')], card: card.className };
+      box.querySelectorAll('.sr').forEach((s) => s.classList.remove('on'));
+      card.classList.remove('res-aprob', 'res-reprob');
+      if (!quitar) {
+        el.classList.add('on');
+        card.classList.add(el.dataset.r === 'APROBADO' ? 'res-aprob' : 'res-reprob');
+      }
       try {
         await marcarResultado(id, quitar ? null : el.dataset.r);
-        // Actualiza la tarjeta en el lugar, sin recargar la grilla (no salta la pantalla).
-        box.querySelectorAll('.sr').forEach((s) => s.classList.remove('on'));
-        card.classList.remove('res-aprob', 'res-reprob');
-        if (!quitar) {
-          el.classList.add('on');
-          card.classList.add(el.dataset.r === 'APROBADO' ? 'res-aprob' : 'res-reprob');
-        }
         toast(quitar ? 'Resultado borrado' : `Marcado: ${el.dataset.r === 'NO ASISTIO' ? 'No asistió' : el.dataset.r === 'APROBADO' ? 'Aprobó' : 'Reprobó'}`);
-      } catch (e) { toast(e.message, 'err'); }
+      } catch (e) {
+        box.querySelectorAll('.sr').forEach((s) => s.classList.remove('on'));
+        antes.on.forEach((s) => s.classList.add('on'));
+        card.className = antes.card;
+        toast(e.message, 'err');
+      }
     };
   });
 }
 // Marca (o borra, con resultado=null) el resultado de una cita preservando
 // el resto de sus datos. Compartido entre la grilla y el check-in del dia.
 async function marcarResultado(id, resultado) {
-  const b = await api(`/agenda/${id}`);
-  const r = await api(`/agenda/${id}`, { method: 'PUT', body: {
-    visto_en: b.actualizado_en,
-    rut: b.rut, nombre: b.nombre, clase: b.clase, contacto: b.contacto, correo: b.correo,
-    tipo_cita: b.tipo_cita, motivo_reagendamiento: b.motivo_reagendamiento,
-    lista_espera: b.lista_espera, intento: b.intento, funcionario_id: b.funcionario_id,
-    fecha_inicio_tramite: b.fecha_inicio_tramite, confirmo_asistencia: b.confirmo_asistencia,
-    comentarios: b.comentarios,
-    resultado,
-  } });
-  (r.avisos || []).forEach((a) => toast(a, 'err'));
-  return r.bloque;
+  await api(`/agenda/${id}/resultado`, { method: 'POST', body: { resultado } });
 }
 
 /* ================= tab: DISPONIBLES ================= */

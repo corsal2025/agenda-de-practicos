@@ -161,7 +161,7 @@ agendaRoutes.put('/agenda/:id', async (c) => {
   const personaNueva = Boolean(rutFmt || nombreNuevo)
     && (bloque.rut !== rutFmt || (bloque.nombre || '') !== (nombreNuevo || ''));
   if (personaNueva) exigirCorreo(body.correo);
-  else if (body.correo && !correoValido(body.correo)) throw bad(`Correo con formato inválido: ${String(body.correo).trim()}`);
+  else if (body.correo && String(body.correo).trim().toLowerCase() !== (bloque.correo || '') && !correoValido(body.correo)) throw bad(`Correo con formato inválido: ${String(body.correo).trim()}`);
 
   let funcionario_id = body.funcionario_id ? Number(body.funcionario_id) : null;
   if (!funcionario_id && body.funcionario_nombre) {
@@ -272,6 +272,22 @@ agendaRoutes.post('/agenda/:id/pendiente', async (c) => {
     .bind(valor, valor && body && body.nota ? String(body.nota).trim() : null, ahoraChile(), id).run();
   await logReq(c, db, id, 'editar', `pendiente reagendar = ${valor}`);
   return c.json({ ok: true, bloque: await traer(db, id) });
+});
+
+// Marca o borra solo el resultado (botones Aprobó/Reprobó/No asistió de la
+// grilla). Un UPDATE directo: no reescribe ni revalida el resto de la cita.
+agendaRoutes.post('/agenda/:id/resultado', async (c) => {
+  const db = c.env.DB;
+  const id = Number(c.req.param('id'));
+  const body = (await c.req.json().catch(() => ({}))) || {};
+  const resultado = body.resultado || null;
+  if (resultado && !(await catalogo(db, 'resultado')).includes(resultado)) throw bad(`Resultado no valido: ${resultado}`);
+  const r = await db.prepare(`UPDATE agenda SET resultado = ?, actualizado_en = ?
+    WHERE id = ? AND (rut IS NOT NULL OR nombre IS NOT NULL) AND bloqueado = 0`)
+    .bind(resultado, ahoraChile(), id).run();
+  if (!r.meta.changes) throw bad('El bloque no tiene una cita.', 404);
+  await logReq(c, db, id, 'editar', `resultado = ${resultado || '(borrado)'}`);
+  return c.json({ ok: true });
 });
 
 agendaRoutes.post('/agenda/:id/reagendar', async (c) => {
