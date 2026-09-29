@@ -7,16 +7,7 @@
 // cada Worker por separado, asi que este import relativo se resuelve y
 // empaqueta bien en el build de este Worker satelite.
 import { habilitado, recordatorio } from '../../worker/lib/correo.js';
-import { hoyISOChile } from '../../worker/lib/fechas.js';
-
-// 'mañana' en fecha de Chile (no en UTC): mismo cuidado que el resto de la app
-// con el hallazgo #3 del plan (datetime/fecha "local" se rompe en silencio bajo D1).
-function mananaISOChile() {
-  const [y, m, d] = hoyISOChile().split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + 1);
-  return dt.toISOString().slice(0, 10);
-}
+import { mananaISOChile } from '../../worker/lib/fechas.js';
 
 const SELECT = `
   SELECT a.*, e.nombre AS examinador

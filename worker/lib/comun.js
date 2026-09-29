@@ -10,6 +10,20 @@ import * as auth from './auth.js';
 import * as pesada from './pesada.js';
 import * as rut from './rut.js';
 
+// Regla principal: no se da hora a una persona sin correo (lo exige la
+// confirmacion y el recordatorio automatico).
+const CORREO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export function correoValido(correo) {
+  return CORREO_RE.test(String(correo || '').trim());
+}
+export function exigirCorreo(correo) {
+  if (!String(correo || '').trim()) {
+    throw bad('Falta el correo: no se puede dar hora a una persona sin correo electrónico.');
+  }
+  if (!correoValido(correo)) throw bad(`Correo con formato inválido: ${String(correo).trim()}`);
+  return String(correo).trim().toLowerCase();
+}
+
 export function bad(msg, status = 400) {
   const e = new Error(msg);
   e.status = status;

@@ -345,7 +345,7 @@ function editorSlot(b, alGuardar) {
         <label class="chk-clase"><input type="checkbox" value="${esc(cl)}" ${clasesIniciales.includes(cl) ? 'checked' : ''}> ${esc(cl)}</label>
       `).join('')}</div></div>
     <div class="campo"><label>Teléfono</label><input id="f-contacto" value="${esc(fTel(b.contacto))}" placeholder="9 1234 5678" inputmode="tel"></div>
-    <div class="campo"><label>Correo</label><input id="f-correo" value="${esc(b.correo)}"></div>
+    <div class="campo"><label>Correo <b class="req" title="Obligatorio para dar hora">*</b></label><input id="f-correo" type="email" placeholder="obligatorio para dar hora" value="${esc(b.correo)}"></div>
     <div class="campo"><label>Tipo de cita</label><select id="f-tipo">${opt(c.tipo_cita, b.tipo_cita)}</select></div>
     <div class="campo ancho"><label>Motivo reagendamiento</label><input id="f-motivo" value="${esc(b.motivo_reagendamiento)}"></div>
     <div class="campo"><label>Lista de espera</label><select id="f-lista">${opt(c.lista_espera, b.lista_espera)}</select></div>
@@ -659,7 +659,7 @@ function dialogoBloquearDia() {
         if (!d.motivo) return toast('Indica el motivo del bloqueo', 'err');
         if (d.incluir_ocupados && !confirm('Las citas del rango se van a quitar de la agenda (quedan en la papelera). ¿Continuar?')) return;
         const r = await api('/bloquear-dia', { method: 'POST', body: d });
-        toast(`${r.bloqueados} bloques bloqueados${r.a_papelera ? ` · ${r.a_papelera} citas a la papelera` : ''}`);
+        toast(`${r.bloqueados} bloques bloqueados${r.a_reagendar ? ` · ${r.a_reagendar} persona(s) pasaron a Reagendar` : ''}`);
       }
       cerrarModal(); recargar(renderAgenda)();
     } catch (e) { toast(e.message, 'err'); }
@@ -798,35 +798,30 @@ function pintarGrilla(cont, filas, fecha) {
       const card = el.closest('.slot');
       const id = Number(box.dataset.id);
       const quitar = el.classList.contains('on');
+      // Se pinta al instante; si el guardado falla se vuelve al estado anterior.
+      const antes = { on: [...box.querySelectorAll('.sr.on')], card: card.className };
+      box.querySelectorAll('.sr').forEach((s) => s.classList.remove('on'));
+      card.classList.remove('res-aprob', 'res-reprob');
+      if (!quitar) {
+        el.classList.add('on');
+        card.classList.add(el.dataset.r === 'APROBADO' ? 'res-aprob' : 'res-reprob');
+      }
       try {
         await marcarResultado(id, quitar ? null : el.dataset.r);
-        // Actualiza la tarjeta en el lugar, sin recargar la grilla (no salta la pantalla).
-        box.querySelectorAll('.sr').forEach((s) => s.classList.remove('on'));
-        card.classList.remove('res-aprob', 'res-reprob');
-        if (!quitar) {
-          el.classList.add('on');
-          card.classList.add(el.dataset.r === 'APROBADO' ? 'res-aprob' : 'res-reprob');
-        }
         toast(quitar ? 'Resultado borrado' : `Marcado: ${el.dataset.r === 'NO ASISTIO' ? 'No asistió' : el.dataset.r === 'APROBADO' ? 'Aprobó' : 'Reprobó'}`);
-      } catch (e) { toast(e.message, 'err'); }
+      } catch (e) {
+        box.querySelectorAll('.sr').forEach((s) => s.classList.remove('on'));
+        antes.on.forEach((s) => s.classList.add('on'));
+        card.className = antes.card;
+        toast(e.message, 'err');
+      }
     };
   });
 }
 // Marca (o borra, con resultado=null) el resultado de una cita preservando
 // el resto de sus datos. Compartido entre la grilla y el check-in del dia.
 async function marcarResultado(id, resultado) {
-  const b = await api(`/agenda/${id}`);
-  const r = await api(`/agenda/${id}`, { method: 'PUT', body: {
-    visto_en: b.actualizado_en,
-    rut: b.rut, nombre: b.nombre, clase: b.clase, contacto: b.contacto, correo: b.correo,
-    tipo_cita: b.tipo_cita, motivo_reagendamiento: b.motivo_reagendamiento,
-    lista_espera: b.lista_espera, intento: b.intento, funcionario_id: b.funcionario_id,
-    fecha_inicio_tramite: b.fecha_inicio_tramite, confirmo_asistencia: b.confirmo_asistencia,
-    comentarios: b.comentarios,
-    resultado,
-  } });
-  (r.avisos || []).forEach((a) => toast(a, 'err'));
-  return r.bloque;
+  await api(`/agenda/${id}/resultado`, { method: 'POST', body: { resultado } });
 }
 
 /* ================= tab: DISPONIBLES ================= */
@@ -877,6 +872,10 @@ async function renderDisponibles() {
 /* ================= tab: REAGENDAR ================= */
 async function renderReagendar() {
   view.innerHTML = `
+    <div class="panel"><h2>Sin hora por bloqueo</h2>
+      <p class="muted">Personas cuyo bloque se bloqueó (licencia, día administrativo, terreno…). Asígnales una hora nueva.</p>
+      <div class="tabla-scroll"><table><thead><tr><th class="c">Hora original</th><th>Examinador</th><th>Nombre</th><th>RUT</th><th>Clase</th><th>Correo</th><th>Motivo bloqueo</th><th class="c"></th></tr></thead>
+      <tbody id="rc-body"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div></div>
     <div class="panel"><h2>Pendientes de reagendar</h2>
       <div class="tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th>Nombre</th><th>RUT</th><th>Nota</th><th class="c"></th></tr></thead>
       <tbody id="rp-body"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div></div>
@@ -897,6 +896,28 @@ async function renderReagendar() {
     });
   });
   cargarPend();
+
+  const cargarCola = () => cargarVista('reagendar-cola', '/cola-reagendar', (rows) => {
+    $('#rc-body').innerHTML = rows.length ? rows.map((r) => `<tr>
+      <td class="c">${esc(fFecha(r.origen_fecha))} ${esc(r.origen_hora)}</td><td>${esc(r.origen_examinador)}</td>
+      <td>${esc(nom(r.nombre))}</td><td style="white-space:nowrap">${esc(r.rut)}</td><td>${esc(r.clase)}</td>
+      <td>${r.correo ? esc(r.correo) : '<span class="sev warning">falta</span>'}</td><td>${esc(r.motivo)}</td>
+      <td class="c"><button class="btn chico" data-cola="${r.id}">Asignar hora</button>
+        <button class="btn chico sec" data-desc="${r.id}">Descartar</button></td></tr>`).join('')
+      : '<tr><td colspan="8" class="muted">Nadie esperando hora.</td></tr>';
+    $('#rc-body').querySelectorAll('button[data-cola]').forEach((el) => {
+      el.onclick = () => detalleCola(rows.find((r) => r.id === Number(el.dataset.cola)));
+    });
+    $('#rc-body').querySelectorAll('button[data-desc]').forEach((el) => {
+      el.onclick = async () => {
+        const nota = prompt('¿Por qué se descarta? (ej. ya no requiere hora)');
+        if (nota === null) return;
+        try { await api(`/cola-reagendar/${el.dataset.desc}/descartar`, { method: 'POST', body: { nota } }); toast('Descartado'); renderReagendar(); }
+        catch (e) { toast(e.message, 'err'); }
+      };
+    });
+  });
+  cargarCola();
 
   const qi = $('#r-q');
   autoformatoRut(qi);
@@ -955,6 +976,53 @@ async function detalleReagendar(id) {
           await api(`/agenda/${id}/reagendar`, { method: 'POST', body: { destino_id: Number(el.dataset.id), motivo: $('#rd-motivo').value } });
           toast('Cita reagendada');
           cont.innerHTML = ''; $('#r-q').value = ''; $('#r-res').innerHTML = '';
+          renderReagendar();
+        } catch (e) { toast(e.message, 'err'); }
+      };
+    });
+  };
+}
+
+// Asignar hora a una persona de la cola (desplazada por un bloqueo).
+function detalleCola(item) {
+  const pesada = String(item.clase || '').split(',').some((c) => META.clases_pesadas.includes(c.trim()));
+  const cont = $('#r-detalle');
+  cont.innerHTML = `
+    <div class="panel">
+      <h3>Asignar hora nueva</h3>
+      <p><b>${esc(nom(item.nombre) || '(SIN NOMBRE)')}</b> · ${esc(item.rut || 'sin RUT')} · Clase ${esc(item.clase || '-')}
+        <br>Tenía: ${esc(fFecha(item.origen_fecha))} ${esc(item.origen_hora)} — bloqueado por ${esc(item.motivo)}</p>
+      <div class="fila">
+        <div class="campo"><label>Correo <b class="req">*</b></label><input id="rc-correo" type="email" value="${esc(item.correo)}" placeholder="obligatorio"></div>
+        <div class="campo"><label>Desde</label><input type="date" id="rc-desde" value="${sumarDias(hoy(), 1)}"></div>
+        <div class="campo"><label>hasta</label><input type="date" id="rc-hasta" value="${sumarDias(hoy(), 30)}"></div>
+        <div class="campo"><label>Examinador</label><select id="rc-exam"><option value="">Cualquiera</option>
+          ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')}</select></div>
+        <button class="btn" id="rc-buscar">Ver bloques libres</button>
+      </div>
+      ${pesada ? `<p class="muted">Clase ${esc(item.clase)}: solo bloques de las ${esc(META.hora_d_a5)}.</p>` : ''}
+      <div class="tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th class="c"></th></tr></thead>
+        <tbody id="rc-libres"><tr><td colspan="4" class="muted">Elige un rango y busca.</td></tr></tbody></table></div>
+    </div>`;
+  cont.scrollIntoView({ behavior: 'smooth' });
+  $('#rc-buscar').onclick = async () => {
+    const q = new URLSearchParams({ desde: $('#rc-desde').value, hasta: $('#rc-hasta').value });
+    if ($('#rc-exam').value) q.set('examinador_id', $('#rc-exam').value);
+    if (pesada) q.set('clase', 'D');
+    const libres = await api(`/disponibles?${q}`);
+    $('#rc-libres').innerHTML = libres.length ? libres.map((l) => `<tr>
+      <td class="c">${esc(fFecha(l.fecha))}</td><td class="c">${esc(l.hora)}</td><td>${esc(l.examinador)}</td>
+      <td class="c"><button class="btn chico" data-id="${l.id}">Asignar aquí</button></td></tr>`).join('')
+      : '<tr><td colspan="4" class="muted">Sin bloques libres.</td></tr>';
+    $('#rc-libres').querySelectorAll('button[data-id]').forEach((el) => {
+      el.onclick = async () => {
+        if (!$('#rc-correo').value.trim()) return toast('Falta el correo: es obligatorio para dar hora.', 'err');
+        if (!confirm('¿Confirmar la nueva hora?')) return;
+        try {
+          const r = await api(`/cola-reagendar/${item.id}/asignar`, { method: 'POST', body: { destino_id: Number(el.dataset.id), correo: $('#rc-correo').value } });
+          toast('Hora asignada');
+          (r.avisos || []).forEach((a) => toast(a, 'err'));
+          cont.innerHTML = '';
           renderReagendar();
         } catch (e) { toast(e.message, 'err'); }
       };
@@ -1065,7 +1133,8 @@ const ETIQUETA = {
   INCOMPLETA: 'Cita incompleta', RUT_INVALIDO: 'RUT invalido', CLASE_BLOQUE: 'Clase en bloque incorrecto',
   DUPLICADO_FUTURO: 'Duplicado futuro', DUPLICADO_DIA: 'Duplicado el mismo dia', CONFLICTO_TERRENO: 'Conflicto terreno',
   SIN_RESULTADO: 'Sin resultado', SIN_CONTACTO: 'Sin contacto', TELEFONO_INCOMPLETO: 'Teléfono incompleto', DIA_INHABIL: 'Cita en dia inhabil',
-  PENDIENTE_REAGENDAR: 'Pendiente de reagendar',
+  PENDIENTE_REAGENDAR: 'Pendiente de reagendar', FALTA_TELEFONO: 'Falta teléfono', FALTA_CORREO: 'Falta correo',
+  CORREO_INVALIDO: 'Correo inválido', FALTA_CLASE: 'Falta clase', CONFLICTO_PESADA: 'Conflicto D/A5 12:30',
 };
 let filtErr = { tipo: '' };
 async function renderErrores() {
@@ -1122,10 +1191,48 @@ function aplicarFormatoImpresion(f) {
   const p = PAGINAS[f] || PAGINAS.carta;
   let st = document.getElementById('estilo-pagina');
   if (!st) { st = document.createElement('style'); st.id = 'estilo-pagina'; document.head.appendChild(st); }
-  st.textContent = `@media print { @page { size: ${p.size}; margin: 14mm 12mm; } }`;
+  // La hoja unica (todos los examinadores) va en horizontal para que quepan las columnas.
+  const horizontal = p.size.split(' ').reverse().join(' ');
+  st.textContent = `@media print { @page { size: ${p.size}; margin: 14mm 12mm; }
+    @page unica { size: ${horizontal}; margin: 8mm; } .hoja-unica { page: unica; } }`;
   try { localStorage.setItem('agenda-formato', f); } catch (_) { /* ignore */ }
 }
 aplicarFormatoImpresion(formatoImpresion());
+
+function disenoDia() {
+  try { return localStorage.getItem('agenda-diseno-dia') === 'porexam' ? 'porexam' : 'unica'; }
+  catch (_) { return 'unica'; }
+}
+
+// Una sola hoja (horizontal): filas = horas, columnas = examinadores. Cada
+// celda trae nombre, RUT, clase y telefono, o el motivo si esta bloqueado.
+function hojaUnicaDia(data, exs, largaFecha, generado) {
+  const horas = [...new Set(exs.flatMap((ex) => data.examinadores[ex].map((r) => r.hora)))].sort();
+  const celda = (r) => {
+    if (!r) return '<td class="hu-vacio">—</td>';
+    if (r.bloqueado) return `<td class="hu-bloq">${esc(r.bloqueo_motivo || 'BLOQUEADO')}</td>`;
+    if (!(r.rut || r.nombre)) return '<td class="hu-libre">Disponible</td>';
+    return `<td><b class="hu-nom">${esc(nom(r.nombre))}</b>
+      <span class="hu-det">${esc(r.rut || '')} · ${r.clase ? esc(r.clase) : 's/clase'}</span></td>`;
+  };
+  const tot = exs.map((ex) => data.examinadores[ex].filter((r) => !r.bloqueado && (r.rut || r.nombre)).length);
+  return `<article class="hoja-dia hoja-unica">
+    <header class="hd-cab">
+      ${MARCA.logo ? `<img src="${MARCA.logo}" alt="${esc(MARCA.organismo)}" class="hd-logo">` : ESCUDO_SVG}
+      <div class="hd-org"><span>${esc(MARCA.organismo)} · ${esc(MARCA.unidad)}</span><b>Agenda de Prácticos</b></div>
+      <div class="hd-folio">${esc(largaFecha)}</div>
+    </header>
+    <h2 class="hu-titulo">Agenda diaria — todos los examinadores (${tot.reduce((a, b) => a + b, 0)} citas)</h2>
+    <table class="hd-tabla hu-tabla">
+      <thead><tr><th class="hu-hora">Hora</th>${exs.map((ex, i) => `<th>${esc(nom(ex))}<span class="hu-det">${tot[i]} citas</span></th>`).join('')}</tr></thead>
+      <tbody>${horas.map((h) => `<tr><td class="hu-hora num">${esc(h)}</td>${
+        exs.map((ex) => celda(data.examinadores[ex].find((r) => r.hora === h))).join('')}</tr>`).join('')}</tbody>
+    </table>
+    <div class="hd-pie"><div class="hd-firmas">
+      ${exs.map((ex) => `<div class="hd-firma"><div class="hd-linea"></div><span>${esc(nom(ex))}</span></div>`).join('')}
+    </div><div class="hd-gen">Generado ${esc(generado)} · Sistema de Agenda de Prácticos</div></div>
+  </article>`;
+}
 
 async function renderDia() {
   const fecha = (estadoAgenda.fecha || hoy());
@@ -1135,16 +1242,22 @@ async function renderDia() {
       <div class="campo"><label>Formato de hoja</label>
         <select id="dd-formato">${Object.entries(PAGINAS).map(([k, v]) =>
           `<option value="${k}" ${k === formatoImpresion() ? 'selected' : ''}>${esc(v.etq)}</option>`).join('')}</select></div>
+      <div class="campo"><label>Diseño</label>
+        <select id="dd-diseno">
+          <option value="unica" ${disenoDia() === 'unica' ? 'selected' : ''}>Todos los examinadores en una hoja</option>
+          <option value="porexam" ${disenoDia() === 'porexam' ? 'selected' : ''}>Una hoja por examinador/a</option>
+        </select></div>
       <button class="btn" id="dd-print">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6V2h8v4M4 12H2V6h12v6h-2M4 10h8v4H4z"/></svg>
         Imprimir informe
       </button>
-      <span class="muted">Una hoja por examinador/a, lista para firmar. Elegí el formato según el papel de la impresora.</span>
+      <span class="muted">"Una hoja" muestra a todos los examinadores lado a lado (se imprime horizontal) para que cada uno vea las citas de su compañero.</span>
     </div></div>
     <div id="dd-cont" class="dd-cont">Cargando...</div>`;
   $('#dd-fecha').onchange = (e) => { estadoAgenda.fecha = e.target.value; renderDia(); };
   $('#dd-formato').onchange = (e) => { aplicarFormatoImpresion(e.target.value); toast(`Formato: ${PAGINAS[e.target.value].etq}`); };
   $('#dd-print').onclick = () => window.print();
+  $('#dd-diseno').onchange = (e) => { try { localStorage.setItem('agenda-diseno-dia', e.target.value); } catch (_) { /* ignore */ } renderDia(); };
 
   await cargarVista('dia', `/dia?fecha=${fecha}`, (data) => {
   const exs = Object.keys(data.examinadores);
@@ -1154,6 +1267,11 @@ async function renderDia() {
   }
   const generado = fFechaHora(new Date().toISOString());
   const largaFecha = fFechaLarga(fecha);
+  document.body.classList.toggle('dia-unica', disenoDia() === 'unica');
+  if (disenoDia() === 'unica') {
+    $('#dd-cont').innerHTML = hojaUnicaDia(data, exs, largaFecha, generado);
+    return;
+  }
 
   $('#dd-cont').innerHTML = exs.map((ex, i) => {
     const filas = data.examinadores[ex];
@@ -1163,24 +1281,19 @@ async function renderDia() {
     let n = 0;
     const cuerpo = filas.map((r) => {
       if (r.bloqueado) {
-        return `<tr class="hd-bloq"><td>${esc(r.hora)}</td><td colspan="8">NO DISPONIBLE — ${esc(r.bloqueo_motivo || 'BLOQUEADO')}</td></tr>`;
+        return `<tr class="hd-bloq"><td></td><td class="num">${esc(r.hora)}</td><td colspan="3">NO DISPONIBLE — ${esc(r.bloqueo_motivo || 'BLOQUEADO')}</td></tr>`;
       }
       const ocupada = r.rut || r.nombre;
       if (!ocupada) {
-        return `<tr class="hd-libre"><td>${esc(r.hora)}</td><td colspan="8">Disponible</td></tr>`;
+        return `<tr class="hd-libre"><td></td><td class="num">${esc(r.hora)}</td><td colspan="3">Disponible</td></tr>`;
       }
       n += 1;
-      const res = r.resultado ? esc(r.resultado) : '';
       return `<tr>
         <td class="hd-n">${n}</td>
         <td class="num">${esc(r.hora)}</td>
         <td class="num">${esc(r.rut || '')}</td>
         <td class="hd-nom">${esc(nom(r.nombre))}</td>
         <td class="hd-c">${r.clase ? clasesTagsHtml(r.clase) : ''}</td>
-        <td class="num">${esc(fTel(r.contacto))}</td>
-        <td>${r.tipo_cita === 'REAGENDADO' ? 'Reagendado' : r.tipo_cita === 'TRASLADO EN TERRENO' ? 'Terreno' : ''}${r.pendiente_reagendar ? '<span class="hd-marca">Pendiente de reagendar</span>' : ''}</td>
-        <td class="hd-res">${res}</td>
-        <td class="hd-obs"></td>
       </tr>`;
     }).join('');
 
@@ -1208,11 +1321,9 @@ async function renderDia() {
       <table class="hd-tabla">
         <colgroup>
           <col class="c-n"><col class="c-h"><col class="c-r"><col><col class="c-cl">
-          <col class="c-t"><col class="c-ti"><col class="c-re"><col class="c-o">
         </colgroup>
         <thead><tr>
           <th>N°</th><th>Hora</th><th>RUT</th><th>Nombre</th><th>Clase</th>
-          <th>Teléfono</th><th>Tipo</th><th>Resultado</th><th>Observaciones</th>
         </tr></thead>
         <tbody>${cuerpo}</tbody>
       </table>
