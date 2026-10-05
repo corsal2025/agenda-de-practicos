@@ -296,10 +296,19 @@ agendaRoutes.post('/agenda/:id/reagendar', async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const { destino_id, motivo, forzar } = body || {};
   const origen = await db.prepare('SELECT * FROM agenda WHERE id = ?').bind(origenId).first();
-  const destino = await db.prepare('SELECT * FROM agenda WHERE id = ?').bind(Number(destino_id)).first();
   if (!origen) throw bad('Cita de origen no encontrada', 404);
-  if (!destino) throw bad('Bloque de destino no encontrado', 404);
   if (!(origen.rut || origen.nombre)) throw bad('El bloque de origen no tiene una cita.');
+
+  if (!destino_id) {
+    const mot = String(motivo || 'POSTULANTE SOLICITA CAMBIO').trim();
+    await db.prepare('UPDATE agenda SET pendiente_reagendar = 1, pendiente_nota = ?, motivo_reagendamiento = ?, actualizado_en = ? WHERE id = ?')
+      .bind(mot, mot, ahoraChile(), origenId).run();
+    await audit(c, origenId, 'editar', `pendiente reagendar: ${mot}`);
+    return c.json({ ok: true });
+  }
+
+  const destino = await db.prepare('SELECT * FROM agenda WHERE id = ?').bind(Number(destino_id)).first();
+  if (!destino) throw bad('Bloque de destino no encontrado', 404);
   if (destino.rut || destino.nombre) throw bad('El bloque de destino ya esta ocupado.');
   if (destino.bloqueado) throw bad('El bloque de destino esta bloqueado.');
   // Regla principal: la nueva hora exige correo (el de la cita o uno nuevo).

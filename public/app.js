@@ -413,18 +413,11 @@ function formularioCita(b, alGuardar) {
       <input id="f-rut" value="${esc(b.rut)}" required placeholder="12.345.678-9" style="font-weight:600">
     </div>
 
-    <div class="campo"><label>Nacionalidad <b class="req" style="color:var(--alerta)">*</b></label>
-      <select id="f-nac" required>
-        <option value="CHILENA" ${(b.nacionalidad || 'CHILENA') === 'CHILENA' ? 'selected' : ''}>CHILENA</option>
-        <option value="EXTRANJERA" ${b.nacionalidad === 'EXTRANJERA' ? 'selected' : ''}>EXTRANJERA</option>
-      </select>
-    </div>
-
     <div class="campo"><label>Celular (contacto) <b class="req" style="color:var(--alerta)">*</b></label>
       <input id="f-contacto" value="${esc(fTel(b.contacto))}" required placeholder="+56 9 1234 5678" inputmode="tel">
     </div>
 
-    <div class="campo ancho"><label>Clase de Licencia que está sacando <b class="req" style="color:var(--alerta)">*</b> (podés marcar más de una)</label>
+    <div class="campo ancho"><label>Clase de Licencia que está sacando <b class="req" style="color:var(--alerta)">*</b> (puedes marcar más de una)</label>
       <div class="chk-clases" id="f-clase">${c.clase.map((cl) => `
         <label class="chk-clase"><input type="checkbox" value="${esc(cl)}" ${clasesIniciales.includes(cl) ? 'checked' : ''}> ${esc(cl)}</label>
       `).join('')}</div>
@@ -433,12 +426,6 @@ function formularioCita(b, alGuardar) {
     <div class="campo"><label>Correo electrónico <b class="req" style="color:var(--alerta)">*</b></label>
       <input id="f-correo" type="email" required placeholder="nombre@correo.com" value="${esc(b.correo)}">
     </div>
-
-    <div class="campo"><label>Fecha inicio de trámite <b class="req" style="color:var(--alerta)">*</b></label>
-      <input type="date" id="f-fit" required value="${esc(b.fecha_inicio_tramite || hoy())}">
-    </div>
-
-    <div class="campo ancho" id="box-vencimiento" style="margin-top:-.2rem;margin-bottom:.4rem"></div>
 
     <div class="campo" id="wrap-f-func">
       <label>Funcionario/a que agenda</label>
@@ -458,21 +445,6 @@ function formularioCita(b, alGuardar) {
       </div>
       <input type="hidden" id="f-func" value="${fAsignado.id || ''}">
     </div>
-
-    ${tieneCita ? `
-    <div style="background:var(--fondo-2,#f8fafc);padding:10px 14px;border-radius:8px;border:1px solid var(--linea,#e2e8f0);margin-top:6px;width:100%" class="ancho">
-      <div style="font-size:11px;font-weight:700;color:var(--tinta-2);text-transform:uppercase;margin-bottom:8px">Evaluación y Resultado en Agenda</div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap">
-        <div class="campo" style="flex:1;min-width:140px;margin:0"><label>Confirmó asistencia</label>
-          <select id="f-conf"><option value="">--</option>
-            <option value="1" ${b.confirmo_asistencia === 1 ? 'selected' : ''}>SI</option>
-            <option value="0" ${b.confirmo_asistencia === 0 ? 'selected' : ''}>NO</option></select>
-        </div>
-        <div class="campo" style="flex:1;min-width:140px;margin:0"><label>Resultado</label>
-          <select id="f-res">${opt(c.resultado, b.resultado)}</select>
-        </div>
-      </div>
-    </div>` : ''}
 
     <div class="campo ancho" id="zona-forzar" ${esPesada ? '' : 'hidden'}>
       <label><input type="checkbox" id="f-forzar"> <span id="f-forzar-txt">${esc(textoForzar(b))}</span></label>
@@ -516,55 +488,6 @@ function formularioCita(b, alGuardar) {
     }
   });
 
-  // Contador dinámico de 6 meses (Ley de Tránsito Art. 21)
-  const actualizarPlazoLegal = () => {
-    const box = $('#box-vencimiento');
-    if (!box) return;
-    const fitVal = $('#f-fit').value;
-    if (!fitVal) {
-      box.innerHTML = '<div style="font-size:12px;color:var(--tinta-3);padding:.3rem 0">Indica la fecha de inicio del trámite para calcular el plazo legal (máx. 6 meses).</div>';
-      return;
-    }
-    const dInicio = new Date(`${fitVal}T12:00:00`);
-    const dCita = new Date(`${b.fecha}T12:00:00`);
-    const dLimite = new Date(dInicio);
-    dLimite.setMonth(dLimite.getMonth() + 6);
-
-    const msDia = 864e5;
-    const diasTranscurridos = Math.max(0, Math.round((dCita - dInicio) / msDia));
-    const diasRestantes = Math.round((dLimite - dCita) / msDia);
-    const mesesExactos = Math.max(0, (diasTranscurridos / 30.4375).toFixed(1));
-
-    if (dCita > dLimite) {
-      box.innerHTML = `
-        <div style="background:#fee2e2;border:1px solid #f87171;border-radius:6px;padding:.5rem .75rem;font-size:12px;color:#991b1b">
-          <div style="font-weight:700;display:flex;align-items:center;gap:.3rem">
-            ⚠️ PLAZO LEGAL VENCIDO (${mesesExactos} meses transcurridos)
-          </div>
-          <div style="margin-top:2px;line-height:1.35">
-            Según el Art. 21 de la Ley 18.290 de Tránsito, el plazo máximo para rendir exámenes es de <b>6 meses</b> desde el inicio del trámite.
-            La fecha límite legal expiró el <b>${fFecha(dLimite.toISOString().slice(0, 10))}</b> (excedida por ${Math.abs(diasRestantes)} días).
-          </div>
-        </div>
-      `;
-    } else {
-      box.innerHTML = `
-        <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:.5rem .75rem;font-size:12px;color:#166534">
-          <div style="font-weight:700;display:flex;align-items:center;gap:.3rem">
-            ✅ PLAZO LEGAL VIGENTE (${mesesExactos} meses de 6 permitidos)
-          </div>
-          <div style="margin-top:2px;line-height:1.35">
-            Quedan <b>${diasRestantes} días</b> de vigencia legal. Fecha fatal de vencimiento: <b>${fFecha(dLimite.toISOString().slice(0, 10))}</b>.
-          </div>
-        </div>
-      `;
-    }
-  };
-
-  $('#f-fit').addEventListener('input', actualizarPlazoLegal);
-  $('#f-fit').addEventListener('change', actualizarPlazoLegal);
-  actualizarPlazoLegal();
-
   // Autocompletar datos si el RUT tiene citas anteriores
   if (!b.rut && !b.nombre) {
     $('#f-rut').addEventListener('blur', async () => {
@@ -578,7 +501,6 @@ function formularioCita(b, alGuardar) {
         if (!$('#f-nombre').value && ultimo.nombre) { $('#f-nombre').value = nom(ultimo.nombre); completo = true; }
         if (!$('#f-contacto').value && ultimo.contacto) { $('#f-contacto').value = fTel(ultimo.contacto); completo = true; }
         if (!$('#f-correo').value && ultimo.correo) { $('#f-correo').value = ultimo.correo; completo = true; }
-        if (ultimo.nacionalidad) { $('#f-nac').value = ultimo.nacionalidad; }
         if (completo) toast('Datos autocompletados de una cita anterior', 'ok');
       } catch (_) {}
     });
@@ -642,14 +564,15 @@ function formularioCita(b, alGuardar) {
 
   if ($('#btn-reagendar-slot')) {
     $('#btn-reagendar-slot').onclick = async () => {
-      const motivo = prompt('Motivo del reagendamiento (ej: POSTULANTE SOLICITA CAMBIO, LICENCIA MEDICA EXAMINADOR):', b.motivo_reagendamiento || 'POSTULANTE SOLICITA CAMBIO');
-      if (motivo === null) return;
       try {
-        await api(`/agenda/${b.id}/reagendar`, { method: 'POST', body: { motivo: motivo.trim() || 'SOLICITUD DE REAGENDAMIENTO' } });
+        await api(`/agenda/${b.id}/reagendar`, { method: 'POST', body: { motivo: 'POSTULANTE SOLICITA CAMBIO' } });
         cerrarModal(); alGuardar && alGuardar();
         actualizarBadgeReagendar();
-        toast('Postulante enviado a la lista de Reagendamiento');
+        toast('Postulante enviado a la lista de Reagendamiento', 'ok');
         irA('reagendar');
+        setTimeout(() => {
+          if (typeof detalleReagendar === 'function') detalleReagendar(b.id);
+        }, 120);
       } catch (e) { toast(e.message, 'err'); }
     };
   }
@@ -660,8 +583,6 @@ function formularioCita(b, alGuardar) {
     const clases = clasesMarcadas();
     const contacto = $('#f-contacto').value.trim();
     const correoVal = $('#f-correo').value.trim();
-    const fit = $('#f-fit').value;
-    const nac = $('#f-nac').value;
 
     // Validaciones estrictas de campos obligatorios
     if (!nombre) { toast('El nombre del postulante es obligatorio', 'err'); $('#f-nombre').focus(); return; }
@@ -670,8 +591,6 @@ function formularioCita(b, alGuardar) {
     if (!clases.length) { toast('Debes marcar al menos una clase de licencia', 'err'); return; }
     if (!contacto) { toast('El número de celular es obligatorio', 'err'); $('#f-contacto').focus(); return; }
     if (!correoVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoVal)) { toast('Ingresa un correo electrónico válido', 'err'); $('#f-correo').focus(); return; }
-    if (!fit) { toast('La fecha de inicio de trámite es obligatoria', 'err'); $('#f-fit').focus(); return; }
-    if (!nac) { toast('La nacionalidad es obligatoria', 'err'); $('#f-nac').focus(); return; }
 
     $('#btn-guardar').disabled = true;
     $('#btn-guardar').textContent = 'Guardando...';
@@ -682,7 +601,7 @@ function formularioCita(b, alGuardar) {
         ...comun,
         rut: rutVal,
         nombre: nombre,
-        nacionalidad: nac,
+        nacionalidad: b.nacionalidad || 'CHILENA',
         clase: clases.join(','),
         contacto: contacto,
         correo: correoVal,
@@ -691,7 +610,7 @@ function formularioCita(b, alGuardar) {
         lista_espera: 'NO',
         intento: b.intento || '1° VEZ',
         funcionario_id: $('#f-func').value && $('#f-func').value !== '__nuevo' ? Number($('#f-func').value) : null,
-        fecha_inicio_tramite: fit,
+        fecha_inicio_tramite: b.fecha_inicio_tramite || hoy(),
         confirmo_asistencia: $('#f-conf') ? ($('#f-conf').value === '' ? null : Number($('#f-conf').value)) : (b.confirmo_asistencia ?? null),
         resultado: $('#f-res') ? ($('#f-res').value || null) : (b.resultado || null),
         pendiente_reagendar: Boolean(b.pendiente_reagendar),
@@ -777,13 +696,13 @@ async function renderPorConfirmar() {
             <tr>
               <th class="c" style="width:95px">Fecha</th>
               <th class="c" style="width:65px">Hora</th>
-              <th>Postulante</th>
-              <th style="white-space:nowrap">RUT</th>
-              <th class="c" style="width:50px">Clase</th>
-              <th>Teléfono</th>
-              <th>Correo</th>
-              <th>Examinador</th>
-              <th class="c" style="min-width:180px">Gestión de asistencia</th>
+              <th class="c">Postulante</th>
+              <th class="c" style="width:115px;white-space:nowrap">RUT</th>
+              <th class="c" style="width:65px">Clase</th>
+              <th class="c" style="width:150px">Teléfono</th>
+              <th class="c" style="min-width:180px">Correo</th>
+              <th class="c" style="width:170px">Examinador</th>
+              <th class="c" style="min-width:280px">Gestión de asistencia</th>
             </tr>
           </thead>
           <tbody id="pc-tbody">
@@ -819,33 +738,69 @@ async function renderPorConfirmar() {
       return;
     }
 
-    $('#pc-tbody').innerHTML = filtradas.map((r) => `
+    $('#pc-tbody').innerHTML = filtradas.map((r) => {
+      const numLimpio = String(r.contacto || '').replace(/\D/g, '');
+      const telWa = numLimpio.startsWith('56') ? numLimpio : (numLimpio.length === 9 ? '56' + numLimpio : '');
+      const nomP = nom(r.nombre) || 'Estimado/a postulante';
+      const examP = r.examinador || 'por asignar';
+      const fechaP = fFecha(r.fecha);
+      const horaP = r.hora || '';
+      const claseP = r.clase ? ` (Clase ${r.clase})` : '';
+      const mensajeWa = `Hola ${nomP}, te contactamos desde la Dirección de Tránsito respecto a tu examen práctico de conducir${claseP}. Te recordamos que tu cita está agendada para el día ${fechaP} a las ${horaP} hrs con el examinador ${examP}. Por favor confírmanos si podrás asistir o si necesitas reagendar tu hora para otra fecha.`;
+
+      return `
       <tr data-id="${r.id}">
         <td class="c" style="white-space:nowrap"><b>${esc(fFecha(r.fecha))}</b></td>
         <td class="c"><b>${esc(r.hora)}</b></td>
-        <td><b>${esc(nom(r.nombre) || '(Sin nombre)')}</b></td>
-        <td style="white-space:nowrap">${esc(r.rut || '-')}</td>
-        <td class="c"><span class="badge" style="font-weight:700">${esc(r.clase || '-')}</span></td>
-        <td>
-          ${r.contacto ? `<a href="tel:${esc(r.contacto)}" style="text-decoration:none;font-weight:600;color:var(--azul)">📞 ${esc(fTel(r.contacto))}</a>` : '<span class="muted">Sin teléfono</span>'}
+        <td class="c"><b>${esc(nom(r.nombre) || '(Sin nombre)')}</b></td>
+        <td class="c num" style="white-space:nowrap;font-weight:600">${esc(r.rut || '-')}</td>
+        <td class="c">${r.clase ? clasesTagsHtml(r.clase) : '<span class="muted">-</span>'}</td>
+        <td class="c num">
+          ${r.contacto ? `
+            <div style="display:inline-flex;flex-direction:column;align-items:center;gap:4px">
+              <a href="tel:${esc(r.contacto)}" style="text-decoration:none;font-weight:600;color:var(--azul)">📞 ${esc(fTel(r.contacto))}</a>
+              ${telWa ? `<a href="https://wa.me/${telWa}?text=${encodeURIComponent(mensajeWa)}" target="_blank" rel="noopener" class="btn-wa" title="Escribir por WhatsApp a este postulante para confirmar o reagendar">💬 WhatsApp</a>` : ''}
+            </div>
+          ` : '<span class="muted">Sin teléfono</span>'}
         </td>
-        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        <td class="c" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
           ${r.correo ? `<a href="mailto:${esc(r.correo)}" style="color:var(--azul)" title="${esc(r.correo)}">${esc(r.correo)}</a>` : '<span class="muted">Sin correo</span>'}
         </td>
-        <td>${esc(r.examinador || 'No asignado')}</td>
+        <td class="c">${esc(r.examinador || 'No asignado')}</td>
         <td class="c" style="white-space:nowrap">
           <button class="btn chico" data-si="${r.id}" style="background:#10b981;border-color:#059669;color:#fff;font-weight:700;margin-right:4px">✔ Confirmó</button>
           <button class="btn chico sec" data-no="${r.id}" style="color:#b91c1c;font-weight:600;margin-right:4px">✖ No asiste</button>
+          <button class="btn chico sec" data-reag="${r.id}" style="color:var(--azul);font-weight:600;margin-right:4px" title="Derivar a Reagendar">🔄 Reagendar</button>
           <button class="btn chico sec" data-ver="${r.id}" title="Ver o editar cita completa">Ficha</button>
         </td>
       </tr>
-    `).join('');
+      `;
+    }).join('');
 
     $('#pc-tbody').querySelectorAll('button[data-si]').forEach((el) => {
       el.onclick = () => marcarAsistencia(Number(el.dataset.si), 1);
     });
     $('#pc-tbody').querySelectorAll('button[data-no]').forEach((el) => {
       el.onclick = () => marcarAsistencia(Number(el.dataset.no), 0);
+    });
+    $('#pc-tbody').querySelectorAll('button[data-reag]').forEach((el) => {
+      el.onclick = async () => {
+        const id = Number(el.dataset.reag);
+        try {
+          await api(`/agenda/${id}/reagendar`, { method: 'POST', body: { motivo: 'POSTULANTE SOLICITA CAMBIO' } });
+          citasCargadas = citasCargadas.filter((c) => c.id !== id);
+          pintarLista();
+          actualizarBadgePorConfirmar();
+          actualizarBadgeReagendar();
+          toast('Postulante derivado a Reagendamiento', 'ok');
+          irA('reagendar');
+          setTimeout(() => {
+            if (typeof detalleReagendar === 'function') detalleReagendar(id);
+          }, 120);
+        } catch (e) {
+          toast(e.message, 'err');
+        }
+      };
     });
     $('#pc-tbody').querySelectorAll('button[data-ver]').forEach((el) => {
       el.onclick = async () => {
@@ -941,11 +896,6 @@ async function renderAgenda() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
             Desbloquear
           </button>
-          <button class="btn-guia-accion" id="a-guia" data-tooltip="Simulador interactivo con flecha explicativa que te enseña paso a paso cómo usar el sistema">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Cómo usar el sistema
-          </button>
-
         </div>
       </div>
     </div>
@@ -959,7 +909,6 @@ async function renderAgenda() {
   $('#a-bloqdia').onclick = () => dialogoBloquearDia();
   $('#a-desbloqdia').onclick = () => dialogoDesbloquearDia();
   if ($('#a-porconfirmar')) $('#a-porconfirmar').onclick = () => irA('porconfirmar');
-  $('#a-guia').onclick = () => iniciarGuiaInteractiva();
   const btnV = $('#btn-vista-vertical');
   const btnH = $('#btn-vista-horizontal');
   if (btnV && btnH) {
@@ -1380,464 +1329,325 @@ function dialogoBloquearDia() {
 }
 
 async function dialogoDesbloquearDia() {
+  const f = estadoAgenda.fecha || hoy();
   const examinadores = META.examinadores || [];
-  const fechaActual = estadoAgenda.fecha || hoy();
+  const motivos = META.catalogos.bloqueo_motivo || [];
   const horasDisponibles = (META && META.horas && META.horas.length) ? META.horas : [
     '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30'
   ];
-  let desModoHoras = 'todas'; // 'todas' | 'especificas'
-  let desHorasSeleccionadas = new Set(['08:30']);
+  let modoActual = 'dias'; // 'dias' | 'horas'
+  let horasSeleccionadas = new Set(['08:30', '09:00']);
 
   modal('🔓 Desbloquear días u horas', `
-    <div style="display:flex;flex-direction:column;gap:.75rem">
-      <div style="background:var(--elev);padding:.85rem 1rem;border-radius:var(--r-sm);border:1px solid var(--linea)">
-        <div style="font-size:13px;font-weight:600;margin-bottom:.5rem;color:var(--tinta);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
-          <span>Filtrar y buscar bloqueos activos</span>
-          <div style="display:flex;gap:6px;align-items:center">
-            <button type="button" class="btn chico activo" id="des-btn-solo-fecha" style="font-size:11px;font-weight:700">
-              📅 Fecha en pantalla (${fFecha(fechaActual)})
-            </button>
-            <button type="button" class="btn chico sec" id="des-btn-todas-fechas" style="font-size:11px">
-              Ver todas las fechas vigentes
-            </button>
-            <button type="button" class="btn chico sec" id="des-toggle-rango" style="font-size:11px">
-              Desbloqueo por rango / horas...
-            </button>
-          </div>
-        </div>
-        
-        <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
-          <div style="flex:1;min-width:200px">
-            <input type="search" id="des-buscar" placeholder="🔍 Buscar por fecha, examinador o motivo..." style="width:100%;margin:0">
-          </div>
-          <div style="min-width:240px">
-            <select id="des-sel-exam" style="width:100%;margin:0">
-              <option value="">Todos los examinadores</option>
-              ${examinadores.map(e => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')}
-            </select>
-          </div>
-        </div>
-        
-        <div id="des-panel-rango" hidden style="margin-top:.75rem;padding-top:.75rem;border-top:1px dashed var(--linea)">
-          <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.75rem">
-            <div class="campo" style="margin:0"><label style="font-size:11px;font-weight:700">Desde fecha</label><input type="date" id="des-rango-desde" value="${fechaActual}"></div>
-            <div class="campo" style="margin:0"><label style="font-size:11px;font-weight:700">Hasta fecha</label><input type="date" id="des-rango-hasta" value="${fechaActual}"></div>
-            <div class="campo" style="margin:0;min-width:200px">
-              <label style="font-size:11px;font-weight:700">Examinador</label>
-              <select id="des-rango-exam" style="margin:0">
-                <option value="">Todos los examinadores</option>
-                ${examinadores.map(e => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')}
-              </select>
-            </div>
-          </div>
+    <div class="tabs-modo-bloq ancho">
+      <button type="button" class="btn-tab-bloq activo" id="desb-tab-dias">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Día(s) completo(s)
+      </button>
+      <button type="button" class="btn-tab-bloq" id="desb-tab-horas">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Por horas / bloques específicos
+      </button>
+    </div>
 
-          <div style="background:#f8fafc;border:1px solid var(--linea,#e2e8f0);border-radius:8px;padding:12px;margin-bottom:.75rem">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
-              <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-                <label style="font-size:11px;font-weight:700;color:var(--tinta-2);text-transform:uppercase;margin:0">
-                  ¿Qué bloques u horas desbloquear?
-                </label>
-                <div style="display:flex;gap:10px">
-                  <label style="font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-weight:600">
-                    <input type="radio" name="des-modo-horas" value="todas" id="des-radio-todas" checked> Todas las horas del día
-                  </label>
-                  <label style="font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-weight:600">
-                    <input type="radio" name="des-modo-horas" value="especificas" id="des-radio-especificas"> Solo horas específicas (ej. 08:30, 11:00)
-                  </label>
-                </div>
-              </div>
-              <div id="des-h-quick-btns" style="display:none;gap:6px">
-                <button type="button" class="btn btn-xs sec" id="des-h-quick-manana" style="font-size:11px;padding:2px 8px">Mañana (08:30-11:00)</button>
-                <button type="button" class="btn btn-xs sec" id="des-h-quick-tarde" style="font-size:11px;padding:2px 8px">Mediodía (11:30-13:30)</button>
-                <button type="button" class="btn btn-xs sec" id="des-h-quick-limpiar" style="font-size:11px;padding:2px 8px">Desmarcar</button>
-              </div>
-            </div>
+    <div class="campo ancho"><label>Examinador</label><select id="desb-exam">
+      <option value="" ${!estadoAgenda.examinador_id ? 'selected' : ''}>Todos los examinadores</option>
+      ${examinadores.filter((e) => e.activo !== false).map((e) => `<option value="${e.id}" ${String(e.id) === String(estadoAgenda.examinador_id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
+    </select></div>
 
-            <!-- Selector de horas específicas con chips -->
-            <div id="des-contenedor-horas" style="display:none;margin-top:10px">
-              <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-                <span style="font-size:11px;color:var(--tinta-3);font-weight:600">Rango rápido de horas:</span>
-                <select id="des-h-sel-desde" style="padding:3px 8px;font-size:12px;border-radius:4px;border:1px solid #cbd5e1">
-                  ${horasDisponibles.map(h => `<option value="${h}" ${h === '08:30' ? 'selected' : ''}>${h}</option>`).join('')}
-                </select>
-                <span style="font-size:11px;color:var(--tinta-3)">hasta</span>
-                <select id="des-h-sel-hasta" style="padding:3px 8px;font-size:12px;border-radius:4px;border:1px solid #cbd5e1">
-                  ${horasDisponibles.map(h => `<option value="${h}" ${h === '11:00' ? 'selected' : ''}>${h}</option>`).join('')}
-                </select>
-                <button type="button" class="btn chico sec" id="des-h-btn-marcar-rango" style="padding:3px 10px;font-size:12px">Marcar rango</button>
-              </div>
+    <!-- PANEL MODO DÍAS COMPLETOS -->
+    <div id="desb-panel-dias" class="ancho" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+      <div class="campo" style="flex:1"><label>Desde fecha</label><input type="date" id="desb-desde" value="${f}"></div>
+      <div class="campo" style="flex:1"><label>Hasta fecha</label><input type="date" id="desb-hasta" value="${f}"></div>
+      <div class="ancho" style="margin-top:-4px"><button type="button" class="btn chico sec" id="desb-semana"
+        title="Lleva Desde al lunes y Hasta al viernes de sus semanas">Ajustar a semanas completas (lun–vie)</button></div>
+    </div>
 
-              <div id="des-chips-horas" style="display:flex;flex-wrap:wrap;gap:6px">
-                ${horasDisponibles.map(h => `
-                  <button type="button" class="chip-hora" data-hora="${h}" style="padding:5px 12px;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer">
-                    ${h}
-                  </button>
-                `).join('')}
-              </div>
-            </div>
-
-            <div id="des-preview-txt" style="font-size:12px;color:var(--tinta);margin-top:10px;padding:6px 10px;background:#e0f2fe;border-radius:6px;line-height:1.4">
-              Se desbloquearán todas las horas del día en el rango de fechas seleccionado.
-            </div>
-          </div>
-
-          <div style="display:flex;justify-content:flex-end">
-            <button type="button" class="btn btn-desbloq-accion chico" id="des-btn-rango">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
-              Desbloquear bloques seleccionados
-            </button>
-          </div>
-        </div>
+    <!-- PANEL MODO HORAS / BLOQUES -->
+    <div id="desb-panel-horas" class="ancho" style="display:none;flex-direction:column;gap:10px;margin-bottom:6px">
+      <div style="display:flex;gap:10px;align-items:flex-end">
+        <div class="campo" style="flex:1;margin:0"><label>Fecha</label><input type="date" id="desb-h-fecha" value="${f}"></div>
+        <div class="campo" id="desb-h-c-hasta" style="flex:1;margin:0" hidden><label>Hasta fecha</label><input type="date" id="desb-h-hasta" value="${f}"></div>
+        <button type="button" class="btn chico sec" id="desb-h-toggle-rango-dias" style="margin-bottom:2px" title="Permite aplicar el desbloqueo horario a varios días consecutivos">Aplicar a varios días...</button>
       </div>
 
-      <div class="tabla-bloqueos-cont">
-        <table class="tabla-bloqueos">
-          <thead>
-            <tr>
-              <th style="width:190px">Fecha</th>
-              <th>Examinador</th>
-              <th>Causa del bloqueo</th>
-              <th style="width:200px">Horario / Bloques</th>
-              <th style="width:170px;text-align:center">Acción</th>
-            </tr>
-          </thead>
-          <tbody id="des-tbody">
-            <tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--tinta-3)">Cargando bloqueos activos...</td></tr>
-          </tbody>
-        </table>
+      <div style="background:#f8fafc;border:1px solid var(--linea,#e2e8f0);border-radius:8px;padding:12px;margin-top:2px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label style="font-size:11px;font-weight:700;color:var(--tinta-2);text-transform:uppercase;margin:0">
+            Selecciona los bloques a desbloquear:
+          </label>
+          <div style="display:flex;gap:6px">
+            <button type="button" class="btn btn-xs sec" id="desb-h-quick-manana" style="font-size:11px;padding:2px 8px">Mañana (08:30-11:00)</button>
+            <button type="button" class="btn btn-xs sec" id="desb-h-quick-tarde" style="font-size:11px;padding:2px 8px">Mediodía (11:30-13:30)</button>
+            <button type="button" class="btn btn-xs sec" id="desb-h-quick-todos" style="font-size:11px;padding:2px 8px">Todos</button>
+            <button type="button" class="btn btn-xs sec" id="desb-h-quick-limpiar" style="font-size:11px;padding:2px 8px">Desmarcar</button>
+          </div>
+        </div>
+
+        <!-- Selector directo de rango de horas -->
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+          <span style="font-size:11px;color:var(--tinta-3);font-weight:600">Rango rápido:</span>
+          <select id="desb-h-sel-desde" style="padding:3px 8px;font-size:12px;border-radius:4px;border:1px solid #cbd5e1">
+            ${horasDisponibles.map((h) => `<option value="${h}" ${h === '08:30' ? 'selected' : ''}>${h} hrs</option>`).join('')}
+          </select>
+          <span style="font-size:11px;color:var(--tinta-3)">a</span>
+          <select id="desb-h-sel-hasta" style="padding:3px 8px;font-size:12px;border-radius:4px;border:1px solid #cbd5e1">
+            ${horasDisponibles.map((h) => `<option value="${h}" ${h === '10:00' ? 'selected' : ''}>${h} hrs</option>`).join('')}
+          </select>
+          <button type="button" class="btn chico sec" id="desb-h-btn-marcar-rango" style="padding:3px 10px;font-size:12px">Marcar</button>
+        </div>
+
+        <!-- Chips interactivos para cada hora -->
+        <div id="desb-horas-chips-cont" style="display:flex;flex-wrap:wrap;gap:6px">
+          ${horasDisponibles.map((h) => {
+            const esPesada = h === META.hora_d_a5;
+            return `<button type="button" class="chip-hora ${horasSeleccionadas.has(h) ? 'activo' : ''}" data-hora="${h}">
+              ${h}
+              ${esPesada ? '<span style="font-size:9px;background:rgba(0,0,0,0.08);padding:1px 4px;border-radius:3px;margin-left:2px">D/A5</span>' : ''}
+            </button>`;
+          }).join('')}
+        </div>
+
+        <div id="desb-horas-seleccionadas-txt" style="font-size:12px;color:var(--azul,#0284c7);font-weight:700;margin-top:8px">
+          2 bloques seleccionados: 08:30, 09:00
+        </div>
       </div>
     </div>
+
+    <!-- MOTIVO ESPECÍFICO (OPCIONAL) -->
+    <div class="campo ancho"><label>Motivo específico a desbloquear (opcional)</label><select id="desb-motivo">
+      <option value="">Todos los motivos (desbloquear cualquier causa)</option>
+      ${motivos.map((m) => `<option value="${esc(m)}">${esc(ETQ_MOTIVO[m] || m.charAt(0) + m.slice(1).toLowerCase())}</option>`).join('')}
+    </select></div>
+    <div class="ancho aviso" id="desb-resumen" hidden></div>
   `, `
-    <div style="flex:1;text-align:left;font-size:12px;color:var(--tinta-3);display:flex;align-items:center;gap:15px" id="des-total-lbl">
-      Cargando...
-    </div>
-    <label style="font-size:11px;color:var(--tinta-3);cursor:pointer;display:flex;align-items:center;gap:4px;margin-right:auto">
-      <input type="checkbox" id="des-chk-hist"> Ver histórico pasado
-    </label>
-    <button class="btn sec" id="des-cerrar">Cerrar</button>
-  `, 'modal-lg');
+    <button class="btn sec" id="desb-cancel">Cancelar</button>
+    <button class="btn btn-desbloq-accion" id="desb-ok">Desbloquear días u horas</button>
+  `);
 
-  $('#des-cerrar').onclick = cerrarModal;
-
-  $('#des-toggle-rango').onclick = () => {
-    const p = $('#des-panel-rango');
-    p.hidden = !p.hidden;
-    $('#des-toggle-rango').classList.toggle('activo', !p.hidden);
-    actualizarDesPreview();
+  // Switch de modo
+  $('#desb-tab-dias').onclick = () => {
+    modoActual = 'dias';
+    $('#desb-tab-dias').classList.add('activo');
+    $('#desb-tab-horas').classList.remove('activo');
+    $('#desb-panel-dias').style.display = 'flex';
+    $('#desb-panel-horas').style.display = 'none';
+    previa();
   };
 
-  const getClaseMotivo = (motivo) => {
-    const m = (motivo || '').toUpperCase();
-    if (m.includes('LICENCIA')) return 'licencia';
-    if (m.includes('FERIADO')) return 'feriado';
-    if (m.includes('CAPACITAC')) return 'capacitacion';
-    if (m.includes('COMPENSAT')) return 'compensatorio';
-    if (m.includes('TERRENO')) return 'terreno';
-    if (m.includes('TRASLADO')) return 'traslado';
-    return 'otro';
+  $('#desb-tab-horas').onclick = () => {
+    modoActual = 'horas';
+    $('#desb-tab-dias').classList.remove('activo');
+    $('#desb-tab-horas').classList.add('activo');
+    $('#desb-panel-dias').style.display = 'none';
+    $('#desb-panel-horas').style.display = 'flex';
+    actualizarVistaChips();
+    previa();
   };
 
-  let listaBloqueos = [];
-  let soloFechaActual = true;
+  // Toggle multidia en modo horas
+  $('#desb-h-toggle-rango-dias').onclick = () => {
+    const cHasta = $('#desb-h-c-hasta');
+    cHasta.hidden = !cHasta.hidden;
+    $('#desb-h-toggle-rango-dias').textContent = cHasta.hidden ? 'Aplicar a varios días...' : 'Solo este día';
+    $('#desb-h-toggle-rango-dias').classList.toggle('activo', !cHasta.hidden);
+    if (!cHasta.hidden && !$('#desb-h-hasta').value) $('#desb-h-hasta').value = $('#desb-h-fecha').value;
+    previa();
+  };
 
-  const actualizarDesChips = () => {
-    document.querySelectorAll('#des-chips-horas .chip-hora').forEach((c) => {
-      const h = c.dataset.hora;
-      const on = desHorasSeleccionadas.has(h);
-      c.classList.toggle('activo', on);
-      c.innerHTML = on ? `✓ ${h}` : h;
+  const actualizarVistaChips = () => {
+    const cont = $('#desb-horas-chips-cont');
+    if (!cont) return;
+    cont.querySelectorAll('.chip-hora').forEach((btn) => {
+      btn.classList.toggle('activo', horasSeleccionadas.has(btn.dataset.hora));
     });
-  };
-
-  const actualizarDesPreview = () => {
-    const desde = $('#des-rango-desde')?.value || fechaActual;
-    const hasta = $('#des-rango-hasta')?.value || fechaActual;
-    const selExam = $('#des-rango-exam');
-    const examNombre = selExam && selExam.value ? selExam.options[selExam.selectedIndex].text : 'todos los examinadores';
-    const fTxt = desde === hasta ? fFecha(desde) : `del ${fFecha(desde)} al ${fFecha(hasta)}`;
-    const prev = $('#des-preview-txt');
-    if (!prev) return;
-
-    if (desModoHoras === 'todas') {
-      prev.style.background = '#e0f2fe';
-      prev.style.color = '#0369a1';
-      prev.innerHTML = `Se desbloquearán <b>todas las horas del día</b> (${fTxt}) para <b>${esc(examNombre)}</b>.`;
-    } else {
-      const arr = Array.from(desHorasSeleccionadas).sort();
+    const info = $('#desb-horas-seleccionadas-txt');
+    if (info) {
+      const arr = Array.from(horasSeleccionadas).sort();
       if (!arr.length) {
-        prev.style.background = '#fef2f2';
-        prev.style.color = '#b91c1c';
-        prev.innerHTML = `⚠ <b>Ninguna hora seleccionada:</b> Marca al menos una hora abajo para desbloquear.`;
-      } else if (arr.length === 1) {
-        prev.style.background = '#ecfdf5';
-        prev.style.color = '#047857';
-        prev.innerHTML = `Se desbloqueará únicamente el bloque de las <b>${arr[0]} hrs</b> (${fTxt}) para <b>${esc(examNombre)}</b>.`;
+        info.textContent = 'Ningún bloque seleccionado (haz clic en los horarios arriba)';
+        info.style.color = 'var(--alerta, #dc2626)';
       } else {
-        prev.style.background = '#ecfdf5';
-        prev.style.color = '#047857';
-        prev.innerHTML = `Se desbloquearán los <b>${arr.length} bloques</b> seleccionados (<b>${arr.join(', ')}</b>) (${fTxt}) para <b>${esc(examNombre)}</b>.`;
+        info.textContent = `${arr.length} ${arr.length === 1 ? 'bloque seleccionado' : 'bloques seleccionados'}: ${arr.join(', ')}`;
+        info.style.color = 'var(--azul, #0284c7)';
       }
     }
   };
 
-  $('#des-radio-todas').onchange = () => {
-    desModoHoras = 'todas';
-    $('#des-contenedor-horas').style.display = 'none';
-    $('#des-h-quick-btns').style.display = 'none';
-    actualizarDesPreview();
-  };
-
-  $('#des-radio-especificas').onchange = () => {
-    desModoHoras = 'especificas';
-    $('#des-contenedor-horas').style.display = 'block';
-    $('#des-h-quick-btns').style.display = 'flex';
-    actualizarDesChips();
-    actualizarDesPreview();
-  };
-
-  document.querySelectorAll('#des-chips-horas .chip-hora').forEach((c) => {
-    c.onclick = () => {
-      const h = c.dataset.hora;
-      if (desHorasSeleccionadas.has(h)) desHorasSeleccionadas.delete(h);
-      else desHorasSeleccionadas.add(h);
-      actualizarDesChips();
-      actualizarDesPreview();
-    };
-  });
-
-  $('#des-h-quick-manana').onclick = () => {
-    desHorasSeleccionadas = new Set(['08:30', '09:00', '09:30', '10:00', '10:30', '11:00']);
-    actualizarDesChips();
-    actualizarDesPreview();
-  };
-
-  $('#des-h-quick-tarde').onclick = () => {
-    desHorasSeleccionadas = new Set(['11:30', '12:00', '12:30', '13:00', '13:30']);
-    actualizarDesChips();
-    actualizarDesPreview();
-  };
-
-  $('#des-h-quick-limpiar').onclick = () => {
-    desHorasSeleccionadas.clear();
-    actualizarDesChips();
-    actualizarDesPreview();
-  };
-
-  $('#des-h-btn-marcar-rango').onclick = () => {
-    const d = $('#des-h-sel-desde').value;
-    const h = $('#des-h-sel-hasta').value;
-    if (h < d) return toast('La hora hasta no puede ser menor a desde', 'err');
-    horasDisponibles.forEach((hr) => {
-      if (hr >= d && hr <= h) desHorasSeleccionadas.add(hr);
-    });
-    actualizarDesChips();
-    actualizarDesPreview();
-  };
-
-  $('#des-rango-desde').onchange = actualizarDesPreview;
-  $('#des-rango-hasta').onchange = actualizarDesPreview;
-  $('#des-rango-exam').onchange = actualizarDesPreview;
-
-  const pintarTabla = () => {
-    const txt = ($('#des-buscar')?.value || '').toLowerCase().trim();
-    const examId = $('#des-sel-exam')?.value || '';
-
-    const filtrados = listaBloqueos.filter((b) => {
-      if (examId && String(b.examinador_id) !== String(examId)) return false;
-      if (soloFechaActual && b.fecha !== fechaActual) return false;
-      if (!txt) return true;
-      const str = `${b.fecha} ${fFechaLarga(b.fecha)} ${b.examinador} ${b.motivo}`.toLowerCase();
-      return str.includes(txt);
-    });
-
-    const tbody = $('#des-tbody');
-    const lbl = $('#des-total-lbl');
-    if (!tbody) return;
-
-    if (lbl) {
-      lbl.textContent = `Mostrando ${filtrados.length} de ${listaBloqueos.length} bloqueos vigentes`;
-    }
-
-    if (!filtrados.length) {
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="5" style="text-align:center;padding:2.5rem 1rem;color:var(--tinta-3)">
-            <div style="font-size:1.8rem;margin-bottom:.3rem">&#128077;</div>
-            <div style="font-weight:600">No hay bloqueos con estos filtros</div>
-            <div style="font-size:12px;margin-top:.2rem">Todos los horarios cumplen con los criterios de búsqueda.</div>
-          </td>
-        </tr>
-      `;
-      return;
-    }
-
-    tbody.innerHTML = filtrados.map((b, idx) => {
-      const cls = getClaseMotivo(b.motivo);
-      const diaLargo = fFechaLarga(b.fecha);
-      const esFechaActual = b.fecha === fechaActual;
-      
-      const horarioTxt = b.cant_bloques >= 10
-        ? `<div style="font-weight:700;color:var(--alerta);font-size:13px">Día completo (${b.cant_bloques} bloques)</div>
-           <div style="font-size:11px;color:var(--tinta-2);font-weight:600">${b.desde_hora} a ${b.hasta_hora} hrs</div>`
-        : `<div style="font-weight:700;color:var(--tinta);font-size:13px">${b.desde_hora} a ${b.hasta_hora} hrs</div>
-           <div style="font-size:11px;color:var(--tinta-3)">(${b.cant_bloques} ${b.cant_bloques === 1 ? 'bloque' : 'bloques'})</div>`;
-
-      return `
-        <tr data-idx="${idx}" style="${esFechaActual ? 'background:rgba(2,132,199,0.04)' : ''}">
-          <td style="font-weight:600">
-            <div>${diaLargo}</div>
-            ${esFechaActual ? '<span style="background:#e0f2fe;color:#0369a1;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;display:inline-block;margin-top:2px">Fecha en pantalla</span>' : ''}
-          </td>
-          <td>
-            <div style="display:flex;align-items:center;gap:.4rem">
-              <span style="font-size:12px">&#128100;</span>
-              <span style="font-weight:600">${esc(b.examinador)}</span>
-            </div>
-          </td>
-          <td>
-            <span class="badge-motivo ${cls}">${esc(ETQ_MOTIVO[b.motivo] || b.motivo)}</span>
-          </td>
-          <td>
-            ${horarioTxt}
-          </td>
-          <td style="text-align:center">
-            <div style="display:inline-flex;gap:4px">
-              <button type="button" class="btn btn-desbloq-accion chico btn-desbloq-fila"
-                data-fecha="${b.fecha}"
-                data-exam="${b.examinador_id || ''}"
-                data-motivo="${esc(b.motivo)}" title="Desbloquear todas las horas de este bloqueo">
-                Desbloquear
-              </button>
-              <button type="button" class="btn chico sec btn-desbloq-elegir-horas"
-                data-fecha="${b.fecha}"
-                data-exam="${b.examinador_id || ''}"
-                data-motivo="${esc(b.motivo)}" title="Abrir selector para elegir horas específicas (ej. 08:30 o 11:00)">
-                Elegir horas...
-              </button>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
-
-    tbody.querySelectorAll('.btn-desbloq-fila').forEach((btn) => {
-      btn.onclick = async () => {
-        const fecha = btn.dataset.fecha;
-        const examId = btn.dataset.exam ? Number(btn.dataset.exam) : null;
-        const motivo = btn.dataset.motivo;
-        btn.disabled = true;
-        btn.textContent = 'Desbloqueando...';
-
-        try {
-          const r = await api('/desbloquear-dia', {
-            method: 'POST',
-            body: { desde: fecha, hasta: fecha, examinador_id: examId, motivo }
-          });
-          toast(`${r.desbloqueados || 1} bloques desbloqueados exitosamente`, 'ok');
-          await cargarBloqueos();
-          renderAgenda();
-        } catch (err) {
-          btn.disabled = false;
-          btn.textContent = 'Desbloquear';
-          toast(err.message, 'err');
-        }
-      };
-    });
-
-    tbody.querySelectorAll('.btn-desbloq-elegir-horas').forEach((btn) => {
+  const contChips = $('#desb-horas-chips-cont');
+  if (contChips) {
+    contChips.querySelectorAll('.chip-hora').forEach((btn) => {
       btn.onclick = () => {
-        const fecha = btn.dataset.fecha;
-        const examId = btn.dataset.exam || '';
-        const panel = $('#des-panel-rango');
-        panel.hidden = false;
-        $('#des-toggle-rango').classList.add('activo');
-        $('#des-rango-desde').value = fecha;
-        $('#des-rango-hasta').value = fecha;
-        $('#des-rango-exam').value = examId;
-        $('#des-radio-especificas').checked = true;
-        desModoHoras = 'especificas';
-        $('#des-contenedor-horas').style.display = 'block';
-        $('#des-h-quick-btns').style.display = 'flex';
-        actualizarDesChips();
-        actualizarDesPreview();
-        panel.scrollIntoView({ behavior: 'smooth' });
+        const h = btn.dataset.hora;
+        if (horasSeleccionadas.has(h)) {
+          horasSeleccionadas.delete(h);
+        } else {
+          horasSeleccionadas.add(h);
+        }
+        actualizarVistaChips();
+        previa();
       };
     });
+  }
+
+  $('#desb-h-quick-manana').onclick = () => {
+    horasSeleccionadas = new Set(['08:30', '09:00', '09:30', '10:00', '10:30', '11:00']);
+    actualizarVistaChips();
+    previa();
+  };
+  $('#desb-h-quick-tarde').onclick = () => {
+    horasSeleccionadas = new Set(['11:30', '12:00', '12:30', '13:00', '13:30']);
+    actualizarVistaChips();
+    previa();
+  };
+  $('#desb-h-quick-todos').onclick = () => {
+    horasSeleccionadas = new Set(horasDisponibles);
+    actualizarVistaChips();
+    previa();
+  };
+  $('#desb-h-quick-limpiar').onclick = () => {
+    horasSeleccionadas.clear();
+    actualizarVistaChips();
+    previa();
+  };
+  $('#desb-h-btn-marcar-rango').onclick = () => {
+    const hd = $('#desb-h-sel-desde').value;
+    const hh = $('#desb-h-sel-hasta').value;
+    if (hh < hd) return toast('La hora hasta no puede ser anterior a la hora desde', 'err');
+    horasDisponibles.forEach((h) => {
+      if (h >= hd && h <= hh) horasSeleccionadas.add(h);
+    });
+    actualizarVistaChips();
+    previa();
   };
 
-  const cargarBloqueos = async () => {
-    try {
-      const hist = $('#des-chk-hist')?.checked ? '1' : '0';
-      listaBloqueos = await api(`/bloqueos?historico=${hist}`);
-      pintarTabla();
-    } catch (e) {
-      const tbody = $('#des-tbody');
-      if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="aviso">${esc(e.message)}</td></tr>`;
+  $('#desb-semana').onclick = () => {
+    const mover = (iso, alDia) => {
+      const d = new Date(`${iso}T12:00:00Z`);
+      const dow = (d.getUTCDay() + 6) % 7;
+      d.setUTCDate(d.getUTCDate() - dow + alDia);
+      return d.toISOString().slice(0, 10);
+    };
+    const desde = $('#desb-desde').value;
+    if (!desde) return;
+    $('#desb-desde').value = mover(desde, 0);
+    $('#desb-hasta').value = mover($('#desb-hasta').value || desde, 4);
+    previa();
+  };
+
+  const datos = () => {
+    if (modoActual === 'dias') {
+      return {
+        desde: $('#desb-desde').value,
+        hasta: $('#desb-hasta').value || $('#desb-desde').value,
+        examinador_id: $('#desb-exam').value || null,
+        motivo: $('#desb-motivo').value || null,
+      };
+    } else {
+      const dDesde = $('#desb-h-fecha').value;
+      const dHasta = ($('#desb-h-c-hasta') && !$('#desb-h-c-hasta').hidden && $('#desb-h-hasta').value)
+        ? $('#desb-h-hasta').value
+        : dDesde;
+      return {
+        desde: dDesde,
+        hasta: dHasta,
+        examinador_id: $('#desb-exam').value || null,
+        motivo: $('#desb-motivo').value || null,
+        horas: Array.from(horasSeleccionadas).sort(),
+      };
     }
   };
 
-  $('#des-btn-solo-fecha').onclick = () => {
-    soloFechaActual = true;
-    $('#des-btn-solo-fecha').classList.add('activo');
-    $('#des-btn-todas-fechas').classList.remove('activo');
-    pintarTabla();
-  };
-
-  $('#des-btn-todas-fechas').onclick = () => {
-    soloFechaActual = false;
-    $('#des-btn-solo-fecha').classList.remove('activo');
-    $('#des-btn-todas-fechas').classList.add('activo');
-    pintarTabla();
-  };
-
-  $('#des-buscar').oninput = pintarTabla;
-  $('#des-sel-exam').onchange = () => {
-    if ($('#des-rango-exam')) $('#des-rango-exam').value = $('#des-sel-exam').value;
-    pintarTabla();
-    actualizarDesPreview();
-  };
-  $('#des-chk-hist').onchange = cargarBloqueos;
-
-  $('#des-btn-rango').onclick = async () => {
-    const desde = $('#des-rango-desde').value;
-    const hasta = $('#des-rango-hasta').value;
-    const examId = $('#des-rango-exam').value ? Number($('#des-rango-exam').value) : null;
-    if (!desde || !hasta) return toast('Indica fechas Desde y Hasta', 'err');
-    if (hasta < desde) return toast('Hasta no puede ser menor a Desde', 'err');
-
-    const body = { desde, hasta, examinador_id: examId };
-
-    if (desModoHoras === 'especificas') {
-      const horas = Array.from(desHorasSeleccionadas).sort();
-      if (!horas.length) return toast('Selecciona al menos una hora para desbloquear (ej: 08:30 o 11:00)', 'alerta');
-      body.horas = horas;
-    }
-
-    const btn = $('#des-btn-rango');
-    btn.disabled = true;
-    try {
-      const r = await api('/desbloquear-dia', {
-        method: 'POST',
-        body
-      });
-      const cant = r.desbloqueados || 0;
-      if (desModoHoras === 'especificas') {
-        toast(`${cant} ${cant === 1 ? 'bloque desbloqueado' : 'bloques desbloqueados'} (${body.horas.join(', ')})`, 'ok');
-      } else {
-        toast(`${cant} bloques desbloqueados exitosamente`, 'ok');
+  let tmr;
+  let pedido = 0;
+  const previa = () => {
+    clearTimeout(tmr);
+    tmr = setTimeout(async () => {
+      const d = datos();
+      const res = $('#desb-resumen');
+      if (!res) return;
+      if (!d.desde || d.hasta < d.desde) {
+        res.hidden = false;
+        res.textContent = 'Revisa las fechas: "Hasta" no puede ser anterior a "Desde".';
+        $('#desb-ok').disabled = true;
+        return;
       }
-      btn.disabled = false;
-      await cargarBloqueos();
-      renderAgenda();
-    } catch (err) {
-      btn.disabled = false;
-      toast(err.message, 'err');
-    }
+      if (modoActual === 'horas' && (!d.horas || !d.horas.length)) {
+        res.hidden = false;
+        res.textContent = 'Selecciona al menos un bloque u horario para desbloquear.';
+        $('#desb-ok').disabled = true;
+        return;
+      }
+
+      const n = ++pedido;
+      const dias = Math.round((Date.parse(d.hasta) - Date.parse(d.desde)) / 864e5) + 1;
+      let txtEncabezado = '';
+      if (modoActual === 'dias') {
+        txtEncabezado = `${fFecha(d.desde)} al ${fFecha(d.hasta)} (${dias} ${dias === 1 ? 'día' : 'días'})`;
+      } else {
+        const hTxt = d.horas.join(', ');
+        txtEncabezado = dias > 1
+          ? `${fFecha(d.desde)} al ${fFecha(d.hasta)} (${dias} días) · ${d.horas.length} ${d.horas.length === 1 ? 'bloque' : 'bloques'} (${hTxt})`
+          : `${fFecha(d.desde)} · ${d.horas.length} ${d.horas.length === 1 ? 'bloque' : 'bloques'} (${hTxt})`;
+      }
+
+      try {
+        const r = await api('/desbloquear-dia', { method: 'POST', body: { ...d, simular: true } });
+        if (n !== pedido || !$('#desb-resumen')) return;
+        const total = r.desbloqueables || 0;
+        let txt = `${txtEncabezado} · se reactivarán ${total} ${total === 1 ? 'bloque bloqueado' : 'bloques bloqueados'}.`;
+        if (total === 0) {
+          txt += ' No hay bloques bloqueados que coincidan con estos criterios.';
+        }
+        res.hidden = false;
+        res.textContent = txt;
+        $('#desb-ok').disabled = false;
+        $('#desb-ok').textContent = total ? `Desbloquear ${total} ${total === 1 ? 'bloque' : 'bloques'}` : 'Desbloquear días u horas';
+      } catch (e) {
+        res.hidden = false;
+        res.textContent = e.message;
+        $('#desb-ok').disabled = false;
+        $('#desb-ok').textContent = 'Desbloquear días u horas';
+      }
+    }, 200);
   };
 
-  await cargarBloqueos();
-}
+  $('#desb-motivo').onchange = previa;
+  $('#desb-desde').onchange = () => {
+    if (!$('#desb-hasta').value || $('#desb-hasta').value < $('#desb-desde').value) $('#desb-hasta').value = $('#desb-desde').value;
+    previa();
+  };
+  $('#desb-h-fecha').onchange = () => {
+    if (!$('#desb-h-hasta').value || $('#desb-h-hasta').value < $('#desb-h-fecha').value) $('#desb-h-hasta').value = $('#desb-h-fecha').value;
+    previa();
+  };
+  ['#desb-hasta', '#desb-h-hasta', '#desb-exam'].forEach((s) => {
+    const el = $(s);
+    if (el) el.onchange = previa;
+  });
+  previa();
 
+  $('#desb-cancel').onclick = cerrarModal;
+  $('#desb-ok').onclick = async () => {
+    const d = datos();
+    if (modoActual === 'horas' && (!d.horas || !d.horas.length)) {
+      return toast('Debes seleccionar al menos un bloque u horario para desbloquear', 'err');
+    }
+
+    $('#desb-ok').disabled = true;
+    try {
+      const r = await api('/desbloquear-dia', { method: 'POST', body: d });
+      cerrarModal();
+      if (!r.desbloqueados) return toast('No había bloques bloqueados que coincidieran con la selección', 'alerta');
+      toast(`${r.desbloqueados} ${r.desbloqueados === 1 ? 'bloque desbloqueado y reactivado' : 'bloques desbloqueados y reactivados'} exitosamente`, 'ok');
+      estadoAgenda.fecha = d.desde;
+      await renderAgenda();
+    } catch (e) {
+      $('#desb-ok').disabled = false;
+      toast(e.message, 'err');
+    }
+  };
+}
 
 function dialogoMiPerfil() {
   modal('Mi perfil', `
@@ -1913,8 +1723,14 @@ function slotCard(b) {
   const esConfirmado = b.confirmo_asistencia === 1;
   const numLimpio = String(b.contacto || '').replace(/\D/g, '');
   const telWa = numLimpio.startsWith('56') ? numLimpio : (numLimpio.length === 9 ? '56' + numLimpio : '');
+  const nomP = nom(b.nombre) || 'Estimado/a postulante';
+  const examP = b.examinador || (META.examinadores.find((e) => e.id === b.examinador_id) || {}).nombre || 'por asignar';
+  const fechaP = fFecha(b.fecha);
+  const horaP = b.hora || '';
+  const claseP = b.clase ? ` (Clase ${b.clase})` : '';
+  const mensajeWa = `Hola ${nomP}, te contactamos desde la Dirección de Tránsito respecto a tu examen práctico de conducir${claseP}. Te recordamos que tu cita está agendada para el día ${fechaP} a las ${horaP} hrs con el examinador ${examP}. Por favor confirma tu asistencia respondiendo a este mensaje.`;
 
-  return `<div class="${cls}" role="button" tabindex="0" data-id="${b.id}">
+  return `<div class="${cls}" data-id="${b.id}">
     ${problema ? `<span class="alerta-dato" title="${esc(problema)}">⚠</span>` : ''}
     <span class="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
@@ -1930,7 +1746,7 @@ function slotCard(b) {
           <svg class="sc-ico" viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M3.654 1.328a.678.678 0 0 0-1.015-.063L1.605 2.3c-.483.484-.661 1.169-.45 1.77a17.568 17.568 0 0 0 4.168 6.608 17.569 17.569 0 0 0 6.608 4.168c.601.211 1.286.033 1.77-.45l1.034-1.034a.678.678 0 0 0-.063-1.015l-2.307-1.794a.678.678 0 0 0-.58-.122l-2.19.547a1.745 1.745 0 0 1-1.657-.459L5.482 8.06a1.745 1.745 0 0 1-.46-1.657l.548-2.19a.678.678 0 0 0-.122-.58L3.654 1.328z"/></svg>
           <span class="num">${esc(fTel(b.contacto) || 'Sin teléfono')}</span>
         </span>
-        ${telWa ? `<a href="https://wa.me/${telWa}?text=${encodeURIComponent('Hola ' + (nom(b.nombre) || '') + ', te contactamos desde la Dirección de Tránsito respecto a tu examen práctico de conducir.')}" target="_blank" rel="noopener" class="btn-wa" title="Escribir por WhatsApp a este postulante" onclick="event.stopPropagation()">💬 WhatsApp</a>` : ''}
+        ${telWa ? `<a href="https://wa.me/${telWa}?text=${encodeURIComponent(mensajeWa)}" target="_blank" rel="noopener" class="btn-wa" title="Escribir por WhatsApp a este postulante con los datos de su cita" onclick="event.stopPropagation()">💬 WhatsApp</a>` : ''}
       </div>
       <span class="sc-item ${b.correo ? 'slot-mail' : 'sin'}" title="${b.correo ? 'Correo: ' + esc(b.correo) : 'Sin correo registrado'}">
         <svg class="sc-ico" viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2zm13 2.383-4.708 2.825L15 11.105V5.383zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741zM1 11.105l4.708-2.897L1 5.383v5.722z"/></svg>
@@ -1938,10 +1754,9 @@ function slotCard(b) {
       </span>
     </div>
 
-    ${b.fecha_inicio_tramite ? `<span class="slot-fit" title="Fecha inicio trámite">Inicio trámite: <b class="num">${esc(fFecha(b.fecha_inicio_tramite))}</b></span>` : ''}
     ${badges.length ? `<span class="badges">${badges.join('')}</span>` : ''}
     <div class="slot-acciones" data-id="${b.id}">
-      <button type="button" class="btn-slot-act btn-confirmar ${esConfirmado ? 'es-confirmado' : ''}" data-act="confirmar" title="${esConfirmado ? 'Asistencia confirmada. Clic para modificar estado' : 'Confirmar asistencia y enviar comprobante por correo'}">
+      <button type="button" class="btn-slot-act btn-confirmar ${esConfirmado ? 'es-confirmado' : ''}" data-act="confirmar" title="${esConfirmado ? 'Asistencia confirmada. Clic para modificar estado' : 'Confirmar asistencia del postulante'}">
         <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
         <span>${esConfirmado ? 'Confirmado' : 'Confirmar'}</span>
       </button>
@@ -2023,57 +1838,6 @@ function pintarGrilla(cont, filas, fecha) {
     }
     cont.innerHTML = html;
   }
-  cont.querySelectorAll('.slot[data-id]').forEach((el) => {
-    const abrir = () => abrirSlotPorId(Number(el.dataset.id), recargar(renderAgenda));
-    el.onclick = (ev) => { if (!ev.target.closest('.slot-res') && !ev.target.closest('.slot-acciones')) abrir(); };
-    el.onkeydown = (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && !ev.target.closest('.slot-res') && !ev.target.closest('.slot-acciones')) { ev.preventDefault(); abrir(); } };
-  });
-
-  cont.querySelectorAll('.slot-acciones button').forEach((btn) => {
-    btn.onclick = async (ev) => {
-      ev.stopPropagation();
-      const id = Number(btn.closest('.slot-acciones').dataset.id);
-      const act = btn.dataset.act;
-      if (act === 'confirmar') {
-        const yaConfirmado = btn.classList.contains('es-confirmado');
-        if (yaConfirmado) {
-          if (!confirm('Esta cita ya figura con asistencia confirmada.\n\n¿Deseas volver a marcarla como pendiente de confirmación?')) return;
-          try {
-            await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: null } });
-            toast('Asistencia marcada como pendiente', 'alerta');
-            await renderAgenda();
-            actualizarBadgePorConfirmar();
-          } catch (e) { toast(e.message, 'err'); }
-          return;
-        }
-        btn.disabled = true;
-        try {
-          const res = await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: 1 } });
-          const cita = filas.find((f) => f.id === id);
-          if (res.correo_enviado || (cita && cita.correo)) {
-            toast(`Asistencia confirmada y comprobante enviado a ${cita && cita.correo ? cita.correo : 'su correo'}`, 'ok');
-          } else {
-            toast('Asistencia confirmada exitosamente', 'ok');
-          }
-          await renderAgenda();
-          actualizarBadgePorConfirmar();
-        } catch (e) {
-          btn.disabled = false;
-          toast(e.message, 'err');
-        }
-      } else if (act === 'reagendar') {
-        irA('reagendar');
-        setTimeout(() => {
-          if (typeof detalleReagendar === 'function') {
-            detalleReagendar(id);
-            const det = document.getElementById('r-detalle');
-            if (det) det.scrollIntoView({ behavior: 'smooth' });
-          }
-        }, 120);
-        toast('Derivado a reagendamiento: selecciona el nuevo bloque disponible', 'info');
-      }
-    };
-  });
   cont.querySelectorAll('.slot-res .sr').forEach((el) => {
     el.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); el.click(); } };
     el.onclick = async (ev) => {
@@ -2098,6 +1862,35 @@ function pintarGrilla(cont, filas, fecha) {
         antes.on.forEach((s) => s.classList.add('on'));
         card.className = antes.card;
         toast(e.message, 'err');
+      }
+    };
+  });
+  cont.querySelectorAll('.slot-acciones button').forEach((btn) => {
+    btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      const id = Number(btn.closest('.slot-acciones').dataset.id);
+      const act = btn.dataset.act;
+      if (act === 'confirmar') {
+        const yaConfirmado = btn.classList.contains('es-confirmado');
+        if (yaConfirmado) {
+          if (!confirm('Esta cita ya figura con asistencia confirmada.\n\n¿Deseas volver a marcarla como pendiente de confirmación?')) return;
+        }
+        try {
+          await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: yaConfirmado ? 0 : 1 } });
+          toast(yaConfirmado ? 'Cita marcada como pendiente' : 'Asistencia confirmada exitosamente', 'ok');
+          actualizarBadgePorConfirmar();
+          renderAgenda();
+        } catch (e) { toast(e.message, 'err'); }
+      } else if (act === 'reagendar') {
+        try {
+          await api(`/agenda/${id}/reagendar`, { method: 'POST', body: { motivo: 'POSTULANTE SOLICITA CAMBIO' } });
+          toast('Postulante enviado a la lista de Reagendamiento', 'ok');
+          actualizarBadgeReagendar();
+          irA('reagendar');
+          setTimeout(() => {
+            if (typeof detalleReagendar === 'function') detalleReagendar(id);
+          }, 120);
+        } catch (e) { toast(e.message, 'err'); }
       }
     };
   });
@@ -2154,229 +1947,477 @@ async function renderDisponibles() {
 }
 
 /* ================= tab: REAGENDAR ================= */
+let reagendarSeleccion = null; // null | { tipo: 'agenda', id, cita } | { tipo: 'cola', id, item }
+let filtReag = { desde: null, hasta: null, examinador_id: '' };
+let filtroOrigenReag = 'todos'; // 'todos' | 'bloqueo' | 'cambio'
+
 async function renderReagendar() {
+  if (!filtReag.desde) filtReag.desde = sumarDias(hoy(), 1);
+  if (!filtReag.hasta) filtReag.hasta = sumarDias(hoy(), 30);
+
   view.innerHTML = `
-    <div class="panel"><h2>Sin hora por bloqueo</h2>
-      <p class="muted">Personas cuyo bloque se bloqueó (licencia, día administrativo, terreno…). Asígnales una hora nueva.</p>
-      <div class="tabla-scroll"><table><thead><tr><th class="c">Hora original</th><th>Examinador</th><th>Nombre</th><th>RUT</th><th>Clase</th><th>Correo</th><th>Motivo bloqueo</th><th class="c"></th></tr></thead>
-      <tbody id="rc-body"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div></div>
-    <div class="panel"><h2>Pendientes de reagendar</h2>
-      <div class="tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th>Nombre</th><th>RUT</th><th>Nota</th><th class="c"></th></tr></thead>
-      <tbody id="rp-body"><tr><td colspan="7">Cargando...</td></tr></tbody></table></div></div>
-    <div class="panel"><h2>Reagendar una cita</h2>
-      <div class="campo" style="max-width:420px"><label>Buscar por RUT, nombre o telefono</label><input id="r-q" placeholder="minimo 3 caracteres"></div>
-      <div id="r-res" class="chips" style="margin-top:.5rem"></div>
-    </div>
-    <div id="r-detalle"></div>`;
+    <div id="r-detalle"></div>
 
-  const cargarPend = () => cargarVista('reagendar', '/agenda?estado=pendiente', (rows) => {
-    $('#rp-body').innerHTML = rows.length ? rows.map((r) => `<tr>
-      <td class="c">${esc(fFecha(r.fecha))}</td><td class="c">${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
-      <td>${esc(nom(r.nombre))}</td><td>${esc(r.rut)}</td><td>${esc(r.pendiente_nota)}</td>
-      <td class="c"><button class="btn chico" data-id="${r.id}">Reagendar</button></td></tr>`).join('')
-      : '<tr><td colspan="7" class="muted">Nada pendiente.</td></tr>';
-    $('#rp-body').querySelectorAll('button[data-id]').forEach((el) => {
-      el.onclick = () => detalleReagendar(Number(el.dataset.id));
-    });
-  });
-  cargarPend();
+    <div class="panel">
+      <div class="fila" style="justify-content:space-between;align-items:center;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
+        <div>
+          <h2 style="margin:0 0 .2rem">Personas por Reagendar</h2>
+          <p class="muted" style="margin:0;font-size:13px">Listado unificado con prioridad inteligente: afectados por bloqueo municipal (urgentes) y solicitudes de cambio.</p>
+        </div>
+        <div id="r-filtros-origen" style="display:flex;align-items:center;gap:6px">
+          <span class="pastilla" style="font-weight:700">Cargando...</span>
+        </div>
+      </div>
+      <div class="tabla-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="c" style="width:145px">Prioridad / Origen</th>
+              <th class="c" style="width:105px">Fecha cita</th>
+              <th class="c" style="width:75px">Hora</th>
+              <th class="c">Postulante</th>
+              <th class="c" style="width:125px">RUT</th>
+              <th class="c" style="width:65px">Clase</th>
+              <th class="c" style="width:170px">Examinador</th>
+              <th>Motivo / Causa</th>
+              <th class="c" style="width:180px">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="r-tabla-unificada"><tr><td colspan="9" class="c muted" style="padding:1.5rem">Cargando postulantes...</td></tr></tbody>
+        </table>
+      </div>
+    </div>`;
 
-  const cargarCola = () => cargarVista('reagendar-cola', '/cola-reagendar', (rows) => {
-    $('#rc-body').innerHTML = rows.length ? rows.map((r) => `<tr>
-      <td class="c">${esc(fFecha(r.origen_fecha))} ${esc(r.origen_hora)}</td><td>${esc(r.origen_examinador)}</td>
-      <td>${esc(nom(r.nombre))}</td><td style="white-space:nowrap">${esc(r.rut)}</td><td>${esc(r.clase)}</td>
-      <td>${r.correo ? esc(r.correo) : '<span class="sev warning">falta</span>'}</td><td>${esc(r.motivo)}</td>
-      <td class="c"><button class="btn chico" data-cola="${r.id}">Asignar hora</button>
-        <button class="btn chico sec" data-desc="${r.id}">Descartar</button></td></tr>`).join('')
-      : '<tr><td colspan="8" class="muted">Nadie esperando hora.</td></tr>';
-    $('#rc-body').querySelectorAll('button[data-cola]').forEach((el) => {
-      el.onclick = () => detalleCola(rows.find((r) => r.id === Number(el.dataset.cola)));
-    });
-    $('#rc-body').querySelectorAll('button[data-desc]').forEach((el) => {
-      el.onclick = async () => {
-        const nota = prompt('¿Por qué se descarta? (ej. ya no requiere hora)');
-        if (nota === null) return;
-        try { await api(`/cola-reagendar/${el.dataset.desc}/descartar`, { method: 'POST', body: { nota } }); toast('Descartado'); renderReagendar(); actualizarBadgeReagendar(); }
-        catch (e) { toast(e.message, 'err'); }
-      };
-    });
-  });
-  cargarCola();
+  pintarPanelTopReagendar();
 
-  const qi = $('#r-q');
-  autoformatoRut(qi);
-  let tmr;
-  qi.oninput = () => {
-    clearTimeout(tmr);
-    tmr = setTimeout(async () => {
-      const q = qi.value.trim();
-      if (q.length < 3) { $('#r-res').innerHTML = ''; return; }
-      const rows = await api(`/buscar?q=${encodeURIComponent(q)}`);
-      $('#r-res').innerHTML = rows.length
-        ? rows.map((r) => `<button class="chip" data-id="${r.id}" style="cursor:pointer">
-            ${esc(nom(r.nombre) || r.rut)} — ${esc(fFecha(r.fecha))} ${esc(r.hora)} (${esc(r.examinador)})</button>`).join('')
-        : '<span class="muted">Sin resultados</span>';
-      $('#r-res').querySelectorAll('button[data-id]').forEach((el) => {
+  try {
+    const [pend, cola] = await Promise.all([
+      api('/agenda?estado=pendiente').catch(() => []),
+      api('/cola-reagendar').catch(() => [])
+    ]);
+
+    const itemsBloqueo = cola.map((c) => ({
+      tipo: 'cola',
+      prioridad: 1, // Urgente
+      id: c.id,
+      fecha: c.origen_fecha,
+      hora: c.origen_hora,
+      nombre: c.nombre,
+      rut: c.rut,
+      clase: c.clase,
+      examinador: c.origen_examinador || 'No asignado',
+      motivo: c.motivo || 'Bloqueo por ausencia',
+      raw: c
+    }));
+
+    const itemsCambio = pend.map((p) => ({
+      tipo: 'agenda',
+      prioridad: 2, // Solicitud normal
+      id: p.id,
+      fecha: p.fecha,
+      hora: p.hora,
+      nombre: p.nombre,
+      rut: p.rut,
+      clase: p.clase,
+      examinador: p.examinador || 'No asignado',
+      motivo: p.pendiente_nota || p.motivo_reagendamiento || 'POSTULANTE SOLICITA CAMBIO',
+      raw: p
+    }));
+
+    // Prioridad 1 (bloqueo) primero; luego por fecha y hora
+    const todos = [...itemsBloqueo, ...itemsCambio].sort((a, b) => {
+      if (a.prioridad !== b.prioridad) return a.prioridad - b.prioridad;
+      return String(a.fecha).localeCompare(String(b.fecha)) || String(a.hora).localeCompare(String(b.hora));
+    });
+
+    const fCont = $('#r-filtros-origen');
+    if (fCont) {
+      fCont.innerHTML = `
+        <button type="button" class="btn chico ${filtroOrigenReag === 'todos' ? '' : 'sec'}" id="r-f-todos" style="font-weight:700">Todos (${todos.length})</button>
+        <button type="button" class="btn chico ${filtroOrigenReag === 'bloqueo' ? '' : 'sec'}" id="r-f-bloq" style="font-weight:700;${filtroOrigenReag === 'bloqueo' ? 'background:#dc2626;border-color:#b91c1c;color:#fff' : 'color:#dc2626'}">🚨 Por Bloqueo (${itemsBloqueo.length})</button>
+        <button type="button" class="btn chico ${filtroOrigenReag === 'cambio' ? '' : 'sec'}" id="r-f-camb" style="font-weight:700;${filtroOrigenReag === 'cambio' ? 'background:#1d4ed8;color:#fff' : 'color:#1d4ed8'}">Solicitud de cambio (${itemsCambio.length})</button>
+      `;
+      $('#r-f-todos').onclick = () => { filtroOrigenReag = 'todos'; pintarFilas(); };
+      $('#r-f-bloq').onclick = () => { filtroOrigenReag = 'bloqueo'; pintarFilas(); };
+      $('#r-f-camb').onclick = () => { filtroOrigenReag = 'cambio'; pintarFilas(); };
+    }
+
+    const pintarFilas = () => {
+      const btnTodos = $('#r-f-todos');
+      const btnBloq = $('#r-f-bloq');
+      const btnCamb = $('#r-f-camb');
+      if (btnTodos) btnTodos.className = `btn chico ${filtroOrigenReag === 'todos' ? '' : 'sec'}`;
+      if (btnBloq) {
+        btnBloq.className = `btn chico ${filtroOrigenReag === 'bloqueo' ? '' : 'sec'}`;
+        btnBloq.style = `font-weight:700;${filtroOrigenReag === 'bloqueo' ? 'background:#dc2626;border-color:#b91c1c;color:#fff' : 'color:#dc2626'}`;
+      }
+      if (btnCamb) {
+        btnCamb.className = `btn chico ${filtroOrigenReag === 'cambio' ? '' : 'sec'}`;
+        btnCamb.style = `font-weight:700;${filtroOrigenReag === 'cambio' ? 'background:#1d4ed8;color:#fff' : 'color:#1d4ed8'}`;
+      }
+
+      const filtrados = todos.filter((it) => {
+        if (filtroOrigenReag === 'bloqueo') return it.tipo === 'cola';
+        if (filtroOrigenReag === 'cambio') return it.tipo === 'agenda';
+        return true;
+      });
+
+      const tb = $('#r-tabla-unificada');
+      if (!tb) return;
+
+      if (!filtrados.length) {
+        tb.innerHTML = '<tr><td colspan="9" class="c muted" style="padding:1.5rem">🎉 No hay personas pendientes en esta categoría.</td></tr>';
+        return;
+      }
+
+      tb.innerHTML = filtrados.map((r) => {
+        const estaActivo = reagendarSeleccion && reagendarSeleccion.tipo === r.tipo && reagendarSeleccion.id === r.id;
+        const esBloqueo = r.tipo === 'cola';
+        const badgeTipo = esBloqueo
+          ? '<span class="badge" style="background:#fee2e2;color:#991b1b;border:1px solid #f87171;font-weight:800;padding:3px 7px;border-radius:4px;font-size:11px">🚨 BLOQUEO</span>'
+          : '<span class="badge" style="background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;font-weight:700;padding:3px 7px;border-radius:4px;font-size:11px">SOLICITUD</span>';
+
+        return `<tr style="${estaActivo ? 'background:#eff6ff;outline:2px solid #3b82f6;outline-offset:-2px' : ''}">
+          <td class="c">${badgeTipo}</td>
+          <td class="c"><b>${esc(fFecha(r.fecha))}</b></td>
+          <td class="c"><b>${esc(r.hora)}</b></td>
+          <td class="c"><b>${esc(nom(r.nombre))}</b></td>
+          <td class="c num" style="white-space:nowrap;font-weight:600">${esc(r.rut)}</td>
+          <td class="c">${r.clase ? clasesTagsHtml(r.clase) : '<span class="muted">-</span>'}</td>
+          <td class="c">${esc(r.examinador)}</td>
+          <td>${esc(r.motivo)}</td>
+          <td class="c" style="white-space:nowrap">
+            ${esBloqueo
+              ? `<button class="btn chico" data-cola="${r.id}" style="${estaActivo ? 'background:#059669;color:#fff' : 'background:#10b981;border-color:#059669;color:#fff'};font-weight:700;margin-right:4px">${estaActivo ? '✓ Seleccionado' : 'Asignar hora'}</button>
+                 <button class="btn chico sec" data-desc="${r.id}" style="color:#b91c1c;font-weight:600">Descartar</button>`
+              : `<button class="btn chico" data-id="${r.id}" style="${estaActivo ? 'background:#059669;color:#fff' : 'background:#1d4ed8'};font-weight:700">${estaActivo ? '✓ Seleccionado' : 'Reagendar'}</button>`
+            }
+          </td>
+        </tr>`;
+      }).join('');
+
+      tb.querySelectorAll('button[data-id]').forEach((el) => {
         el.onclick = () => detalleReagendar(Number(el.dataset.id));
       });
-    }, 250);
-  };
+      tb.querySelectorAll('button[data-cola]').forEach((el) => {
+        el.onclick = () => detalleCola(cola.find((c) => c.id === Number(el.dataset.cola)));
+      });
+      tb.querySelectorAll('button[data-desc]').forEach((el) => {
+        el.onclick = async () => {
+          if (!confirm('¿Seguro que deseas descartar a este postulante de la lista de reagendamiento?')) return;
+          try {
+            await api(`/cola-reagendar/${el.dataset.desc}/descartar`, { method: 'POST', body: { nota: 'Descartado por funcionario' } });
+            toast('Postulante descartado');
+            if (reagendarSeleccion && reagendarSeleccion.tipo === 'cola' && reagendarSeleccion.id === Number(el.dataset.desc)) {
+              reagendarSeleccion = null;
+            }
+            renderReagendar();
+            actualizarBadgeReagendar();
+          } catch (e) { toast(e.message, 'err'); }
+        };
+      });
+    };
+
+    pintarFilas();
+  } catch (err) {
+    const tb = $('#r-tabla-unificada');
+    if (tb) tb.innerHTML = `<tr><td colspan="9" class="c muted" style="color:var(--error);padding:1.5rem">Error al cargar listado: ${esc(err.message)}</td></tr>`;
+  }
+}
+
+function pintarPanelTopReagendar() {
+  const cont = $('#r-detalle');
+  if (!cont) return;
+
+  if (!filtReag.desde) filtReag.desde = sumarDias(hoy(), 1);
+  if (!filtReag.hasta) filtReag.hasta = sumarDias(hoy(), 30);
+
+  if (!reagendarSeleccion) {
+    cont.innerHTML = `
+      <div class="panel" style="border:1px solid var(--linea);box-shadow:0 3px 12px rgba(27,58,117,.06);margin-bottom:1.25rem;background:#f8fafc">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+          <div>
+            <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--azul)">Reagendamiento de Citas</div>
+            <h3 style="margin:2px 0 0;color:var(--azul-900);font-size:1.15rem">Búsqueda y Reubicación de Cupos Libres</h3>
+          </div>
+          <span class="pastilla" style="font-weight:600;background:#e2e8f0;color:var(--tinta-2)">Selecciona un postulante para moverlo</span>
+        </div>
+
+        <div class="fila" style="align-items:flex-end;gap:12px;background:#fff;padding:.85rem;border-radius:6px;border:1px solid var(--linea)">
+          <div class="campo"><label>Destino desde</label><input type="date" id="rd-desde" value="${filtReag.desde}"></div>
+          <div class="campo"><label>Hasta</label><input type="date" id="rd-hasta" value="${filtReag.hasta}"></div>
+          <div class="campo"><label>Examinador</label>
+            <select id="rd-exam">
+              <option value="">Cualquiera</option>
+              ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}" ${String(filtReag.examinador_id) === String(e.id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
+            </select>
+          </div>
+          <button class="btn" id="rd-buscar" style="background:#1d4ed8;font-weight:700">Ver bloques libres</button>
+        </div>
+
+        <div id="rd-ayuda" style="margin-top:.75rem;padding:.65rem .85rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#1e40af;font-size:13px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:16px">👉</span>
+          <div>Haz clic en <b>Reagendar</b> en cualquiera de los postulantes de abajo (o en <b>Asignar hora</b> si fue por bloqueo) para asignarle un nuevo cupo libre.</div>
+        </div>
+
+        <div id="rd-tabla-prev" class="tabla-scroll" style="display:none;margin-top:.75rem;max-height:300px;overflow-y:auto">
+          <table>
+            <thead>
+              <tr>
+                <th class="c" style="width:110px">Fecha</th>
+                <th class="c" style="width:80px">Hora</th>
+                <th class="c">Examinador disponible</th>
+                <th class="c" style="width:140px">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="rd-body"></tbody>
+          </table>
+        </div>
+      </div>`;
+
+    $('#rd-buscar').onclick = async () => {
+      filtReag.desde = $('#rd-desde').value;
+      filtReag.hasta = $('#rd-hasta').value;
+      filtReag.examinador_id = $('#rd-exam').value;
+      const q = new URLSearchParams({ desde: filtReag.desde, hasta: filtReag.hasta });
+      if (filtReag.examinador_id) q.set('examinador_id', filtReag.examinador_id);
+      $('#rd-tabla-prev').style.display = 'block';
+      $('#rd-body').innerHTML = '<tr><td colspan="4" class="c muted" style="padding:1rem">Buscando cupos libres...</td></tr>';
+      try {
+        const libres = await api(`/disponibles?${q}`);
+        $('#rd-body').innerHTML = libres.length ? libres.map((l) => `<tr>
+          <td class="c"><b>${esc(fFecha(l.fecha))}</b></td>
+          <td class="c"><b>${esc(l.hora)}</b></td>
+          <td class="c">${esc(l.examinador)}</td>
+          <td class="c"><span class="badge-ok" style="background:#e0f2fe;color:#0369a1;padding:3px 8px;border-radius:4px;font-size:12px;font-weight:700">Cupo libre</span></td></tr>`).join('')
+          : '<tr><td colspan="4" class="c muted" style="padding:1rem">No hay bloques libres en este rango de fechas.</td></tr>';
+      } catch (e) {
+        $('#rd-body').innerHTML = `<tr><td colspan="4" class="c muted" style="color:var(--error);padding:1rem">Error al buscar: ${esc(e.message)}</td></tr>`;
+      }
+    };
+    return;
+  }
+
+  // Si hay postulante de agenda seleccionado:
+  if (reagendarSeleccion.tipo === 'agenda') {
+    const cita = reagendarSeleccion.cita;
+    const pesada = cita.clase && META.clases_pesadas.includes(cita.clase);
+    cont.innerHTML = `
+      <div class="panel" style="border:2px solid var(--azul);box-shadow:0 6px 20px rgba(27,58,117,.15);margin-bottom:1.25rem;background:#f8fafc">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem">
+          <div>
+            <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--azul)">Reagendamiento en curso</div>
+            <h3 style="margin:2px 0 4px;color:var(--azul-900);font-size:1.25rem">
+              <b>${esc(nom(cita.nombre) || '(SIN NOMBRE)')}</b>
+              <span style="font-weight:400;font-size:13.5px;color:var(--tinta-2);margin-left:8px">RUT: <b style="font-family:monospace">${esc(cita.rut || 'sin RUT')}</b> · Clase: <b>${esc(cita.clase || '-')}</b></span>
+            </h3>
+            <p class="muted" style="margin:0;font-size:13px">
+              Cita actual que se cambiará: <b>${esc(fFecha(cita.fecha))} a las ${esc(cita.hora)} hrs</b> con <b>${esc(cita.examinador || 'No asignado')}</b>
+            </p>
+          </div>
+          <button type="button" class="btn chico sec" id="rd-cerrar" style="font-weight:700">✕ Cancelar selección</button>
+        </div>
+
+        <div class="fila" style="align-items:flex-end;gap:12px;background:#fff;padding:.85rem;border-radius:6px;border:1px solid var(--linea)">
+          <div class="campo"><label>Destino desde</label><input type="date" id="rd-desde" value="${filtReag.desde}"></div>
+          <div class="campo"><label>Hasta</label><input type="date" id="rd-hasta" value="${filtReag.hasta}"></div>
+          <div class="campo"><label>Examinador</label>
+            <select id="rd-exam">
+              <option value="">Cualquiera</option>
+              ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}" ${String(filtReag.examinador_id) === String(e.id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
+            </select>
+          </div>
+          <button class="btn" id="rd-buscar" style="background:#1d4ed8;font-weight:700">Ver bloques libres</button>
+        </div>
+
+        ${pesada ? `<p class="muted" style="margin:.5rem 0 0;color:var(--pesada);font-weight:700">⚠ Clase ${esc(cita.clase)}: destino limitado al bloque ${esc(META.hora_d_a5)}.</p>` : ''}
+
+        <div class="campo" style="margin-top:.75rem">
+          <label>Motivo del reagendamiento</label>
+          <input id="rd-motivo" value="${esc(cita.motivo_reagendamiento || cita.pendiente_nota || 'POSTULANTE SOLICITA CAMBIO')}">
+        </div>
+
+        <div class="tabla-scroll" style="margin-top:.75rem;max-height:360px;overflow-y:auto">
+          <table>
+            <thead>
+              <tr>
+                <th class="c" style="width:110px">Fecha</th>
+                <th class="c" style="width:80px">Hora</th>
+                <th class="c">Examinador disponible</th>
+                <th class="c" style="width:140px">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="rd-body"><tr><td colspan="4" class="c muted" style="padding:1.5rem">Buscando bloques libres...</td></tr></tbody>
+          </table>
+        </div>
+      </div>`;
+
+    $('#rd-cerrar').onclick = () => {
+      reagendarSeleccion = null;
+      renderReagendar();
+    };
+
+    const buscarLibres = async () => {
+      filtReag.desde = $('#rd-desde').value;
+      filtReag.hasta = $('#rd-hasta').value;
+      filtReag.examinador_id = $('#rd-exam').value;
+      const q = new URLSearchParams({ desde: filtReag.desde, hasta: filtReag.hasta });
+      if (filtReag.examinador_id) q.set('examinador_id', filtReag.examinador_id);
+      if (pesada) q.set('clase', cita.clase);
+      try {
+        const libres = await api(`/disponibles?${q}`);
+        $('#rd-body').innerHTML = libres.length ? libres.map((l) => `<tr>
+          <td class="c"><b>${esc(fFecha(l.fecha))}</b></td>
+          <td class="c"><b>${esc(l.hora)}</b></td>
+          <td class="c">${esc(l.examinador)}</td>
+          <td class="c"><button class="btn chico" data-id="${l.id}" style="background:#10b981;border-color:#059669;color:#fff;font-weight:700">Mover aquí</button></td></tr>`).join('')
+          : '<tr><td colspan="4" class="c muted" style="padding:1.5rem">No se encontraron bloques libres en este rango de fechas. Amplía el rango "Hasta" para buscar más adelante.</td></tr>';
+
+        $('#rd-body').querySelectorAll('button[data-id]').forEach((el) => {
+          el.onclick = async () => {
+            const lId = Number(el.dataset.id);
+            const selSlot = libres.find((x) => x.id === lId);
+            const fechaTxt = selSlot ? `${fFecha(selSlot.fecha)} a las ${selSlot.hora}` : 'el nuevo horario';
+            if (!confirm(`¿Confirmar el reagendamiento de ${nom(cita.nombre) || cita.rut} para ${fechaTxt}?`)) return;
+            try {
+              await api(`/agenda/${cita.id}/reagendar`, { method: 'POST', body: { destino_id: lId, motivo: $('#rd-motivo').value } });
+              toast('¡Cita reagendada con éxito!', 'ok');
+              reagendarSeleccion = null;
+              actualizarBadgeReagendar();
+              renderReagendar();
+            } catch (e) { toast(e.message, 'err'); }
+          };
+        });
+      } catch (e) {
+        $('#rd-body').innerHTML = `<tr><td colspan="4" class="c muted" style="color:var(--error);padding:1.5rem">Error al buscar: ${esc(e.message)}</td></tr>`;
+      }
+    };
+
+    $('#rd-buscar').onclick = buscarLibres;
+    buscarLibres();
+    cont.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+
+  // Si hay postulante de cola de bloqueos seleccionado:
+  if (reagendarSeleccion.tipo === 'cola') {
+    const item = reagendarSeleccion.item;
+    const pesada = String(item.clase || '').split(',').some((c) => META.clases_pesadas.includes(c.trim()));
+    cont.innerHTML = `
+      <div class="panel" style="border:2px solid #10b981;box-shadow:0 6px 20px rgba(16,185,129,.15);margin-bottom:1.25rem;background:#f0fdf4">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem">
+          <div>
+            <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#047857">Asignación de cupo por bloqueo</div>
+            <h3 style="margin:2px 0 4px;color:#065f46;font-size:1.25rem">
+              <b>${esc(nom(item.nombre) || '(SIN NOMBRE)')}</b>
+              <span style="font-weight:400;font-size:13.5px;color:var(--tinta-2);margin-left:8px">RUT: <b style="font-family:monospace">${esc(item.rut || 'sin RUT')}</b> · Clase: <b>${esc(item.clase || '-')}</b></span>
+            </h3>
+            <p class="muted" style="margin:0;font-size:13px">
+              Cita original afectada: <b>${esc(fFecha(item.origen_fecha))} a las ${esc(item.origen_hora)} hrs</b> con <b>${esc(item.origen_examinador || 'No asignado')}</b> (${esc(item.motivo || 'Bloqueo')})
+            </p>
+          </div>
+          <button type="button" class="btn chico sec" id="rd-cerrar" style="font-weight:700">✕ Cancelar selección</button>
+        </div>
+
+        <div class="fila" style="align-items:flex-end;gap:12px;background:#fff;padding:.85rem;border-radius:6px;border:1px solid var(--linea)">
+          <div class="campo"><label>Destino desde</label><input type="date" id="rd-desde" value="${filtReag.desde}"></div>
+          <div class="campo"><label>Hasta</label><input type="date" id="rd-hasta" value="${filtReag.hasta}"></div>
+          <div class="campo"><label>Examinador</label>
+            <select id="rd-exam">
+              <option value="">Cualquiera</option>
+              ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}" ${String(filtReag.examinador_id) === String(e.id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
+            </select>
+          </div>
+          <button class="btn" id="rd-buscar" style="background:#10b981;border-color:#059669;color:#fff;font-weight:700">Ver bloques libres</button>
+        </div>
+
+        ${pesada ? `<p class="muted" style="margin:.5rem 0 0;color:var(--pesada);font-weight:700">⚠ Clase ${esc(item.clase)}: solo bloques de las ${esc(META.hora_d_a5)}.</p>` : ''}
+
+        <div class="campo" style="margin-top:.75rem">
+          <label>Correo para confirmación (opcional)</label>
+          <input id="rd-cola-correo" type="email" value="${esc(item.correo || '')}" placeholder="ejemplo@correo.cl">
+        </div>
+
+        <div class="tabla-scroll" style="margin-top:.75rem;max-height:360px;overflow-y:auto">
+          <table>
+            <thead>
+              <tr>
+                <th class="c" style="width:110px">Fecha</th>
+                <th class="c" style="width:80px">Hora</th>
+                <th class="c">Examinador disponible</th>
+                <th class="c" style="width:160px">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="rd-body"><tr><td colspan="4" class="c muted" style="padding:1.5rem">Buscando bloques libres...</td></tr></tbody>
+          </table>
+        </div>
+      </div>`;
+
+    $('#rd-cerrar').onclick = () => {
+      reagendarSeleccion = null;
+      renderReagendar();
+    };
+
+    const buscarLibresCola = async () => {
+      filtReag.desde = $('#rd-desde').value;
+      filtReag.hasta = $('#rd-hasta').value;
+      filtReag.examinador_id = $('#rd-exam').value;
+      const q = new URLSearchParams({ desde: filtReag.desde, hasta: filtReag.hasta });
+      if (filtReag.examinador_id) q.set('examinador_id', filtReag.examinador_id);
+      if (pesada) q.set('clase', 'D');
+      try {
+        const libres = await api(`/disponibles?${q}`);
+        $('#rd-body').innerHTML = libres.length ? libres.map((l) => `<tr>
+          <td class="c"><b>${esc(fFecha(l.fecha))}</b></td>
+          <td class="c"><b>${esc(l.hora)}</b></td>
+          <td class="c">${esc(l.examinador)}</td>
+          <td class="c"><button class="btn chico" data-id="${l.id}" style="background:#10b981;border-color:#059669;color:#fff;font-weight:700">Asignar este cupo</button></td></tr>`).join('')
+          : '<tr><td colspan="4" class="c muted" style="padding:1.5rem">No se encontraron bloques libres en este rango de fechas. Amplía el rango "Hasta" para buscar más adelante.</td></tr>';
+
+        $('#rd-body').querySelectorAll('button[data-id]').forEach((el) => {
+          el.onclick = async () => {
+            const lId = Number(el.dataset.id);
+            const selSlot = libres.find((x) => x.id === lId);
+            const fechaTxt = selSlot ? `${fFecha(selSlot.fecha)} a las ${selSlot.hora}` : 'el nuevo horario';
+            if (!confirm(`¿Confirmar asignación de hora para ${nom(item.nombre) || item.rut} el ${fechaTxt}?`)) return;
+            try {
+              const r = await api(`/cola-reagendar/${item.id}/asignar`, {
+                method: 'POST',
+                body: { destino_id: lId, correo: $('#rd-cola-correo').value }
+              });
+              toast('¡Hora asignada exitosamente!', 'ok');
+              (r.avisos || []).forEach((a) => toast(a, 'alerta'));
+              reagendarSeleccion = null;
+              actualizarBadgeReagendar();
+              renderReagendar();
+            } catch (e) { toast(e.message, 'err'); }
+          };
+        });
+      } catch (e) {
+        $('#rd-body').innerHTML = `<tr><td colspan="4" class="c muted" style="color:var(--error);padding:1.5rem">Error al buscar: ${esc(e.message)}</td></tr>`;
+      }
+    };
+
+    $('#rd-buscar').onclick = buscarLibresCola;
+    buscarLibresCola();
+    cont.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
 }
 
 async function detalleReagendar(id) {
-  const cita = await api(`/agenda/${id}`);
-  const pesada = cita.clase && META.clases_pesadas.includes(cita.clase);
-  const cont = $('#r-detalle');
-  cont.innerHTML = `
-    <div class="panel">
-      <h3>Cita seleccionada</h3>
-      <p><b>${esc(nom(cita.nombre) || '(SIN NOMBRE)')}</b> · ${esc(cita.rut || 'sin RUT')} · Clase ${esc(cita.clase || '-')}
-        <br>Actual: ${esc(fFecha(cita.fecha))} ${esc(cita.hora)} — ${esc(cita.examinador)}</p>
-      <div class="fila">
-        <div class="campo"><label>Destino desde</label><input type="date" id="rd-desde" value="${sumarDias(hoy(), 1)}"></div>
-        <div class="campo"><label>hasta</label><input type="date" id="rd-hasta" value="${sumarDias(hoy(), 30)}"></div>
-        <div class="campo"><label>Examinador</label><select id="rd-exam"><option value="">Cualquiera</option>
-          ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')}</select></div>
-        <button class="btn" id="rd-buscar">Ver bloques libres</button>
-      </div>
-      ${pesada ? `<p class="muted">Clase ${esc(cita.clase)}: destino limitado al bloque ${esc(META.hora_d_a5)}.</p>` : ''}
-      <div class="campo"><label>Motivo del reagendamiento</label><input id="rd-motivo" value="${esc(cita.motivo_reagendamiento)}"></div>
-      <div class="tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th class="c"></th></tr></thead>
-        <tbody id="rd-body"><tr><td colspan="4" class="muted">Elige un rango y busca.</td></tr></tbody></table></div>
-    </div>`;
-  $('#rd-buscar').onclick = async () => {
-    const q = new URLSearchParams({ desde: $('#rd-desde').value, hasta: $('#rd-hasta').value });
-    if ($('#rd-exam').value) q.set('examinador_id', $('#rd-exam').value);
-    if (pesada) q.set('clase', cita.clase);
-    const libres = await api(`/disponibles?${q}`);
-    $('#rd-body').innerHTML = libres.length ? libres.map((l) => `<tr>
-      <td class="c">${esc(fFecha(l.fecha))}</td><td class="c">${esc(l.hora)}</td><td>${esc(l.examinador)}</td>
-      <td class="c"><button class="btn chico" data-id="${l.id}">Mover aquí</button></td></tr>`).join('')
-      : '<tr><td colspan="4" class="muted">Sin bloques libres.</td></tr>';
-    $('#rd-body').querySelectorAll('button[data-id]').forEach((el) => {
-      el.onclick = async () => {
-        if (!confirm('Confirmar el reagendamiento?')) return;
-        try {
-          await api(`/agenda/${id}/reagendar`, { method: 'POST', body: { destino_id: Number(el.dataset.id), motivo: $('#rd-motivo').value } });
-          toast('Cita reagendada');
-          cont.innerHTML = ''; $('#r-q').value = ''; $('#r-res').innerHTML = '';
-          renderReagendar();
-        } catch (e) { toast(e.message, 'err'); }
-      };
-    });
-  };
+  try {
+    const cita = await api(`/agenda/${id}`);
+    reagendarSeleccion = { tipo: 'agenda', id, cita };
+    renderReagendar();
+  } catch (e) {
+    toast(e.message, 'err');
+  }
 }
 
-// Asignar hora a una persona de la cola (desplazada por ausencia de examinador o bloqueo).
 async function detalleCola(item) {
-  const pesada = String(item.clase || '').split(',').some((c) => META.clases_pesadas.includes(c.trim()));
-  modal(`Asignar nueva hora · ${esc(nom(item.nombre) || item.rut)}`, `
-    <div class="ancho" style="margin-top:-.3rem;margin-bottom:.8rem">
-      <div style="font-size:1.05rem"><b>${esc(nom(item.nombre) || '(SIN NOMBRE)')}</b> · RUT: <b>${esc(item.rut || 'sin RUT')}</b> · Clase: <b>${esc(item.clase || '-')}</b></div>
-      <div class="muted" style="margin-top:.25rem">Cita original: <b>${esc(fFecha(item.origen_fecha))} ${esc(item.origen_hora)}</b> · Examinador: <b>${esc(item.origen_examinador || 'No asignado')}</b> (${esc(item.motivo || 'Bloqueo')})</div>
-    </div>
-
-    <div class="campo ancho"><label>Correo para confirmación</label>
-      <input id="rc-correo" type="email" value="${esc(item.correo || '')}" placeholder="opcional"></div>
-
-    <div class="ancho" id="rc-sugerencias-cont" style="margin-top:.8rem">
-      <p class="muted">Buscando las primeras horas disponibles...</p>
-    </div>
-
-    <details class="ancho" style="margin-top:1.2rem">
-      <summary style="cursor:pointer;font-weight:600;color:var(--azul)">Búsqueda manual por rango de fechas</summary>
-      <div class="fila" style="margin-top:.75rem">
-        <div class="campo"><label>Desde</label><input type="date" id="rc-desde" value="${sumarDias(hoy(), 1)}"></div>
-        <div class="campo"><label>Hasta</label><input type="date" id="rc-hasta" value="${sumarDias(hoy(), 30)}"></div>
-        <div class="campo"><label>Examinador</label><select id="rc-exam"><option value="">Cualquiera</option>
-          ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')}</select></div>
-        <button class="btn sec" id="rc-buscar" style="align-self:flex-end">Buscar en rango</button>
-      </div>
-      ${pesada ? `<p class="muted">Clase ${esc(item.clase)}: solo bloques de las ${esc(META.hora_d_a5)}.</p>` : ''}
-      <div class="tabla-scroll"><table style="margin-top:.5rem"><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th class="c"></th></tr></thead>
-        <tbody id="rc-libres"><tr><td colspan="4" class="muted">Haz clic en "Buscar en rango" si requieres una fecha específica.</td></tr></tbody></table></div>
-    </details>
-  `, `<button class="btn sec" id="rc-cerrar">Cerrar</button>`);
-
-  $('#rc-cerrar').onclick = cerrarModal;
-  const cont = { scrollIntoView: () => {} };
-
-  async function ejecutarAsignacion(destinoId, fechaStr, horaStr, examStr) {
-    const nomP = nom(item.nombre) || item.rut;
-    if (!confirm('¿Confirmar asignación de hora para ' + nomP + '?\n\nFecha: ' + fechaStr + '\nHora: ' + horaStr + '\nExaminador: ' + examStr)) return;
-    try {
-      const r = await api(`/cola-reagendar/${item.id}/asignar`, {
-        method: 'POST',
-        body: { destino_id: destinoId, correo: $('#rc-correo').value }
-      });
-      toast('Hora asignada exitosamente');
-      cerrarModal();
-      actualizarBadgeReagendar();
-      (r.avisos || []).forEach((a) => toast(a, 'alerta'));
-      if (location.hash === '#reagendar') renderReagendar(); else if (!location.hash || location.hash === '#agenda') renderAgenda();
-    } catch (e) {
-      toast(e.message, 'err');
-    }
-  }
-
-  // Cargar sugerencias automáticas de inmediato
-  try {
-    const sug = await api(`/cola-reagendar/${item.id}/sugerencias`);
-    const sCont = $('#rc-sugerencias-cont');
-    let html = '';
-
-    const renderCard = (c) => `
-      <div class="card-cupo">
-        <div>
-          <div class="cupo-fecha">📅 ${esc(fFecha(c.fecha))}</div>
-          <div class="cupo-hora">⏰ ${esc(c.hora)}</div>
-          <div class="cupo-exam">👤 ${esc(c.examinador)}</div>
-        </div>
-        <button class="btn chico btn-asignar" data-asig="${c.id}" data-f="${esc(fFecha(c.fecha))}" data-h="${esc(c.hora)}" data-e="${esc(c.examinador)}">Asignar este cupo</button>
-      </div>`;
-
-    if (sug.mismo_examinador && sug.mismo_examinador.length) {
-      html += `
-        <div class="sug-seccion">
-          <h4>Próximas horas disponibles con el mismo examinador (${esc(sug.origen_examinador || 'Original')})</h4>
-          <div class="sug-grid">${sug.mismo_examinador.map(renderCard).join('')}</div>
-        </div>`;
-    }
-
-    if (sug.otros_examinadores && sug.otros_examinadores.length) {
-      html += `
-        <div class="sug-seccion">
-          <h4>Primeras horas disponibles con otros examinadores</h4>
-          <div class="sug-grid">${sug.otros_examinadores.map(renderCard).join('')}</div>
-        </div>`;
-    }
-
-    if (!html) {
-      html = '<div class="aviso">No se encontraron cupos libres en los próximos días. Utiliza la búsqueda manual por rango.</div>';
-    }
-
-    sCont.innerHTML = html;
-    sCont.querySelectorAll('button[data-asig]').forEach((btn) => {
-      btn.onclick = () => ejecutarAsignacion(Number(btn.dataset.asig), btn.dataset.f, btn.dataset.h, btn.dataset.e);
-    });
-  } catch (err) {
-    $('#rc-sugerencias-cont').innerHTML = `<p class="muted">No se pudieron cargar sugerencias automáticas (${esc(err.message)}).</p>`;
-  }
-
-  // Búsqueda manual
-  $('#rc-buscar').onclick = async () => {
-    const q = new URLSearchParams({ desde: $('#rc-desde').value, hasta: $('#rc-hasta').value });
-    if ($('#rc-exam').value) q.set('examinador_id', $('#rc-exam').value);
-    if (pesada) q.set('clase', 'D');
-    const libres = await api(`/disponibles?${q}`);
-    $('#rc-libres').innerHTML = libres.length ? libres.map((l) => `<tr>
-      <td class="c">${esc(fFecha(l.fecha))}</td><td class="c">${esc(l.hora)}</td><td>${esc(l.examinador)}</td>
-      <td class="c"><button class="btn chico" data-id="${l.id}" data-f="${esc(fFecha(l.fecha))}" data-h="${esc(l.hora)}" data-e="${esc(l.examinador)}">Asignar aquí</button></td></tr>`).join('')
-      : '<tr><td colspan="4" class="muted">Sin bloques libres en el rango seleccionado.</td></tr>';
-    $('#rc-libres').querySelectorAll('button[data-id]').forEach((el) => {
-      el.onclick = () => ejecutarAsignacion(Number(el.dataset.id), el.dataset.f, el.dataset.h, el.dataset.e);
-    });
-  };
+  reagendarSeleccion = { tipo: 'cola', id: item.id, item };
+  renderReagendar();
 }
 
 /* ================= tab: BUSCAR (historial) ================= */
@@ -2578,10 +2619,15 @@ function hojaUnicaDia(data, exs, largaFecha, generado) {
     if (!r) return '<td class="hu-vacio">—</td>';
     if (r.bloqueado) return `<td class="hu-bloq">${esc(r.bloqueo_motivo || 'BLOQUEADO')}</td>`;
     if (!(r.rut || r.nombre)) return '<td class="hu-libre">Disponible</td>';
-    const intBadge = r.intento ? (r.intento.includes('1') ? ' · 1° vez' : r.intento.includes('2') ? ' · 2° vez' : '') : '';
-    const fitBadge = r.fecha_inicio_tramite ? ` · F.I.T: ${esc(fFecha(r.fecha_inicio_tramite))}` : '';
-    return `<td><b class="hu-nom">${esc(nom(r.nombre))}</b>
-      <span class="hu-det">${esc(r.rut || '')} · ${r.clase ? esc(r.clase) : 's/clase'}${intBadge}${fitBadge}</span></td>`;
+    const intBadge = r.intento ? (r.intento.includes('1') ? '<span class="hu-int">1° vez</span>' : r.intento.includes('2') ? '<span class="hu-int">2° vez</span>' : '') : '';
+    const claseTag = r.clase ? `<span class="hu-tag-clase">${esc(r.clase)}</span>` : '<span class="hu-tag-clase s-clase">s/c</span>';
+    return `<td class="hu-celda">
+      <div class="hu-nom">${esc(nom(r.nombre))}</div>
+      <div class="hu-meta">
+        <span class="hu-rut">${esc(r.rut || '-')}</span>
+        <span class="hu-badges">${claseTag}${intBadge}</span>
+      </div>
+    </td>`;
   };
   const tot = exs.map((ex) => data.examinadores[ex].filter((r) => !r.bloqueado && (r.rut || r.nombre)).length);
   return `<article class="hoja-dia hoja-unica">
@@ -2859,8 +2905,11 @@ async function actualizarBadgePorConfirmar() {
 
 async function actualizarBadgeReagendar() {
   try {
-    const list = await apiReciente('/cola-reagendar', 30e3);
-    pintarBadge('badge-reagendar', list.length);
+    const [cola, pend] = await Promise.all([
+      apiReciente('/cola-reagendar', 30e3).catch(() => []),
+      apiReciente('/agenda?estado=pendiente', 30e3).catch(() => [])
+    ]);
+    pintarBadge('badge-reagendar', (cola.length || 0) + (pend.length || 0));
   } catch (_) { pintarBadge('badge-reagendar', 0); }
 }
 
@@ -3242,6 +3291,19 @@ document.querySelectorAll('#nav button[data-tab]').forEach((b) => { b.onclick = 
   };
 })();
 
+const btnGuiaGlobal = document.getElementById('btn-guia-global');
+if (btnGuiaGlobal) {
+  btnGuiaGlobal.onclick = () => {
+    const curTab = (location.hash.slice(1) || '').split('?')[0];
+    if (curTab !== 'agenda') {
+      irA('agenda');
+      setTimeout(iniciarGuiaInteractiva, 200);
+    } else {
+      iniciarGuiaInteractiva();
+    }
+  };
+}
+
 init();
 
 
@@ -3252,13 +3314,13 @@ const PASOS_TOUR = [
     target: '#nav',
     titulo: '1. Pestañas y Módulos Principales',
     icono: '🧭',
-    descripcion: 'Desde aquí accedes a todos los módulos: <b>Citas disponibles</b> (donde se buscan y agendan las horas a los contribuyentes), <b>Agenda</b> (operación y control diario), <b>Reagendar</b> (postulantes desplazados por bloqueos), <b>Por confirmar</b> (gestión de asistencia), <b>Agenda del día</b> (impresión vertical en una hoja), <b>Estadísticas</b> y <b>Papelera</b>.'
+    descripcion: 'Desde aquí accedes a todos los módulos: <b>Citas disponibles</b> (búsqueda y reserva de cupos), <b>Agenda</b> (control operativo diario), <b>Reagendar</b> (postulantes derivados por bloqueos), <b>Por confirmar</b> (gestión de asistencia), <b>Agenda del día</b> (impresión en una hoja), <b>Estadísticas</b> y <b>Papelera</b>.'
   },
   {
     target: '#a-fecha',
     titulo: '2. Navegación por Fechas',
     icono: '📅',
-    descripcion: 'Permite avanzar o retroceder días fácilmente con las flechas o elegir una fecha exacta en el calendario. El botón <b>Hoy</b> te regresa de inmediato a la jornada actual.'
+    descripcion: 'Permite avanzar o retroceder días con las flechas o elegir una fecha en el calendario. El botón <b>Hoy</b> te regresa de inmediato a la jornada actual.'
   },
   {
     target: '#a-exam',
@@ -3267,34 +3329,28 @@ const PASOS_TOUR = [
     descripcion: 'Puedes ver la grilla completa con todos los examinadores en columnas paralelas, o seleccionar uno específico para concentrarte en sus citas y cupos.'
   },
   {
-    target: '#a-libres',
-    titulo: '4. Contador de Bloques Libres',
-    icono: '📊',
-    descripcion: 'Esta pastilla te indica en tiempo real cuántas horas libres quedan disponibles para agendar en la fecha y examinador seleccionados.'
-  },
-  {
-    target: 'header.top nav button[data-tab="porconfirmar"]',
-    titulo: '5. Confirmación Telefónica de Citas',
-    icono: '📞',
-    descripcion: 'Abre un listado rápido de las personas citadas en los próximos 7 días para marcar directamente si confirmaron o no su asistencia.'
+    target: '.modo-vista-grupo',
+    titulo: '4. Vistas Vertical y Horizontal',
+    icono: '📐',
+    descripcion: 'Cambia entre la vista clásica en columnas o la <b>vista horizontal continua</b> tipo línea de tiempo, según tu preferencia de pantalla.'
   },
   {
     target: '#a-bloqdia',
-    titulo: '6. Bloquear Días u Horas (Ausencias)',
+    titulo: '5. Bloquear Días u Horas (Ausencias)',
     icono: '🔒',
-    descripcion: 'Usa este botón para inhabilitar horarios cuando un examinador tenga <b>licencia médica, feriado legal, capacitación o terreno</b>. El sistema protege automáticamente a los postulantes que tenían hora y los traslada a <b>Reagendar</b>.'
+    descripcion: 'Inhabilita franjas horarias por licencias, feriados, capacitaciones o terreno. Si un bloque tenía cita, el sistema traslada al postulante automáticamente a <b>Reagendar</b> para proteger su cupo.'
   },
   {
     target: '#a-desbloqdia',
-    titulo: '7. Desbloquear y Reactivar Horas',
+    titulo: '6. Desbloquear Días u Horas (Reactivación)',
     icono: '🔓',
-    descripcion: 'Si una ausencia se cancela o un examinador regresa antes, este botón libera los bloques inhabilitados para que vuelvan a estar disponibles para citaciones.'
+    descripcion: 'Estructura idéntica y simétrica al bloqueo: reactiva de forma inmediata días completos o bloques de horas específicos cuando una ausencia se cancela.'
   },
   {
     target: '#a-grid',
-    titulo: '8. Grilla Operativa y Ficha de Examen',
-    icono: '📝',
-    descripcion: 'Cada celda muestra el nombre centrado del postulante, su RUT y clase. Al hacer clic sobre una cita puedes ver sus datos, registrar si <b>Aprobó</b> o <b>Reprobó</b>, y guardar notas del examen.'
+    titulo: '7. Grilla Operativa y Contacto por WhatsApp',
+    icono: '💬',
+    descripcion: 'Cada tarjeta muestra el postulante, RUT y clase. Incluye enlace directo a <b>WhatsApp</b> con mensaje institucional pre-redactado y botones instantáneos de resultado (Aprobó, Reprobó, No asistió).'
   }
 ];
 

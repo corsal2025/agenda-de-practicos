@@ -719,10 +719,20 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
   const origenId = Number(req.params.id);
   const { destino_id, motivo, forzar } = req.body || {};
   const origen = db.prepare('SELECT * FROM agenda WHERE id = ?').get(origenId);
-  const destino = db.prepare('SELECT * FROM agenda WHERE id = ?').get(Number(destino_id));
   if (!origen) throw bad('Cita de origen no encontrada', 404);
-  if (!destino) throw bad('Bloque de destino no encontrado', 404);
   if (!(origen.rut || origen.nombre)) throw bad('El bloque de origen no tiene una cita.');
+
+  // Si no se indica destino_id, se deriva a la cola de pendientes de reagendar directamente
+  if (!destino_id) {
+    const mot = String(motivo || 'POSTULANTE SOLICITA CAMBIO').trim();
+    db.prepare(`UPDATE agenda SET pendiente_reagendar = 1, pendiente_nota = ?, motivo_reagendamiento = ?, actualizado_en = datetime('now','localtime') WHERE id = ?`)
+      .run(mot, mot, origenId);
+    logReq(req, origenId, 'editar', `pendiente reagendar: ${mot}`);
+    return res.json({ ok: true, bloque: traer(origenId) });
+  }
+
+  const destino = db.prepare('SELECT * FROM agenda WHERE id = ?').get(Number(destino_id));
+  if (!destino) throw bad('Bloque de destino no encontrado', 404);
   if (destino.rut || destino.nombre) throw bad('El bloque de destino ya esta ocupado.');
   if (destino.bloqueado) throw bad('El bloque de destino esta bloqueado.');
   const origenTienePesada = String(origen.clase || '').toUpperCase().split(',').map((s) => s.trim())

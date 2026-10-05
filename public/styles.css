@@ -329,7 +329,7 @@ input:focus, select:focus, textarea:focus {
   padding: .5rem .65rem .5rem .7rem;
   border: 1px solid var(--linea); border-left: 3px solid var(--linea);
   border-radius: var(--r-sm); background: var(--papel); color: var(--tinta);
-  text-align: left; cursor: pointer; font: inherit;
+  text-align: left; cursor: default; font: inherit;
   transition: border-color .12s, box-shadow .12s, background .12s;
 }
 .alerta-dato {
@@ -636,21 +636,47 @@ tbody tr:first-child td { border-top: 0; }
 
 /* ---------- Agenda del dia: todos los examinadores en una hoja ---------- */
 .req { color: #ad2b2f; }
-.hu-titulo { font-size: 14px; margin: 10px 0 4px; }
-.hu-tabla { table-layout: fixed; }
-.hu-tabla th, .hu-tabla td { vertical-align: top; border: 1px solid #d5dbe4; padding: 3px 5px; }
-.hu-tabla .hu-hora { width: 48px; text-align: center; font-weight: 700; }
-.hu-tabla .hu-nom { display: block; text-transform: uppercase; font-size: 8.5px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
-.hu-tabla .hu-det { display: block; font-size: 8.5px; color: #55606f; font-weight: 400; }
-.hu-tabla .hu-libre, .hu-tabla .hu-vacio { color: #98a2b2; font-style: italic; text-align: center; }
-.hu-tabla .hu-bloq { background: #f6efe2; color: #7a5a1e; font-size: 9px; font-weight: 700; text-align: center; }
+.hu-titulo { font-size: 14px; margin: 10px 0 4px; font-weight: 700; color: var(--azul-900); }
+.hu-tabla { table-layout: fixed; width: 100%; border-collapse: collapse; }
+.hu-tabla th, .hu-tabla td { vertical-align: middle; border: 1px solid #d5dbe4; padding: 4px 6px; }
+.hu-tabla thead th { background: #eef2f8; color: #1b3a75; text-align: center; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
+.hu-tabla thead th .hu-det { display: block; font-size: 9px; font-weight: 600; color: #55606f; margin-top: 2px; }
+.hu-tabla .hu-hora { width: 50px; text-align: center; font-weight: 700; font-size: 11px; color: var(--tinta-2); }
+.hu-celda { background: #fff; }
+.hu-tabla .hu-nom {
+  display: block; text-transform: uppercase; font-size: 9.5px; font-weight: 700; line-height: 1.25;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; color: #102550;
+}
+.hu-meta {
+  display: flex; justify-content: space-between; align-items: center; gap: 4px;
+  margin-top: 3px; padding-top: 2px; border-top: 1px dashed #e2e8f0;
+}
+.hu-rut {
+  font-size: 9px; font-weight: 700; font-variant-numeric: tabular-nums; color: #334155; letter-spacing: .01em;
+}
+.hu-badges { display: inline-flex; align-items: center; gap: 3px; }
+.hu-tag-clase {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 16px; height: 14px; padding: 0 4px; border-radius: 2px;
+  font-weight: 800; font-size: 8px; line-height: 1; color: #fff; background: var(--azul);
+}
+.hu-tag-clase.s-clase { background: #94a3b8; }
+.hu-int {
+  display: inline-flex; align-items: center;
+  font-size: 7.5px; font-weight: 700; line-height: 1; padding: 1px 3px; border-radius: 2px;
+  background: #fef3c7; color: #92400e; border: 1px solid #fde68a;
+}
+.hu-tabla .hu-libre, .hu-tabla .hu-vacio { color: #94a3b8; font-style: italic; text-align: center; font-size: 9px; }
+.hu-tabla .hu-bloq { background: #fbf2e6; color: #9a6a1a; font-size: 9px; font-weight: 700; text-align: center; }
 .hoja-unica .hd-firmas { display: flex; gap: 16px; flex-wrap: wrap; }
 @media print {
   .hoja-unica { font-size: 8.5pt; break-after: auto; page-break-after: auto; }
   .hoja-unica .hu-titulo { font-size: 11pt; margin: 2mm 0 3mm; }
-  .hoja-unica .hu-tabla th, .hoja-unica .hu-tabla td { padding: 1.8mm 1.5mm; }
-  .hoja-unica .hu-nom { font-size: 7.5pt; }
-  .hoja-unica .hu-det { font-size: 7pt; }
+  .hoja-unica .hu-tabla th, .hoja-unica .hu-tabla td { padding: 1.5mm 1.8mm; }
+  .hoja-unica .hu-nom { font-size: 8pt; }
+  .hoja-unica .hu-rut { font-size: 7.5pt; }
+  .hoja-unica .hu-tag-clase { font-size: 7pt; height: 11px; padding: 0 3px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .hoja-unica .hu-int { font-size: 6.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .hoja-unica .hd-pie { margin-top: 6mm; }
   .hoja-unica .hd-firmas { display: flex; justify-content: space-around; gap: 8mm; }
   .hoja-unica .hd-firma { width: 45mm; }
