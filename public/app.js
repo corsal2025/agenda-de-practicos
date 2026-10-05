@@ -142,6 +142,12 @@ function fFechaHora(v) {
   if (m) return `${m[3]}/${m[2]}/${m[1]} ${m[4]}`;
   return fFecha(v);
 }
+function fFechaDia(v) {
+  if (!v) return '';
+  const d = new Date(`${v}T12:00:00`);
+  const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  return `${dias[d.getDay()]} ${fFecha(v)}`;
+}
 
 // Mantener la posicion del scroll cuando una accion vuelve a dibujar la vista.
 let _scrollY = null;
@@ -200,11 +206,11 @@ async function proximoDiaConAgenda(desde, n) {
 const opt = (arr, sel) => ['<option value="">--</option>']
   .concat(arr.map((v) => `<option ${v === sel ? 'selected' : ''}>${esc(v)}</option>`)).join('');
 
-function modal(titulo, cuerpoHtml, pieHtml) {
+function modal(titulo, cuerpoHtml, pieHtml, extraCls = '') {
   const root = $('#modal-root');
   root.innerHTML = '';
   const ov = h(`<div class="overlay">
-    <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal ${extraCls}" role="dialog" aria-modal="true">
       <header><h3>${esc(titulo)}</h3><button class="x" aria-label="Cerrar">&times;</button></header>
       <div class="cuerpo"></div>
       <footer></footer>
@@ -289,6 +295,7 @@ async function pantallaLogin() {
 /* ================= router ================= */
 const tabs = {
   agenda: renderAgenda, disponibles: renderDisponibles, reagendar: renderReagendar,
+  porconfirmar: renderPorConfirmar,
   buscar: renderBuscar, errores: renderErrores, dia: renderDia, analitica: renderAnalitica,
   papelera: renderPapelera, datos: renderDatos,
 };
@@ -307,7 +314,8 @@ function ajustarOffsetsFijos() {
   if (panelFijo) raiz.setProperty('--alto-panel-fijo', `${Math.round(panelFijo.getBoundingClientRect().height)}px`);
 }
 function ruta() {
-  const tab = (location.hash.slice(1) || 'agenda').split('?')[0];
+  cerrarModal();
+  const tab = (location.hash.slice(1) || 'disponibles').split('?')[0];
   document.querySelectorAll('#nav button[data-tab]').forEach((b) => b.classList.toggle('activo', b.dataset.tab === tab));
   genVista++; // las cargas pendientes de la pestaña anterior ya no pintan
   (tabs[tab] || renderAgenda)();
@@ -327,57 +335,237 @@ function textoForzar(b) {
 const clasesDe = (v) => String(v || '').split(',').map((s) => s.trim()).filter(Boolean);
 
 function editorSlot(b, alGuardar) {
+  // 1. Si la celda está bloqueada: Diálogo para desbloquear
+  if (b.bloqueado) {
+    modal(
+      `Bloque inhabilitado · ${fFecha(b.fecha)} · ${b.hora} · ${b.examinador}`,
+      `
+      <div style="text-align:center;padding:1.4rem .5rem">
+        <div style="font-size:2.4rem;margin-bottom:.5rem">&#128274;</div>
+        <h3 style="margin:0 0 .5rem;color:var(--alerta);font-size:1.2rem;text-transform:uppercase">${esc(b.bloqueo_motivo || 'BLOQUEADO')}</h3>
+        <p class="muted" style="max-width:380px;margin:0 auto;line-height:1.4">Este horario de examen práctico se encuentra actualmente no disponible.</p>
+      </div>
+      `,
+      `
+      <button class="btn btn-desbloq-accion" id="btn-desbloq-slot">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+        Desbloquear esta hora
+      </button>
+      <button class="btn sec" id="btn-cancel-bloq">Cerrar</button>
+      `
+    );
+    $('#btn-cancel-bloq').onclick = cerrarModal;
+    $('#btn-desbloq-slot').onclick = async () => {
+      try {
+        await api(`/agenda/${b.id}/liberar`, { method: 'POST', body: { motivo: 'Desbloqueo manual' } });
+        cerrarModal();
+        alGuardar && alGuardar();
+        toast('Bloque desbloqueado exitosamente · Ahora está disponible para citar', 'ok');
+      } catch (e) {
+        toast(e.message, 'err');
+      }
+    };
+    return;
+  }
+
+  // 2. Si la celda está libre o tiene cita: Abrir DIRECTAMENTE el formulario de agendamiento completo
+  formularioCita(b, alGuardar);
+}
+
+function funcionarioActual() {
+  if (!META) return null;
+  if (META.funcionario_id) {
+    const f = (META.funcionarios || []).find((x) => x.id === META.funcionario_id);
+    if (f) return f;
+  }
+  if (META.usuario) {
+    const uNorm = String(META.usuario).trim().toLowerCase();
+    const f = (META.funcionarios || []).find((x) =>
+      (x.nombre && x.nombre.trim().toLowerCase() === uNorm) ||
+      (x.usuario && x.usuario.trim().toLowerCase() === uNorm)
+    );
+    if (f) return f;
+  }
+  return (META.funcionarios || []).find((f) => f.activo) || null;
+}
+
+function formularioCita(b, alGuardar) {
   const c = META.catalogos;
   const funcs = META.funcionarios.filter((f) => f.activo);
+  const actual = funcionarioActual();
+  const fAsignado = (b.funcionario_id && (META.funcionarios || []).find((f) => f.id === b.funcionario_id))
+    || actual
+    || (b.funcionario ? { id: b.funcionario_id || null, nombre: b.funcionario } : null)
+    || { id: null, nombre: META.usuario || 'Funcionario en sesión' };
+  const esAdmin = META.rol === 'admin';
   const clasesIniciales = clasesDe(b.clase);
   const esPesada = clasesIniciales.some((cl) => META.clases_pesadas.includes(cl));
+  const tieneCita = Boolean(b && (b.rut || b.nombre));
+
   modal(
-    `${fFecha(b.fecha)}  ·  ${b.hora}  ·  ${b.examinador}`,
+    `${tieneCita ? 'Ficha de cita' : 'Agendar nueva cita'} · ${fFecha(b.fecha)} · ${b.hora} hrs · Examinador/a: ${esc(b.examinador)}`,
     `
-    <div class="campo ancho" style="background:#f8fafc;padding:.5rem;border-radius:6px">
-      <label><input type="checkbox" id="f-bloq" ${b.bloqueado ? 'checked' : ''}> Bloquear este bloque (no disponible: terreno, feriado, dia administrativo...)</label>
-      <input id="f-bloq-motivo" placeholder="Motivo del bloqueo" value="${esc(b.bloqueo_motivo)}" ${b.bloqueado ? '' : 'hidden'}>
+    <div class="campo"><label>Nombre completo <b class="req" style="color:var(--alerta)">*</b></label>
+      <input id="f-nombre" value="${esc(nom(b.nombre))}" required placeholder="NOMBRES Y APELLIDOS" style="text-transform:uppercase;font-weight:600">
     </div>
-    <div class="campo"><label>RUT</label><input id="f-rut" value="${esc(b.rut)}" placeholder="12.345.678-9"></div>
-    <div class="campo"><label>Nombre</label><input id="f-nombre" value="${esc(nom(b.nombre))}" style="text-transform:uppercase"></div>
-    <div class="campo ancho"><label>Clase (podés marcar más de una)</label>
+    
+    <div class="campo"><label>RUT (con puntos y guión) <b class="req" style="color:var(--alerta)">*</b></label>
+      <input id="f-rut" value="${esc(b.rut)}" required placeholder="12.345.678-9" style="font-weight:600">
+    </div>
+
+    <div class="campo"><label>Nacionalidad <b class="req" style="color:var(--alerta)">*</b></label>
+      <select id="f-nac" required>
+        <option value="CHILENA" ${(b.nacionalidad || 'CHILENA') === 'CHILENA' ? 'selected' : ''}>CHILENA</option>
+        <option value="EXTRANJERA" ${b.nacionalidad === 'EXTRANJERA' ? 'selected' : ''}>EXTRANJERA</option>
+      </select>
+    </div>
+
+    <div class="campo"><label>Celular (contacto) <b class="req" style="color:var(--alerta)">*</b></label>
+      <input id="f-contacto" value="${esc(fTel(b.contacto))}" required placeholder="+56 9 1234 5678" inputmode="tel">
+    </div>
+
+    <div class="campo ancho"><label>Clase de Licencia que está sacando <b class="req" style="color:var(--alerta)">*</b> (podés marcar más de una)</label>
       <div class="chk-clases" id="f-clase">${c.clase.map((cl) => `
         <label class="chk-clase"><input type="checkbox" value="${esc(cl)}" ${clasesIniciales.includes(cl) ? 'checked' : ''}> ${esc(cl)}</label>
-      `).join('')}</div></div>
-    <div class="campo"><label>Teléfono</label><input id="f-contacto" value="${esc(fTel(b.contacto))}" placeholder="9 1234 5678" inputmode="tel"></div>
-    <div class="campo"><label>Correo <b class="req" title="Obligatorio para dar hora">*</b></label><input id="f-correo" type="email" placeholder="obligatorio para dar hora" value="${esc(b.correo)}"></div>
-    <div class="campo"><label>Tipo de cita</label><select id="f-tipo">${opt(c.tipo_cita, b.tipo_cita)}</select></div>
-    <div class="campo ancho"><label>Motivo reagendamiento</label><input id="f-motivo" value="${esc(b.motivo_reagendamiento)}"></div>
-    <div class="campo"><label>Lista de espera</label><select id="f-lista">${opt(c.lista_espera, b.lista_espera)}</select></div>
-    <div class="campo"><label>Intento</label><select id="f-intento">${opt(c.intento, b.intento)}</select></div>
-    <div class="campo"><label>Funcionario/a que agenda</label>
-      <select id="f-func">${['<option value="">--</option>']
-        .concat(funcs.map((f) => `<option value="${f.id}" ${f.id === b.funcionario_id ? 'selected' : ''}>${esc(f.nombre)}</option>`)).join('')}
-        <option value="__nuevo">+ Nuevo...</option></select></div>
-    <div class="campo"><label>Fecha inicio tramite</label><input type="date" id="f-fit" value="${esc(b.fecha_inicio_tramite)}"></div>
-    <div class="campo"><label>Confirmo asistencia</label>
-      <select id="f-conf"><option value="">--</option>
-        <option value="1" ${b.confirmo_asistencia === 1 ? 'selected' : ''}>SI</option>
-        <option value="0" ${b.confirmo_asistencia === 0 ? 'selected' : ''}>NO</option></select></div>
-    <div class="campo"><label>Resultado</label><select id="f-res">${opt(c.resultado, b.resultado)}</select></div>
-    <div class="campo ancho"><label>Comentarios</label><textarea id="f-com" rows="2">${esc(b.comentarios)}</textarea></div>
-    <div class="campo ancho">
-      <label><input type="checkbox" id="f-pend" ${b.pendiente_reagendar ? 'checked' : ''}> Marcar como pendiente de reagendar</label>
-      <input id="f-pend-nota" placeholder="Nota (opcional)" value="${esc(b.pendiente_nota)}" ${b.pendiente_reagendar ? '' : 'hidden'}>
+      `).join('')}</div>
     </div>
+
+    <div class="campo"><label>Correo electrónico <b class="req" style="color:var(--alerta)">*</b></label>
+      <input id="f-correo" type="email" required placeholder="nombre@correo.com" value="${esc(b.correo)}">
+    </div>
+
+    <div class="campo"><label>Fecha inicio de trámite <b class="req" style="color:var(--alerta)">*</b></label>
+      <input type="date" id="f-fit" required value="${esc(b.fecha_inicio_tramite || hoy())}">
+    </div>
+
+    <div class="campo ancho" id="box-vencimiento" style="margin-top:-.2rem;margin-bottom:.4rem"></div>
+
+    <div class="campo" id="wrap-f-func">
+      <label>Funcionario/a que agenda</label>
+      <div id="disp-f-func" style="display:flex;align-items:center;gap:.6rem;padding:.45rem .75rem;background:var(--elev);border:1px solid var(--linea);border-radius:6px;min-height:38px;box-sizing:border-box">
+        <span style="font-size:14px">👤</span>
+        <span id="txt-f-func" style="font-weight:700;color:var(--tinta);font-size:13px">${esc(fAsignado.nombre)}</span>
+        <span class="badge" style="margin-left:auto;font-size:10px;background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;padding:2px 7px;font-weight:600">
+          ${b.funcionario_id ? 'Asignado' : 'Automático por login'}
+        </span>
+        ${esAdmin ? `<button type="button" class="btn chico sec" id="btn-cambiar-func" style="padding:1px 6px;font-size:11px;margin-left:6px" title="Cambiar funcionario (solo administradores)">Cambiar</button>` : ''}
+      </div>
+      <div id="sel-f-func-cont" hidden style="margin-top:4px">
+        <select id="f-func-sel" style="width:100%">
+          ${funcs.map((f) => `<option value="${f.id}" ${f.id === (fAsignado.id || b.funcionario_id) ? 'selected' : ''}>${esc(f.nombre)}</option>`).join('')}
+          <option value="__nuevo">+ Nuevo...</option>
+        </select>
+      </div>
+      <input type="hidden" id="f-func" value="${fAsignado.id || ''}">
+    </div>
+
+    ${tieneCita ? `
+    <div style="background:var(--fondo-2,#f8fafc);padding:10px 14px;border-radius:8px;border:1px solid var(--linea,#e2e8f0);margin-top:6px;width:100%" class="ancho">
+      <div style="font-size:11px;font-weight:700;color:var(--tinta-2);text-transform:uppercase;margin-bottom:8px">Evaluación y Resultado en Agenda</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div class="campo" style="flex:1;min-width:140px;margin:0"><label>Confirmó asistencia</label>
+          <select id="f-conf"><option value="">--</option>
+            <option value="1" ${b.confirmo_asistencia === 1 ? 'selected' : ''}>SI</option>
+            <option value="0" ${b.confirmo_asistencia === 0 ? 'selected' : ''}>NO</option></select>
+        </div>
+        <div class="campo" style="flex:1;min-width:140px;margin:0"><label>Resultado</label>
+          <select id="f-res">${opt(c.resultado, b.resultado)}</select>
+        </div>
+      </div>
+    </div>` : ''}
+
     <div class="campo ancho" id="zona-forzar" ${esPesada ? '' : 'hidden'}>
-      <label><input type="checkbox" id="f-forzar"> <span id="f-forzar-txt">${esc(textoForzar(b))}</span></label></div>
+      <label><input type="checkbox" id="f-forzar"> <span id="f-forzar-txt">${esc(textoForzar(b))}</span></label>
+    </div>
     `,
     `
-    ${(b.rut || b.nombre || b.bloqueado) ? '<button class="btn peligro sec" id="btn-liberar">Liberar bloque</button>' : ''}
+    ${(b.rut || b.nombre) ? '<button class="btn peligro sec" id="btn-liberar" title="Quita la cita del bloque">Liberar bloque</button>' : ''}
+    ${(b.rut || b.nombre) ? '<button type="button" class="btn sec" id="btn-reagendar-slot" style="color:var(--azul);font-weight:600">Reagendar postulante</button>' : ''}
     <button class="btn sec" id="btn-cancel">Cancelar</button>
-    <button class="btn" id="btn-guardar">Guardar</button>
+    <button class="btn" id="btn-guardar" style="background:#1d4ed8;font-weight:700">${tieneCita ? "Guardar cambios" : "Confirmar y agendar cita"}</button>
     `
   );
 
-  autoformatoRut($('#f-rut'));
-  // Si el bloque esta libre y el RUT ya tiene citas anteriores, autocompleta
-  // nombre/telefono/correo con lo mas reciente (sin pisar datos ya escritos).
+  // Autoformato de RUT en tiempo real
+  $('#f-rut').addEventListener('input', () => {
+    let v = $('#f-rut').value.replace(/[^0-9kK]/g, '').toUpperCase();
+    if (v.length > 9) v = v.slice(0, 9);
+    if (v.length > 1) {
+      const cuerpo = v.slice(0, -1);
+      const dv = v.slice(-1);
+      let cuerpoFmt = '';
+      for (let i = cuerpo.length - 1, j = 1; i >= 0; i--, j++) {
+        cuerpoFmt = cuerpo[i] + cuerpoFmt;
+        if (j % 3 === 0 && i > 0) cuerpoFmt = '.' + cuerpoFmt;
+      }
+      $('#f-rut').value = cuerpoFmt + '-' + dv;
+    } else {
+      $('#f-rut').value = v;
+    }
+  });
+
+  // Autoformato de Celular
+  $('#f-contacto').addEventListener('blur', () => {
+    let v = $('#f-contacto').value.trim().replace(/\s+/g, '');
+    if (v.startsWith('+56')) v = v.slice(3);
+    if (v.startsWith('56')) v = v.slice(2);
+    if (v.length === 9 && v.startsWith('9')) {
+      $('#f-contacto').value = `+56 9 ${v.slice(1, 5)} ${v.slice(5)}`;
+    } else if (v.length === 8) {
+      $('#f-contacto').value = `+56 9 ${v.slice(0, 4)} ${v.slice(4)}`;
+    }
+  });
+
+  // Contador dinámico de 6 meses (Ley de Tránsito Art. 21)
+  const actualizarPlazoLegal = () => {
+    const box = $('#box-vencimiento');
+    if (!box) return;
+    const fitVal = $('#f-fit').value;
+    if (!fitVal) {
+      box.innerHTML = '<div style="font-size:12px;color:var(--tinta-3);padding:.3rem 0">Indica la fecha de inicio del trámite para calcular el plazo legal (máx. 6 meses).</div>';
+      return;
+    }
+    const dInicio = new Date(`${fitVal}T12:00:00`);
+    const dCita = new Date(`${b.fecha}T12:00:00`);
+    const dLimite = new Date(dInicio);
+    dLimite.setMonth(dLimite.getMonth() + 6);
+
+    const msDia = 864e5;
+    const diasTranscurridos = Math.max(0, Math.round((dCita - dInicio) / msDia));
+    const diasRestantes = Math.round((dLimite - dCita) / msDia);
+    const mesesExactos = Math.max(0, (diasTranscurridos / 30.4375).toFixed(1));
+
+    if (dCita > dLimite) {
+      box.innerHTML = `
+        <div style="background:#fee2e2;border:1px solid #f87171;border-radius:6px;padding:.5rem .75rem;font-size:12px;color:#991b1b">
+          <div style="font-weight:700;display:flex;align-items:center;gap:.3rem">
+            ⚠️ PLAZO LEGAL VENCIDO (${mesesExactos} meses transcurridos)
+          </div>
+          <div style="margin-top:2px;line-height:1.35">
+            Según el Art. 21 de la Ley 18.290 de Tránsito, el plazo máximo para rendir exámenes es de <b>6 meses</b> desde el inicio del trámite.
+            La fecha límite legal expiró el <b>${fFecha(dLimite.toISOString().slice(0, 10))}</b> (excedida por ${Math.abs(diasRestantes)} días).
+          </div>
+        </div>
+      `;
+    } else {
+      box.innerHTML = `
+        <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:.5rem .75rem;font-size:12px;color:#166534">
+          <div style="font-weight:700;display:flex;align-items:center;gap:.3rem">
+            ✅ PLAZO LEGAL VIGENTE (${mesesExactos} meses de 6 permitidos)
+          </div>
+          <div style="margin-top:2px;line-height:1.35">
+            Quedan <b>${diasRestantes} días</b> de vigencia legal. Fecha fatal de vencimiento: <b>${fFecha(dLimite.toISOString().slice(0, 10))}</b>.
+          </div>
+        </div>
+      `;
+    }
+  };
+
+  $('#f-fit').addEventListener('input', actualizarPlazoLegal);
+  $('#f-fit').addEventListener('change', actualizarPlazoLegal);
+  actualizarPlazoLegal();
+
+  // Autocompletar datos si el RUT tiene citas anteriores
   if (!b.rut && !b.nombre) {
     $('#f-rut').addEventListener('blur', async () => {
       const val = $('#f-rut').value.trim();
@@ -390,66 +578,135 @@ function editorSlot(b, alGuardar) {
         if (!$('#f-nombre').value && ultimo.nombre) { $('#f-nombre').value = nom(ultimo.nombre); completo = true; }
         if (!$('#f-contacto').value && ultimo.contacto) { $('#f-contacto').value = fTel(ultimo.contacto); completo = true; }
         if (!$('#f-correo').value && ultimo.correo) { $('#f-correo').value = ultimo.correo; completo = true; }
-        if (completo) toast('Datos autocompletados de una cita anterior');
-      } catch (_) { /* sin conexion o sin resultados: no interrumpe el agendamiento */ }
+        if (ultimo.nacionalidad) { $('#f-nac').value = ultimo.nacionalidad; }
+        if (completo) toast('Datos autocompletados de una cita anterior', 'ok');
+      } catch (_) {}
     });
   }
-  $('#f-func').onchange = async (e) => {
-    if (e.target.value !== '__nuevo') return;
-    const nombre = prompt('Nombre del nuevo funcionario/a:');
-    e.target.value = '';
-    if (!nombre) return;
-    const r = await api('/funcionarios', { method: 'POST', body: { nombre } });
-    META = await api('/meta');
-    const s = $('#f-func');
-    s.insertAdjacentHTML('beforeend', `<option value="${r.id}">${esc(nombre.toUpperCase())}</option>`);
-    s.value = r.id;
-  };
-  $('#f-bloq').onchange = (e) => { $('#f-bloq-motivo').hidden = !e.target.checked; };
-  $('#f-pend').onchange = (e) => { $('#f-pend-nota').hidden = !e.target.checked; };
-  const clasesMarcadas = () => [...$('#f-clase').querySelectorAll('input:checked')].map((i) => i.value);
-  $('#f-clase').addEventListener('change', () => {
-    const esPesadaSel = clasesMarcadas().some((cl) => META.clases_pesadas.includes(cl));
-    $('#zona-forzar').hidden = !esPesadaSel;
-    if (esPesadaSel) $('#f-forzar-txt').textContent = textoForzar({ hora: b.hora });
-  });
-  $('#btn-cancel').onclick = cerrarModal;
-  if ($('#btn-liberar')) $('#btn-liberar').onclick = async () => {
-    if (!confirm('Liberar el bloque? Los datos quedan en la papelera (pestana Datos) por si hay que recuperarlos.')) return;
-    await api(`/agenda/${b.id}/liberar`, { method: 'POST' });
-    toast('Bloque liberado');
-    cerrarModal(); alGuardar && alGuardar();
-  };
-  $('#btn-guardar').onclick = async () => {
-    const comun = { visto_en: b.actualizado_en, comentarios: $('#f-com').value };
-    try {
-      if ($('#f-bloq').checked) {
-        if ((b.rut || b.nombre) && !b.bloqueado) {
-          if (!confirm(`Este bloque tiene la cita de ${nom(b.nombre) || b.rut}.\n\nAl bloquearlo, la cita se retira y queda guardada en la papelera (Datos → Papelera).\n\n¿Bloquear igual?`)) return;
+
+  if ($('#btn-cambiar-func')) {
+    $('#btn-cambiar-func').onclick = () => {
+      $('#sel-f-func-cont').hidden = false;
+      $('#btn-cambiar-func').style.display = 'none';
+      $('#f-func-sel').focus();
+    };
+  }
+  if ($('#f-func-sel')) {
+    $('#f-func-sel').onchange = async (e) => {
+      if (e.target.value === '__nuevo') {
+        const nombre = prompt('Nombre del nuevo funcionario/a:');
+        if (!nombre || !nombre.trim()) { e.target.value = $('#f-func').value; return; }
+        try {
+          const r = await api('/funcionarios', { method: 'POST', body: { nombre } });
+          META = await api('/meta');
+          const optEl = document.createElement('option');
+          optEl.value = r.id; optEl.textContent = r.nombre; optEl.selected = true;
+          $('#f-func-sel').insertBefore(optEl, $('#f-func-sel').lastElementChild);
+          $('#f-func').value = r.id;
+          $('#txt-f-func').textContent = r.nombre;
+        } catch (err) {
+          toast(err.message, 'err');
         }
-        await api(`/agenda/${b.id}`, { method: 'PUT', body: { ...comun, bloqueado: true, bloqueo_motivo: $('#f-bloq-motivo').value } });
-        toast((b.rut || b.nombre) ? 'Bloque bloqueado — la cita fue a la papelera' : 'Bloque marcado como no disponible');
-      } else {
-        const body = {
-          ...comun,
-          rut: $('#f-rut').value, nombre: $('#f-nombre').value, clase: clasesMarcadas().join(','),
-          contacto: $('#f-contacto').value, correo: $('#f-correo').value, tipo_cita: $('#f-tipo').value,
-          motivo_reagendamiento: $('#f-motivo').value, lista_espera: $('#f-lista').value,
-          intento: $('#f-intento').value,
-          funcionario_id: $('#f-func').value && $('#f-func').value !== '__nuevo' ? Number($('#f-func').value) : null,
-          fecha_inicio_tramite: $('#f-fit').value,
-          confirmo_asistencia: $('#f-conf').value === '' ? null : Number($('#f-conf').value),
-          resultado: $('#f-res').value,
-          pendiente_reagendar: $('#f-pend').checked,
-          pendiente_nota: $('#f-pend-nota').value,
-          forzar: $('#f-forzar') && $('#f-forzar').checked,
-        };
-        const r = await api(`/agenda/${b.id}`, { method: 'PUT', body });
-        (r.avisos || []).forEach((a) => toast(a, 'err'));
-        toast('Guardado');
+        return;
       }
-      cerrarModal(); alGuardar && alGuardar();
+      $('#f-func').value = e.target.value;
+      const fn = funcs.find((f) => String(f.id) === String(e.target.value));
+      $('#txt-f-func').textContent = fn ? fn.nombre : '';
+    };
+  }
+
+  const clasesMarcadas = () => Array.from(document.querySelectorAll('#f-clase input:checked')).map((i) => i.value);
+
+  const chequearPesada = () => {
+    const clases = clasesMarcadas();
+    const tienePesada = clases.some((cl) => META.clases_pesadas.includes(cl));
+    $('#zona-forzar').hidden = !tienePesada;
+    if (tienePesada) $('#f-forzar-txt').textContent = textoForzar(b);
+  };
+  document.querySelectorAll('#f-clase input').forEach((chk) => {
+    chk.addEventListener('change', chequearPesada);
+  });
+
+  $('#btn-cancel').onclick = cerrarModal;
+
+  if ($('#btn-liberar')) {
+    $('#btn-liberar').onclick = async () => {
+      if (!confirm('¿Seguro que deseas liberar este bloque? La cita se moverá a la Papelera.')) return;
+      try {
+        await api(`/agenda/${b.id}/liberar`, { method: 'POST', body: { motivo: 'Liberado desde formulario' } });
+        cerrarModal(); alGuardar && alGuardar();
+        toast('Bloque liberado');
+      } catch (e) { toast(e.message, 'err'); }
+    };
+  }
+
+  if ($('#btn-reagendar-slot')) {
+    $('#btn-reagendar-slot').onclick = async () => {
+      const motivo = prompt('Motivo del reagendamiento (ej: POSTULANTE SOLICITA CAMBIO, LICENCIA MEDICA EXAMINADOR):', b.motivo_reagendamiento || 'POSTULANTE SOLICITA CAMBIO');
+      if (motivo === null) return;
+      try {
+        await api(`/agenda/${b.id}/reagendar`, { method: 'POST', body: { motivo: motivo.trim() || 'SOLICITUD DE REAGENDAMIENTO' } });
+        cerrarModal(); alGuardar && alGuardar();
+        actualizarBadgeReagendar();
+        toast('Postulante enviado a la lista de Reagendamiento');
+        irA('reagendar');
+      } catch (e) { toast(e.message, 'err'); }
+    };
+  }
+
+  $('#btn-guardar').onclick = async () => {
+    const nombre = $('#f-nombre').value.trim();
+    const rutVal = $('#f-rut').value.trim();
+    const clases = clasesMarcadas();
+    const contacto = $('#f-contacto').value.trim();
+    const correoVal = $('#f-correo').value.trim();
+    const fit = $('#f-fit').value;
+    const nac = $('#f-nac').value;
+
+    // Validaciones estrictas de campos obligatorios
+    if (!nombre) { toast('El nombre del postulante es obligatorio', 'err'); $('#f-nombre').focus(); return; }
+    if (!rutVal) { toast('El RUT es obligatorio', 'err'); $('#f-rut').focus(); return; }
+    if (!formatearSiEsRut(rutVal)) { toast('El RUT ingresado no es válido (revisa el dígito verificador)', 'err'); $('#f-rut').focus(); return; }
+    if (!clases.length) { toast('Debes marcar al menos una clase de licencia', 'err'); return; }
+    if (!contacto) { toast('El número de celular es obligatorio', 'err'); $('#f-contacto').focus(); return; }
+    if (!correoVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoVal)) { toast('Ingresa un correo electrónico válido', 'err'); $('#f-correo').focus(); return; }
+    if (!fit) { toast('La fecha de inicio de trámite es obligatoria', 'err'); $('#f-fit').focus(); return; }
+    if (!nac) { toast('La nacionalidad es obligatoria', 'err'); $('#f-nac').focus(); return; }
+
+    $('#btn-guardar').disabled = true;
+    $('#btn-guardar').textContent = 'Guardando...';
+
+    const comun = { visto_en: b.actualizado_en, comentarios: b.comentarios || null };
+    try {
+      const body = {
+        ...comun,
+        rut: rutVal,
+        nombre: nombre,
+        nacionalidad: nac,
+        clase: clases.join(','),
+        contacto: contacto,
+        correo: correoVal,
+        tipo_cita: b.tipo_cita || 'NORMAL',
+        motivo_reagendamiento: b.motivo_reagendamiento || null,
+        lista_espera: 'NO',
+        intento: b.intento || '1° VEZ',
+        funcionario_id: $('#f-func').value && $('#f-func').value !== '__nuevo' ? Number($('#f-func').value) : null,
+        fecha_inicio_tramite: fit,
+        confirmo_asistencia: $('#f-conf') ? ($('#f-conf').value === '' ? null : Number($('#f-conf').value)) : (b.confirmo_asistencia ?? null),
+        resultado: $('#f-res') ? ($('#f-res').value || null) : (b.resultado || null),
+        pendiente_reagendar: Boolean(b.pendiente_reagendar),
+        pendiente_nota: b.pendiente_nota || null,
+        forzar: $('#f-forzar') && $('#f-forzar').checked,
+      };
+
+      const r = await api(`/agenda/${b.id}`, { method: 'PUT', body });
+      (r.avisos || []).forEach((a) => toast(a, 'err'));
+      toast('Cita agendada exitosamente · Comprobante e instrucciones enviadas por correo', 'ok');
+      cerrarModal();
+      alGuardar && alGuardar();
     } catch (e) {
+      $('#btn-guardar').disabled = false;
+      $('#btn-guardar').textContent = 'Guardar cita';
       toast(e.message, 'err');
       if (e.status === 409 && e.data && e.data.bloque) { editorSlot(e.data.bloque, alGuardar); }
     }
@@ -459,24 +716,237 @@ async function abrirSlotPorId(id, alGuardar) {
   editorSlot(await api(`/agenda/${id}`), alGuardar);
 }
 
+async function fechaInicialAgenda() {
+  const h = hoy();
+  const dow = new Date(`${h}T12:00:00`).getDay();
+  if (dow === 0 || dow === 6) {
+    return await proximoDiaConAgenda(h, 1);
+  }
+  try {
+    const rows = await apiReciente(`/agenda?fecha=${h}`, 30e3);
+    if (!rows || !rows.length) return await proximoDiaConAgenda(h, 1);
+  } catch (_) {}
+  return h;
+}
+
+
+/* ================= tab: POR CONFIRMAR ================= */
+async function renderPorConfirmar() {
+  view.innerHTML = `
+    <div class="panel">
+      <div class="fila" style="justify-content:space-between;align-items:center">
+        <div>
+          <h2 style="margin:0 0 .25rem;display:flex;align-items:center;gap:.5rem">
+            <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" style="color:#f59e0b">
+              <rect x="3" y="3" width="14" height="14" rx="2"/>
+              <path d="M6.5 10l2.5 2.5 5-5"/>
+            </svg>
+            Citas por confirmar asistencia
+          </h2>
+          <p class="muted" style="margin:0;font-size:13px">
+            Postulantes citados en los próximos días que aún no confirman asistencia. Contacta telefónicamente o por correo y registra directamente su respuesta.
+          </p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span class="pastilla" id="pc-total-badge" style="font-weight:700">Cargando...</span>
+          <button class="btn sec chico" id="pc-refrescar" title="Actualizar lista">↻ Actualizar</button>
+          <button class="btn chico" id="btn-enviar-correos-masivos" title="Enviar enlace de confirmación por correo a todos los pendientes">✉ Enviar correos a pendientes</button>
+        </div>
+      </div>
+      <div class="fila" style="margin-top:1rem;gap:12px;align-items:flex-end">
+        <div class="campo" style="flex:1;min-width:240px">
+          <label>Buscar en la lista (RUT, nombre o teléfono)</label>
+          <input type="search" id="pc-q" placeholder="Escribe para filtrar al instante..." autocomplete="off">
+        </div>
+        <div class="campo" style="min-width:180px">
+          <label>Rango de fechas</label>
+          <select id="pc-rango">
+            <option value="7" selected>Próximos 7 días</option>
+            <option value="15">Próximos 15 días</option>
+            <option value="30">Próximos 30 días</option>
+            <option value="todos">Todas las fechas futuras</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:.75rem">
+      <div class="tabla-scroll">
+        <table style="width:100%">
+          <thead>
+            <tr>
+              <th class="c" style="width:95px">Fecha</th>
+              <th class="c" style="width:65px">Hora</th>
+              <th>Postulante</th>
+              <th style="white-space:nowrap">RUT</th>
+              <th class="c" style="width:50px">Clase</th>
+              <th>Teléfono</th>
+              <th>Correo</th>
+              <th>Examinador</th>
+              <th class="c" style="min-width:180px">Gestión de asistencia</th>
+            </tr>
+          </thead>
+          <tbody id="pc-tbody">
+            <tr><td colspan="9" class="c muted" style="padding:2rem">Cargando citas por confirmar...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  let citasCargadas = [];
+
+  const pintarLista = () => {
+    const q = ($('#pc-q').value || '').trim().toLowerCase();
+    const filtradas = citasCargadas.filter((r) => {
+      if (!q) return true;
+      const nomP = (r.nombre || '').toLowerCase();
+      const rutP = (r.rut || '').toLowerCase();
+      const telP = (r.contacto || '').toLowerCase();
+      return nomP.includes(q) || rutP.includes(q) || telP.includes(q);
+    });
+
+    $('#pc-total-badge').textContent = `${filtradas.length} ${filtradas.length === 1 ? 'cita pendiente' : 'citas pendientes'}`;
+
+    if (!filtradas.length) {
+      $('#pc-tbody').innerHTML = `
+        <tr>
+          <td colspan="9" class="c muted" style="padding:2.5rem 1rem">
+            ${q ? 'No se encontraron postulantes que coincidan con la búsqueda.' : '🎉 No hay citas pendientes de confirmación en este rango.'}
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    $('#pc-tbody').innerHTML = filtradas.map((r) => `
+      <tr data-id="${r.id}">
+        <td class="c" style="white-space:nowrap"><b>${esc(fFecha(r.fecha))}</b></td>
+        <td class="c"><b>${esc(r.hora)}</b></td>
+        <td><b>${esc(nom(r.nombre) || '(Sin nombre)')}</b></td>
+        <td style="white-space:nowrap">${esc(r.rut || '-')}</td>
+        <td class="c"><span class="badge" style="font-weight:700">${esc(r.clase || '-')}</span></td>
+        <td>
+          ${r.contacto ? `<a href="tel:${esc(r.contacto)}" style="text-decoration:none;font-weight:600;color:var(--azul)">📞 ${esc(fTel(r.contacto))}</a>` : '<span class="muted">Sin teléfono</span>'}
+        </td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${r.correo ? `<a href="mailto:${esc(r.correo)}" style="color:var(--azul)" title="${esc(r.correo)}">${esc(r.correo)}</a>` : '<span class="muted">Sin correo</span>'}
+        </td>
+        <td>${esc(r.examinador || 'No asignado')}</td>
+        <td class="c" style="white-space:nowrap">
+          <button class="btn chico" data-si="${r.id}" style="background:#10b981;border-color:#059669;color:#fff;font-weight:700;margin-right:4px">✔ Confirmó</button>
+          <button class="btn chico sec" data-no="${r.id}" style="color:#b91c1c;font-weight:600;margin-right:4px">✖ No asiste</button>
+          <button class="btn chico sec" data-ver="${r.id}" title="Ver o editar cita completa">Ficha</button>
+        </td>
+      </tr>
+    `).join('');
+
+    $('#pc-tbody').querySelectorAll('button[data-si]').forEach((el) => {
+      el.onclick = () => marcarAsistencia(Number(el.dataset.si), 1);
+    });
+    $('#pc-tbody').querySelectorAll('button[data-no]').forEach((el) => {
+      el.onclick = () => marcarAsistencia(Number(el.dataset.no), 0);
+    });
+    $('#pc-tbody').querySelectorAll('button[data-ver]').forEach((el) => {
+      el.onclick = async () => {
+        try {
+          const b = await api(`/agenda/${el.dataset.ver}`);
+          editorSlot(b, () => cargarDatos());
+        } catch (e) {
+          toast(e.message, 'err');
+        }
+      };
+    });
+  };
+
+  const marcarAsistencia = async (id, val) => {
+    try {
+      await api(`/agenda/${id}/confirmar`, {
+        method: 'POST',
+        body: { valor: val }
+      });
+      citasCargadas = citasCargadas.filter((c) => c.id !== id);
+      pintarLista();
+      actualizarBadgePorConfirmar();
+      toast(val ? 'Asistencia confirmada exitosamente' : 'Registrado: postulante no asiste', val ? 'ok' : 'alerta');
+    } catch (e) {
+      toast(e.message, 'err');
+    }
+  };
+
+  const cargarDatos = async () => {
+    const rango = $('#pc-rango').value;
+    const h = hoy();
+    let hasta = null;
+    if (rango === '7') hasta = sumarDias(h, 7);
+    else if (rango === '15') hasta = sumarDias(h, 15);
+    else if (rango === '30') hasta = sumarDias(h, 30);
+
+    try {
+      const todos = await api('/agenda?estado=porconfirmar');
+      citasCargadas = todos.filter((r) => {
+        if (r.fecha < h) return false;
+        if (hasta && r.fecha > hasta) return false;
+        return true;
+      });
+      pintarLista();
+      actualizarBadgePorConfirmar();
+    } catch (e) {
+      $('#pc-tbody').innerHTML = `<tr><td colspan="9" class="c muted" style="color:var(--error);padding:2rem">Error: ${esc(e.message)}</td></tr>`;
+    }
+  };
+
+  $('#pc-q').oninput = pintarLista;
+  $('#pc-rango').onchange = cargarDatos;
+  $('#pc-refrescar').onclick = cargarDatos;
+
+  await cargarDatos();
+}
+
 /* ================= tab: AGENDA ================= */
 let estadoAgenda = { fecha: null, examinador_id: '', filtro: '' };
 async function renderAgenda() {
-  if (!estadoAgenda.fecha) estadoAgenda.fecha = hoy();
+  if (!estadoAgenda.fecha) estadoAgenda.fecha = await fechaInicialAgenda();
   view.innerHTML = `
     <div class="panel no-print panel-fijo">
-      <div class="fila">
-        <button class="btn sec" id="dia-prev">&#8592;</button>
-        <div class="campo"><label>Fecha</label><input type="date" id="a-fecha" value="${estadoAgenda.fecha}"></div>
-        <button class="btn sec" id="dia-next">&#8594;</button>
-        <button class="btn sec" id="a-hoy">Hoy</button>
-        <div class="campo"><label>Examinador</label>
-          <select id="a-exam"><option value="">Todos</option>
-            ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}" ${String(e.id) === String(estadoAgenda.examinador_id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
-          </select></div>
-        <span class="pastilla" id="a-libres" style="margin-left:auto">— bloques libres</span>
-        <button class="btn sec" id="a-porconfirmar">Por confirmar</button>
-        <button class="btn sec" id="a-bloqdia">Bloquear días</button>
+      <div class="fila" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:flex-end;gap:6px">
+          <button class="btn sec" id="dia-prev" style="padding:.45rem .65rem" title="Día anterior">&#8592;</button>
+          <div class="campo"><label>Fecha</label><input type="date" id="a-fecha" value="${estadoAgenda.fecha}"></div>
+          <button class="btn sec" id="dia-next" style="padding:.45rem .65rem" title="Día siguiente">&#8594;</button>
+          <button class="btn sec" id="a-hoy">Hoy</button>
+          <div class="campo"><label>Examinador</label>
+            <select id="a-exam"><option value="">Todos</option>
+              ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}" ${String(e.id) === String(estadoAgenda.examinador_id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
+            </select></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="pastilla" id="a-libres" data-tooltip="Total de horas disponibles para agendar en la fecha seleccionada">— bloques libres</span>
+          <div class="vista-selector" title="Elegir modalidad de visualización de la Agenda">
+            <button type="button" class="btn-vista ${(estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista')) === 'horizontal' ? '' : 'activo'}" id="btn-vista-vertical" title="Vista vertical por examinador (modo actual)">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2zm7 0a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V2z"/></svg>
+              <span>Vertical</span>
+            </button>
+            <button type="button" class="btn-vista ${(estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista')) === 'horizontal' ? 'activo' : ''}" id="btn-vista-horizontal" title="Vista horizontal continua (Línea de tiempo hacia el lado)">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3zm0 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-3z"/></svg>
+              <span>Horizontal</span>
+            </button>
+          </div>
+          
+          <button class="btn btn-bloq-accion" id="a-bloqdia" data-tooltip="Inhabilita franjas horarias por licencias, feriados, capacitaciones o terreno (envía citas a Reagendar)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Bloquear
+          </button>
+          <button class="btn btn-desbloq-accion" id="a-desbloqdia" data-tooltip="Libera y reactiva bloques previamente bloqueados para volver a citar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+            Desbloquear
+          </button>
+          <button class="btn-guia-accion" id="a-guia" data-tooltip="Simulador interactivo con flecha explicativa que te enseña paso a paso cómo usar el sistema">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Cómo usar el sistema
+          </button>
+
+        </div>
       </div>
     </div>
     <div class="panel"><div id="a-grid">Cargando...</div></div>`;
@@ -485,9 +955,26 @@ async function renderAgenda() {
   $('#a-exam').onchange = (e) => { estadoAgenda.examinador_id = e.target.value; renderAgenda(); };
   $('#dia-prev').onclick = async () => { estadoAgenda.fecha = await proximoDiaConAgenda(estadoAgenda.fecha, -1); renderAgenda(); };
   $('#dia-next').onclick = async () => { estadoAgenda.fecha = await proximoDiaConAgenda(estadoAgenda.fecha, 1); renderAgenda(); };
-  $('#a-hoy').onclick = () => { estadoAgenda.fecha = hoy(); renderAgenda(); };
+  $('#a-hoy').onclick = async () => { estadoAgenda.fecha = await fechaInicialAgenda(); renderAgenda(); };
   $('#a-bloqdia').onclick = () => dialogoBloquearDia();
-  $('#a-porconfirmar').onclick = () => dialogoPorConfirmar();
+  $('#a-desbloqdia').onclick = () => dialogoDesbloquearDia();
+  if ($('#a-porconfirmar')) $('#a-porconfirmar').onclick = () => irA('porconfirmar');
+  $('#a-guia').onclick = () => iniciarGuiaInteractiva();
+  const btnV = $('#btn-vista-vertical');
+  const btnH = $('#btn-vista-horizontal');
+  if (btnV && btnH) {
+    btnV.onclick = () => {
+      estadoAgenda.modoVista = 'vertical';
+      localStorage.setItem('agenda_modo_vista', 'vertical');
+      renderAgenda();
+    };
+    btnH.onclick = () => {
+      estadoAgenda.modoVista = 'horizontal';
+      localStorage.setItem('agenda_modo_vista', 'horizontal');
+      renderAgenda();
+    };
+  }
+
 
   const q = new URLSearchParams({ fecha: estadoAgenda.fecha });
   if (estadoAgenda.examinador_id) q.set('examinador_id', estadoAgenda.examinador_id);
@@ -501,9 +988,12 @@ async function renderAgenda() {
   });
   actualizarBadgePapelera();
   actualizarBadgeErrores();
+  actualizarBadgeReagendar();
+  actualizarBadgePorConfirmar();
 }
 
-async function dialogoPorConfirmar() {
+async function dialogoPorConfirmar() { irA('porconfirmar'); return;
+
   const hasta = sumarDias(hoy(), 7);
   const rows = (await api('/agenda?estado=porconfirmar'))
     .filter((r) => r.fecha <= hasta);
@@ -537,55 +1027,206 @@ async function dialogoPorConfirmar() {
 // Bloquea todos los bloques de un examinador (o de todos) en un rango de fechas:
 // permisos administrativos, licencias, feriado legal, compensatorios, etc.
 const MOTIVOS_BLOQUEO_DEF = ['PERMISO ADMINISTRATIVO', 'LICENCIA MEDICA', 'FERIADO LEGAL', 'COMPENSATORIO', 'CAPACITACION', 'TERRENO'];
-const ETQ_MOTIVO = { 'LICENCIA MEDICA': 'Licencia médica', CAPACITACION: 'Capacitación', BLOQUEADO: 'bloqueo de celda (sin motivo)' };
+const ETQ_MOTIVO = {
+  'LICENCIA MEDICA': 'Licencia médica',
+  'FERIADO LEGAL': 'Feriado legal',
+  'CAPACITACION': 'Capacitación',
+  'COMPENSATORIO': 'Día compensatorio',
+  'TERRENO': 'Examen en terreno',
+  'TRASLADO': 'Traslado',
+  'BLOQUEADO': 'Bloqueo administrativo'
+};
 function dialogoBloquearDia() {
   const motivos = META.motivos_bloqueo || MOTIVOS_BLOQUEO_DEF;
   const f = estadoAgenda.fecha || hoy();
-  modal('Bloquear / desbloquear días', `
-    <div class="ancho fila" style="gap:.4rem">
-      <button type="button" class="btn chico" id="bd-modo-bloq">Bloquear</button>
-      <button type="button" class="btn chico sec" id="bd-modo-des">Desbloquear</button>
+  const horasDisponibles = (META && META.horas && META.horas.length) ? META.horas : [
+    '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30'
+  ];
+  let modoActual = 'dias'; // 'dias' | 'horas'
+  let horasSeleccionadas = new Set(['08:30', '09:00']);
+
+  modal('🔒 Bloquear días u horas', `
+    <div class="tabs-modo-bloq ancho">
+      <button type="button" class="btn-tab-bloq activo" id="bd-tab-dias">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Día(s) completo(s)
+      </button>
+      <button type="button" class="btn-tab-bloq" id="bd-tab-horas">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Por horas / bloques específicos
+      </button>
     </div>
+
     <div class="campo ancho"><label>Examinador</label><select id="bd-exam">
+      <option value="" ${!estadoAgenda.examinador_id ? 'selected' : ''}>Todos los examinadores</option>
       ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}" ${String(e.id) === String(estadoAgenda.examinador_id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
-      <option value="">Todos los examinadores</option></select></div>
-    <div class="campo"><label>Desde</label><input type="date" id="bd-desde" value="${f}"></div>
-    <div class="campo"><label>Hasta</label><input type="date" id="bd-hasta" value="${f}"></div>
-    <div class="ancho"><button type="button" class="btn chico sec" id="bd-semana"
-      title="Lleva Desde al lunes y Hasta al viernes de sus semanas">Ajustar a semanas completas (lun–vie)</button></div>
-    <div class="campo"><label>Motivo</label><select id="bd-motivo">
-      <option value="" id="bd-cualquiera" hidden>Cualquier motivo</option>
+    </select></div>
+
+    <!-- PANEL MODO DÍAS COMPLETOS -->
+    <div id="bd-panel-dias" class="ancho" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+      <div class="campo" style="flex:1"><label>Desde fecha</label><input type="date" id="bd-desde" value="${f}"></div>
+      <div class="campo" style="flex:1"><label>Hasta fecha</label><input type="date" id="bd-hasta" value="${f}"></div>
+      <div class="ancho" style="margin-top:-4px"><button type="button" class="btn chico sec" id="bd-semana"
+        title="Lleva Desde al lunes y Hasta al viernes de sus semanas">Ajustar a semanas completas (lun–vie)</button></div>
+    </div>
+
+    <!-- PANEL MODO HORAS / BLOQUES -->
+    <div id="bd-panel-horas" class="ancho" style="display:none;flex-direction:column;gap:10px;margin-bottom:6px">
+      <div style="display:flex;gap:10px;align-items:flex-end">
+        <div class="campo" style="flex:1;margin:0"><label>Fecha</label><input type="date" id="bd-h-fecha" value="${f}"></div>
+        <div class="campo" id="bd-h-c-hasta" style="flex:1;margin:0" hidden><label>Hasta fecha</label><input type="date" id="bd-h-hasta" value="${f}"></div>
+        <button type="button" class="btn chico sec" id="bd-h-toggle-rango-dias" style="margin-bottom:2px" title="Permite aplicar el bloqueo horario a varios días consecutivos">Aplicar a varios días...</button>
+      </div>
+
+      <div style="background:#f8fafc;border:1px solid var(--linea,#e2e8f0);border-radius:8px;padding:12px;margin-top:2px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label style="font-size:11px;font-weight:700;color:var(--tinta-2);text-transform:uppercase;margin:0">
+            Selecciona los bloques a bloquear:
+          </label>
+          <div style="display:flex;gap:6px">
+            <button type="button" class="btn btn-xs sec" id="bd-h-quick-manana" style="font-size:11px;padding:2px 8px">Mañana (08:30-11:00)</button>
+            <button type="button" class="btn btn-xs sec" id="bd-h-quick-tarde" style="font-size:11px;padding:2px 8px">Mediodía (11:30-13:30)</button>
+            <button type="button" class="btn btn-xs sec" id="bd-h-quick-limpiar" style="font-size:11px;padding:2px 8px">Desmarcar</button>
+          </div>
+        </div>
+
+        <!-- Selector directo de rango de horas -->
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+          <span style="font-size:11px;color:var(--tinta-3);font-weight:600">Rango rápido:</span>
+          <select id="bd-h-sel-desde" style="padding:3px 8px;font-size:12px;border-radius:4px;border:1px solid #cbd5e1">
+            ${horasDisponibles.map((h) => `<option value="${h}" ${h === '08:30' ? 'selected' : ''}>${h} hrs</option>`).join('')}
+          </select>
+          <span style="font-size:11px;color:var(--tinta-3)">a</span>
+          <select id="bd-h-sel-hasta" style="padding:3px 8px;font-size:12px;border-radius:4px;border:1px solid #cbd5e1">
+            ${horasDisponibles.map((h) => `<option value="${h}" ${h === '10:00' ? 'selected' : ''}>${h} hrs</option>`).join('')}
+          </select>
+          <button type="button" class="btn chico sec" id="bd-h-btn-marcar-rango" style="padding:3px 10px;font-size:12px">Marcar</button>
+        </div>
+
+        <!-- Chips interactivos para cada hora -->
+        <div id="bd-horas-chips-cont" style="display:flex;flex-wrap:wrap;gap:6px">
+          ${horasDisponibles.map((h) => {
+            const esPesada = h === META.hora_d_a5;
+            return `<button type="button" class="chip-hora ${horasSeleccionadas.has(h) ? 'activo' : ''}" data-hora="${h}">
+              ${h}
+              ${esPesada ? '<span style="font-size:9px;background:rgba(0,0,0,0.08);padding:1px 4px;border-radius:3px;margin-left:2px">D/A5</span>' : ''}
+            </button>`;
+          }).join('')}
+        </div>
+
+        <div id="bd-horas-seleccionadas-txt" style="font-size:12px;color:var(--azul,#0284c7);font-weight:700;margin-top:8px">
+          2 bloques seleccionados: 08:30, 09:00
+        </div>
+      </div>
+    </div>
+
+    <!-- MOTIVO Y OPCIONES COMUNES -->
+    <div class="campo ancho"><label>Motivo del bloqueo</label><select id="bd-motivo">
       ${motivos.map((m) => `<option value="${esc(m)}">${esc(ETQ_MOTIVO[m] || m.charAt(0) + m.slice(1).toLowerCase())}</option>`).join('')}
       <option value="__otro">Otro...</option></select></div>
-    <div class="campo" id="bd-otro-c" hidden><label>Otro motivo</label><input id="bd-otro" placeholder="Escribe el motivo"></div>
-    <div class="campo ancho" id="bd-ocupados-c"><label><input type="checkbox" id="bd-ocupados"> Incluir bloques que ya tienen cita (las citas van a la papelera)</label></div>
+    <div class="campo ancho" id="bd-otro-c" hidden><label>Otro motivo</label><input id="bd-otro" placeholder="Escribe el motivo"></div>
+    <div class="campo ancho" id="bd-ocupados-c"><label><input type="checkbox" id="bd-ocupados" checked> Incluir bloques que ya tienen cita (se enviarán a Reagendar)</label></div>
     <div class="ancho aviso" id="bd-resumen" hidden></div>
-  `, `<button class="btn sec" id="bd-cancel">Cancelar</button>
-      <button class="btn" id="bd-ok">Bloquear</button>`);
+  `, `
+    <button class="btn sec" id="bd-cancel">Cancelar</button>
+    <button class="btn btn-bloq-accion" id="bd-ok">Bloquear días u horas</button>
+  `);
 
-  // Modo: bloquear o desbloquear. Al desbloquear, el motivo por defecto es
-  // "Cualquier motivo" (quita todo bloqueo del rango, venga de donde venga).
-  let modo = 'bloquear';
-  const ponerModo = (m) => {
-    modo = m;
-    const des = m === 'desbloquear';
-    $('#bd-modo-bloq').classList.toggle('sec', des);
-    $('#bd-modo-des').classList.toggle('sec', !des);
-    $('#bd-cualquiera').hidden = !des;
-    $('#bd-motivo').value = des ? '' : motivos[0];
-    $('#bd-otro-c').hidden = true;
-    $('#bd-ocupados-c').hidden = des;
-    $('#bd-ok').textContent = des ? 'Desbloquear' : 'Bloquear';
+  // Switch de modo
+  $('#bd-tab-dias').onclick = () => {
+    modoActual = 'dias';
+    $('#bd-tab-dias').classList.add('activo');
+    $('#bd-tab-horas').classList.remove('activo');
+    $('#bd-panel-dias').style.display = 'flex';
+    $('#bd-panel-horas').style.display = 'none';
     previa();
   };
-  $('#bd-modo-bloq').onclick = () => ponerModo('bloquear');
-  $('#bd-modo-des').onclick = () => ponerModo('desbloquear');
 
-  // lunes de la semana de `desde` / viernes de la semana de `hasta`
+  $('#bd-tab-horas').onclick = () => {
+    modoActual = 'horas';
+    $('#bd-tab-dias').classList.remove('activo');
+    $('#bd-tab-horas').classList.add('activo');
+    $('#bd-panel-dias').style.display = 'none';
+    $('#bd-panel-horas').style.display = 'flex';
+    actualizarVistaChips();
+    previa();
+  };
+
+  // Toggle multidia en modo horas
+  $('#bd-h-toggle-rango-dias').onclick = () => {
+    const cHasta = $('#bd-h-c-hasta');
+    cHasta.hidden = !cHasta.hidden;
+    $('#bd-h-toggle-rango-dias').textContent = cHasta.hidden ? 'Aplicar a varios días...' : 'Solo este día';
+    $('#bd-h-toggle-rango-dias').classList.toggle('activo', !cHasta.hidden);
+    if (!cHasta.hidden && !$('#bd-h-hasta').value) $('#bd-h-hasta').value = $('#bd-h-fecha').value;
+    previa();
+  };
+
+  const actualizarVistaChips = () => {
+    const cont = $('#bd-horas-chips-cont');
+    if (!cont) return;
+    cont.querySelectorAll('.chip-hora').forEach((btn) => {
+      btn.classList.toggle('activo', horasSeleccionadas.has(btn.dataset.hora));
+    });
+    const info = $('#bd-horas-seleccionadas-txt');
+    if (info) {
+      const arr = Array.from(horasSeleccionadas).sort();
+      if (!arr.length) {
+        info.textContent = 'Ningún bloque seleccionado (haz clic en los horarios arriba)';
+        info.style.color = 'var(--alerta, #dc2626)';
+      } else {
+        info.textContent = `${arr.length} ${arr.length === 1 ? 'bloque seleccionado' : 'bloques seleccionados'}: ${arr.join(', ')}`;
+        info.style.color = 'var(--azul, #0284c7)';
+      }
+    }
+  };
+
+  const contChips = $('#bd-horas-chips-cont');
+  if (contChips) {
+    contChips.querySelectorAll('.chip-hora').forEach((btn) => {
+      btn.onclick = () => {
+        const h = btn.dataset.hora;
+        if (horasSeleccionadas.has(h)) {
+          horasSeleccionadas.delete(h);
+        } else {
+          horasSeleccionadas.add(h);
+        }
+        actualizarVistaChips();
+        previa();
+      };
+    });
+  }
+
+  $('#bd-h-quick-manana').onclick = () => {
+    horasSeleccionadas = new Set(['08:30', '09:00', '09:30', '10:00', '10:30', '11:00']);
+    actualizarVistaChips();
+    previa();
+  };
+  $('#bd-h-quick-tarde').onclick = () => {
+    horasSeleccionadas = new Set(['11:30', '12:00', '12:30', '13:00', '13:30']);
+    actualizarVistaChips();
+    previa();
+  };
+  $('#bd-h-quick-limpiar').onclick = () => {
+    horasSeleccionadas.clear();
+    actualizarVistaChips();
+    previa();
+  };
+  $('#bd-h-btn-marcar-rango').onclick = () => {
+    const hd = $('#bd-h-sel-desde').value;
+    const hh = $('#bd-h-sel-hasta').value;
+    if (hh < hd) return toast('La hora hasta no puede ser anterior a la hora desde', 'err');
+    horasDisponibles.forEach((h) => {
+      if (h >= hd && h <= hh) horasSeleccionadas.add(h);
+    });
+    actualizarVistaChips();
+    previa();
+  };
+
   $('#bd-semana').onclick = () => {
     const mover = (iso, alDia) => {
       const d = new Date(`${iso}T12:00:00Z`);
-      const dow = (d.getUTCDay() + 6) % 7; // 0 = lunes
+      const dow = (d.getUTCDay() + 6) % 7;
       d.setUTCDate(d.getUTCDate() - dow + alDia);
       return d.toISOString().slice(0, 10);
     };
@@ -597,11 +1238,32 @@ function dialogoBloquearDia() {
   };
 
   const motivo = () => ($('#bd-motivo').value === '__otro' ? $('#bd-otro').value.trim() : $('#bd-motivo').value);
-  const datos = () => ({
-    desde: $('#bd-desde').value, hasta: $('#bd-hasta').value || $('#bd-desde').value,
-    examinador_id: $('#bd-exam').value || null, motivo: motivo(), incluir_ocupados: $('#bd-ocupados').checked,
-  });
-  // Vista previa: cuantos bloques se van a bloquear y cuantas citas hay en el rango.
+  
+  const datos = () => {
+    if (modoActual === 'dias') {
+      return {
+        desde: $('#bd-desde').value,
+        hasta: $('#bd-hasta').value || $('#bd-desde').value,
+        examinador_id: $('#bd-exam').value || null,
+        motivo: motivo(),
+        incluir_ocupados: $('#bd-ocupados').checked,
+      };
+    } else {
+      const dDesde = $('#bd-h-fecha').value;
+      const dHasta = ($('#bd-h-c-hasta') && !$('#bd-h-c-hasta').hidden && $('#bd-h-hasta').value)
+        ? $('#bd-h-hasta').value
+        : dDesde;
+      return {
+        desde: dDesde,
+        hasta: dHasta,
+        examinador_id: $('#bd-exam').value || null,
+        motivo: motivo(),
+        incluir_ocupados: $('#bd-ocupados').checked,
+        horas: Array.from(horasSeleccionadas).sort(),
+      };
+    }
+  };
+
   let tmr;
   let pedido = 0;
   const previa = () => {
@@ -610,61 +1272,572 @@ function dialogoBloquearDia() {
       const d = datos();
       const res = $('#bd-resumen');
       if (!res) return;
-      if (!d.desde || d.hasta < d.desde) { res.hidden = false; res.textContent = 'Revisa las fechas: "Hasta" no puede ser anterior a "Desde".'; return; }
+      if (!d.desde || d.hasta < d.desde) {
+        res.hidden = false;
+        res.textContent = 'Revisa las fechas: "Hasta" no puede ser anterior a "Desde".';
+        $('#bd-ok').disabled = true;
+        return;
+      }
+      if (modoActual === 'horas' && (!d.horas || !d.horas.length)) {
+        res.hidden = false;
+        res.textContent = 'Selecciona al menos un bloque u horario para bloquear.';
+        $('#bd-ok').disabled = true;
+        return;
+      }
+
       const n = ++pedido;
       const dias = Math.round((Date.parse(d.hasta) - Date.parse(d.desde)) / 864e5) + 1;
-      const txtDias = `${fFecha(d.desde)} al ${fFecha(d.hasta)} (${dias} ${dias === 1 ? 'día' : 'días'})`;
+      let txtEncabezado = '';
+      if (modoActual === 'dias') {
+        txtEncabezado = `${fFecha(d.desde)} al ${fFecha(d.hasta)} (${dias} ${dias === 1 ? 'día' : 'días'})`;
+      } else {
+        const hTxt = d.horas.join(', ');
+        txtEncabezado = dias > 1
+          ? `${fFecha(d.desde)} al ${fFecha(d.hasta)} (${dias} días) · ${d.horas.length} ${d.horas.length === 1 ? 'bloque' : 'bloques'} (${hTxt})`
+          : `${fFecha(d.desde)} · ${d.horas.length} ${d.horas.length === 1 ? 'bloque' : 'bloques'} (${hTxt})`;
+      }
+
       try {
-        if (modo === 'desbloquear') {
-          const r = await api('/desbloquear-dia', { method: 'POST', body: { ...d, simular: true } });
-          if (n !== pedido || !$('#bd-resumen')) return;
-          const detalle = r.por_motivo.map((x) => `${x.n} ${ETQ_MOTIVO[x.motivo] || x.motivo.toLowerCase()}`).join(', ');
-          res.hidden = false;
-          res.textContent = r.desbloqueables
-            ? `${txtDias} · se desbloquearán ${r.desbloqueables} ${r.desbloqueables === 1 ? 'bloque' : 'bloques'}: ${detalle}.`
-            : `${txtDias} · no hay bloques bloqueados${d.motivo ? ' con ese motivo' : ''} en el rango.`;
-          return;
-        }
         const r = await api('/bloquear-dia', { method: 'POST', body: { ...d, simular: true } });
         if (n !== pedido || !$('#bd-resumen')) return;
-        let txt = `${txtDias} · se bloquearán ${r.bloqueables} ${r.bloqueables === 1 ? 'bloque' : 'bloques'}.`;
+        let txt = `${txtEncabezado} · se bloquearán ${r.bloqueables} ${r.bloqueables === 1 ? 'bloque' : 'bloques'}.`;
         if (r.con_cita) {
           txt += d.incluir_ocupados
-            ? ` ${r.con_cita} ${r.con_cita === 1 ? 'cita pasa' : 'citas pasan'} a la papelera (reagéndalas después).`
+            ? ` ${r.con_cita} ${r.con_cita === 1 ? 'cita pasa' : 'citas pasan'} a la lista de Reagendamiento.`
             : ` Hay ${r.con_cita} ${r.con_cita === 1 ? 'cita' : 'citas'} en el rango que NO se tocan: reagéndalas o marca "Incluir bloques que ya tienen cita".`;
         }
-        res.hidden = false; res.textContent = txt;
-      } catch (e) { res.hidden = false; res.textContent = e.message; }
-    }, 250);
+        res.hidden = false;
+        res.textContent = txt;
+        $('#bd-ok').disabled = false;
+        $('#bd-ok').textContent = r.bloqueables ? `Bloquear ${r.bloqueables} ${r.bloqueables === 1 ? 'bloque' : 'bloques'}` : 'Bloquear días u horas';
+      } catch (e) {
+        res.hidden = false;
+        res.textContent = e.message;
+        $('#bd-ok').disabled = false;
+        $('#bd-ok').textContent = 'Bloquear días u horas';
+      }
+    }, 200);
   };
-  $('#bd-motivo').onchange = () => { $('#bd-otro-c').hidden = $('#bd-motivo').value !== '__otro'; previa(); };
+
+  $('#bd-motivo').onchange = () => {
+    $('#bd-otro-c').hidden = $('#bd-motivo').value !== '__otro';
+    previa();
+  };
   $('#bd-otro').oninput = previa;
   $('#bd-desde').onchange = () => {
     if (!$('#bd-hasta').value || $('#bd-hasta').value < $('#bd-desde').value) $('#bd-hasta').value = $('#bd-desde').value;
     previa();
   };
-  ['#bd-hasta', '#bd-exam', '#bd-ocupados'].forEach((s) => { $(s).onchange = previa; });
+  $('#bd-h-fecha').onchange = () => {
+    if (!$('#bd-h-hasta').value || $('#bd-h-hasta').value < $('#bd-h-fecha').value) $('#bd-h-hasta').value = $('#bd-h-fecha').value;
+    previa();
+  };
+  ['#bd-hasta', '#bd-h-hasta', '#bd-exam', '#bd-ocupados'].forEach((s) => {
+    const el = $(s);
+    if (el) el.onchange = previa;
+  });
   previa();
 
   $('#bd-cancel').onclick = cerrarModal;
   $('#bd-ok').onclick = async () => {
     const d = datos();
-    try {
-      if (modo === 'desbloquear') {
-        if ($('#bd-motivo').value === '__otro' && !d.motivo) return toast('Escribe el motivo a desbloquear', 'err');
-        const r = await api('/desbloquear-dia', { method: 'POST', body: { ...d, incluir_ocupados: undefined } });
-        if (!r.desbloqueados) return toast('No había bloques bloqueados en ese rango para desbloquear', 'err');
-        toast(`${r.desbloqueados} bloques desbloqueados`);
-      } else {
-        if (!d.motivo) return toast('Indica el motivo del bloqueo', 'err');
-        if (d.incluir_ocupados && !confirm('Las citas del rango se van a quitar de la agenda (quedan en la papelera). ¿Continuar?')) return;
-        const r = await api('/bloquear-dia', { method: 'POST', body: d });
-        toast(`${r.bloqueados} bloques bloqueados${r.a_reagendar ? ` · ${r.a_reagendar} persona(s) pasaron a Reagendar` : ''}`);
+    if ($('#bd-motivo').value === '__otro' && !d.motivo) return toast('Escribe el motivo del bloqueo', 'err');
+    if (modoActual === 'horas' && (!d.horas || !d.horas.length)) {
+      return toast('Debes seleccionar al menos un bloque u horario', 'err');
+    }
+
+    if (d.incluir_ocupados) {
+      try {
+        const sim = await api('/bloquear-dia', { method: 'POST', body: { ...d, simular: true } });
+        if (sim.con_cita > 0) {
+          const txt = sim.con_cita === 1 ? '1 postulante' : `${sim.con_cita} postulantes`;
+          if (!confirm(`Se bloqueará el horario seleccionado.\n${txt} con cita agendada pasarán a la sección "Reagendar" para reasignarles un nuevo cupo.\n\n¿Deseas proceder con el bloqueo?`)) return;
+        }
+      } catch (err) {
+        return toast(err.message, 'err');
       }
-      cerrarModal(); recargar(renderAgenda)();
-    } catch (e) { toast(e.message, 'err'); }
+    }
+
+    $('#bd-ok').disabled = true;
+    try {
+      const r = await api('/bloquear-dia', { method: 'POST', body: d });
+      cerrarModal();
+      if (!r.bloqueados) return toast('No había bloques disponibles en ese horario para bloquear', 'err');
+      let msg = `${r.bloqueados} ${r.bloqueados === 1 ? 'bloque bloqueado' : 'bloques bloqueados'}`;
+      if (r.a_reagendar) msg += ` · ${r.a_reagendar} citas movidas a Reagendar`;
+      toast(msg, 'ok');
+      actualizarBadgeReagendar();
+      estadoAgenda.fecha = d.desde;
+      await renderAgenda();
+      if (r.a_reagendar && confirm(`Se bloquearon los bloques y ${r.a_reagendar} postulante(s) fueron enviados a Reagendar.\n\n¿Deseas ir a la pestaña Reagendar ahora para asignarles cupo?`)) {
+        irA('reagendar');
+      }
+    } catch (e) {
+      $('#bd-ok').disabled = false;
+      toast(e.message, 'err');
+    }
   };
 }
+
+async function dialogoDesbloquearDia() {
+  const examinadores = META.examinadores || [];
+  const fechaActual = estadoAgenda.fecha || hoy();
+  const horasDisponibles = (META && META.horas && META.horas.length) ? META.horas : [
+    '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30'
+  ];
+  let desModoHoras = 'todas'; // 'todas' | 'especificas'
+  let desHorasSeleccionadas = new Set(['08:30']);
+
+  modal('🔓 Desbloquear días u horas', `
+    <div style="display:flex;flex-direction:column;gap:.75rem">
+      <div style="background:var(--elev);padding:.85rem 1rem;border-radius:var(--r-sm);border:1px solid var(--linea)">
+        <div style="font-size:13px;font-weight:600;margin-bottom:.5rem;color:var(--tinta);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+          <span>Filtrar y buscar bloqueos activos</span>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button type="button" class="btn chico activo" id="des-btn-solo-fecha" style="font-size:11px;font-weight:700">
+              📅 Fecha en pantalla (${fFecha(fechaActual)})
+            </button>
+            <button type="button" class="btn chico sec" id="des-btn-todas-fechas" style="font-size:11px">
+              Ver todas las fechas vigentes
+            </button>
+            <button type="button" class="btn chico sec" id="des-toggle-rango" style="font-size:11px">
+              Desbloqueo por rango / horas...
+            </button>
+          </div>
+        </div>
+        
+        <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <input type="search" id="des-buscar" placeholder="🔍 Buscar por fecha, examinador o motivo..." style="width:100%;margin:0">
+          </div>
+          <div style="min-width:240px">
+            <select id="des-sel-exam" style="width:100%;margin:0">
+              <option value="">Todos los examinadores</option>
+              ${examinadores.map(e => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        
+        <div id="des-panel-rango" hidden style="margin-top:.75rem;padding-top:.75rem;border-top:1px dashed var(--linea)">
+          <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.75rem">
+            <div class="campo" style="margin:0"><label style="font-size:11px;font-weight:700">Desde fecha</label><input type="date" id="des-rango-desde" value="${fechaActual}"></div>
+            <div class="campo" style="margin:0"><label style="font-size:11px;font-weight:700">Hasta fecha</label><input type="date" id="des-rango-hasta" value="${fechaActual}"></div>
+            <div class="campo" style="margin:0;min-width:200px">
+              <label style="font-size:11px;font-weight:700">Examinador</label>
+              <select id="des-rango-exam" style="margin:0">
+                <option value="">Todos los examinadores</option>
+                ${examinadores.map(e => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
+          <div style="background:#f8fafc;border:1px solid var(--linea,#e2e8f0);border-radius:8px;padding:12px;margin-bottom:.75rem">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+              <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                <label style="font-size:11px;font-weight:700;color:var(--tinta-2);text-transform:uppercase;margin:0">
+                  ¿Qué bloques u horas desbloquear?
+                </label>
+                <div style="display:flex;gap:10px">
+                  <label style="font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-weight:600">
+                    <input type="radio" name="des-modo-horas" value="todas" id="des-radio-todas" checked> Todas las horas del día
+                  </label>
+                  <label style="font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-weight:600">
+                    <input type="radio" name="des-modo-horas" value="especificas" id="des-radio-especificas"> Solo horas específicas (ej. 08:30, 11:00)
+                  </label>
+                </div>
+              </div>
+              <div id="des-h-quick-btns" style="display:none;gap:6px">
+                <button type="button" class="btn btn-xs sec" id="des-h-quick-manana" style="font-size:11px;padding:2px 8px">Mañana (08:30-11:00)</button>
+                <button type="button" class="btn btn-xs sec" id="des-h-quick-tarde" style="font-size:11px;padding:2px 8px">Mediodía (11:30-13:30)</button>
+                <button type="button" class="btn btn-xs sec" id="des-h-quick-limpiar" style="font-size:11px;padding:2px 8px">Desmarcar</button>
+              </div>
+            </div>
+
+            <!-- Selector de horas específicas con chips -->
+            <div id="des-contenedor-horas" style="display:none;margin-top:10px">
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+                <span style="font-size:11px;color:var(--tinta-3);font-weight:600">Rango rápido de horas:</span>
+                <select id="des-h-sel-desde" style="padding:3px 8px;font-size:12px;border-radius:4px;border:1px solid #cbd5e1">
+                  ${horasDisponibles.map(h => `<option value="${h}" ${h === '08:30' ? 'selected' : ''}>${h}</option>`).join('')}
+                </select>
+                <span style="font-size:11px;color:var(--tinta-3)">hasta</span>
+                <select id="des-h-sel-hasta" style="padding:3px 8px;font-size:12px;border-radius:4px;border:1px solid #cbd5e1">
+                  ${horasDisponibles.map(h => `<option value="${h}" ${h === '11:00' ? 'selected' : ''}>${h}</option>`).join('')}
+                </select>
+                <button type="button" class="btn chico sec" id="des-h-btn-marcar-rango" style="padding:3px 10px;font-size:12px">Marcar rango</button>
+              </div>
+
+              <div id="des-chips-horas" style="display:flex;flex-wrap:wrap;gap:6px">
+                ${horasDisponibles.map(h => `
+                  <button type="button" class="chip-hora" data-hora="${h}" style="padding:5px 12px;font-size:12px;font-weight:600;border-radius:6px;cursor:pointer">
+                    ${h}
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+
+            <div id="des-preview-txt" style="font-size:12px;color:var(--tinta);margin-top:10px;padding:6px 10px;background:#e0f2fe;border-radius:6px;line-height:1.4">
+              Se desbloquearán todas las horas del día en el rango de fechas seleccionado.
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end">
+            <button type="button" class="btn btn-desbloq-accion chico" id="des-btn-rango">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+              Desbloquear bloques seleccionados
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabla-bloqueos-cont">
+        <table class="tabla-bloqueos">
+          <thead>
+            <tr>
+              <th style="width:190px">Fecha</th>
+              <th>Examinador</th>
+              <th>Causa del bloqueo</th>
+              <th style="width:200px">Horario / Bloques</th>
+              <th style="width:170px;text-align:center">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="des-tbody">
+            <tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--tinta-3)">Cargando bloqueos activos...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `, `
+    <div style="flex:1;text-align:left;font-size:12px;color:var(--tinta-3);display:flex;align-items:center;gap:15px" id="des-total-lbl">
+      Cargando...
+    </div>
+    <label style="font-size:11px;color:var(--tinta-3);cursor:pointer;display:flex;align-items:center;gap:4px;margin-right:auto">
+      <input type="checkbox" id="des-chk-hist"> Ver histórico pasado
+    </label>
+    <button class="btn sec" id="des-cerrar">Cerrar</button>
+  `, 'modal-lg');
+
+  $('#des-cerrar').onclick = cerrarModal;
+
+  $('#des-toggle-rango').onclick = () => {
+    const p = $('#des-panel-rango');
+    p.hidden = !p.hidden;
+    $('#des-toggle-rango').classList.toggle('activo', !p.hidden);
+    actualizarDesPreview();
+  };
+
+  const getClaseMotivo = (motivo) => {
+    const m = (motivo || '').toUpperCase();
+    if (m.includes('LICENCIA')) return 'licencia';
+    if (m.includes('FERIADO')) return 'feriado';
+    if (m.includes('CAPACITAC')) return 'capacitacion';
+    if (m.includes('COMPENSAT')) return 'compensatorio';
+    if (m.includes('TERRENO')) return 'terreno';
+    if (m.includes('TRASLADO')) return 'traslado';
+    return 'otro';
+  };
+
+  let listaBloqueos = [];
+  let soloFechaActual = true;
+
+  const actualizarDesChips = () => {
+    document.querySelectorAll('#des-chips-horas .chip-hora').forEach((c) => {
+      const h = c.dataset.hora;
+      const on = desHorasSeleccionadas.has(h);
+      c.classList.toggle('activo', on);
+      c.innerHTML = on ? `✓ ${h}` : h;
+    });
+  };
+
+  const actualizarDesPreview = () => {
+    const desde = $('#des-rango-desde')?.value || fechaActual;
+    const hasta = $('#des-rango-hasta')?.value || fechaActual;
+    const selExam = $('#des-rango-exam');
+    const examNombre = selExam && selExam.value ? selExam.options[selExam.selectedIndex].text : 'todos los examinadores';
+    const fTxt = desde === hasta ? fFecha(desde) : `del ${fFecha(desde)} al ${fFecha(hasta)}`;
+    const prev = $('#des-preview-txt');
+    if (!prev) return;
+
+    if (desModoHoras === 'todas') {
+      prev.style.background = '#e0f2fe';
+      prev.style.color = '#0369a1';
+      prev.innerHTML = `Se desbloquearán <b>todas las horas del día</b> (${fTxt}) para <b>${esc(examNombre)}</b>.`;
+    } else {
+      const arr = Array.from(desHorasSeleccionadas).sort();
+      if (!arr.length) {
+        prev.style.background = '#fef2f2';
+        prev.style.color = '#b91c1c';
+        prev.innerHTML = `⚠ <b>Ninguna hora seleccionada:</b> Marca al menos una hora abajo para desbloquear.`;
+      } else if (arr.length === 1) {
+        prev.style.background = '#ecfdf5';
+        prev.style.color = '#047857';
+        prev.innerHTML = `Se desbloqueará únicamente el bloque de las <b>${arr[0]} hrs</b> (${fTxt}) para <b>${esc(examNombre)}</b>.`;
+      } else {
+        prev.style.background = '#ecfdf5';
+        prev.style.color = '#047857';
+        prev.innerHTML = `Se desbloquearán los <b>${arr.length} bloques</b> seleccionados (<b>${arr.join(', ')}</b>) (${fTxt}) para <b>${esc(examNombre)}</b>.`;
+      }
+    }
+  };
+
+  $('#des-radio-todas').onchange = () => {
+    desModoHoras = 'todas';
+    $('#des-contenedor-horas').style.display = 'none';
+    $('#des-h-quick-btns').style.display = 'none';
+    actualizarDesPreview();
+  };
+
+  $('#des-radio-especificas').onchange = () => {
+    desModoHoras = 'especificas';
+    $('#des-contenedor-horas').style.display = 'block';
+    $('#des-h-quick-btns').style.display = 'flex';
+    actualizarDesChips();
+    actualizarDesPreview();
+  };
+
+  document.querySelectorAll('#des-chips-horas .chip-hora').forEach((c) => {
+    c.onclick = () => {
+      const h = c.dataset.hora;
+      if (desHorasSeleccionadas.has(h)) desHorasSeleccionadas.delete(h);
+      else desHorasSeleccionadas.add(h);
+      actualizarDesChips();
+      actualizarDesPreview();
+    };
+  });
+
+  $('#des-h-quick-manana').onclick = () => {
+    desHorasSeleccionadas = new Set(['08:30', '09:00', '09:30', '10:00', '10:30', '11:00']);
+    actualizarDesChips();
+    actualizarDesPreview();
+  };
+
+  $('#des-h-quick-tarde').onclick = () => {
+    desHorasSeleccionadas = new Set(['11:30', '12:00', '12:30', '13:00', '13:30']);
+    actualizarDesChips();
+    actualizarDesPreview();
+  };
+
+  $('#des-h-quick-limpiar').onclick = () => {
+    desHorasSeleccionadas.clear();
+    actualizarDesChips();
+    actualizarDesPreview();
+  };
+
+  $('#des-h-btn-marcar-rango').onclick = () => {
+    const d = $('#des-h-sel-desde').value;
+    const h = $('#des-h-sel-hasta').value;
+    if (h < d) return toast('La hora hasta no puede ser menor a desde', 'err');
+    horasDisponibles.forEach((hr) => {
+      if (hr >= d && hr <= h) desHorasSeleccionadas.add(hr);
+    });
+    actualizarDesChips();
+    actualizarDesPreview();
+  };
+
+  $('#des-rango-desde').onchange = actualizarDesPreview;
+  $('#des-rango-hasta').onchange = actualizarDesPreview;
+  $('#des-rango-exam').onchange = actualizarDesPreview;
+
+  const pintarTabla = () => {
+    const txt = ($('#des-buscar')?.value || '').toLowerCase().trim();
+    const examId = $('#des-sel-exam')?.value || '';
+
+    const filtrados = listaBloqueos.filter((b) => {
+      if (examId && String(b.examinador_id) !== String(examId)) return false;
+      if (soloFechaActual && b.fecha !== fechaActual) return false;
+      if (!txt) return true;
+      const str = `${b.fecha} ${fFechaLarga(b.fecha)} ${b.examinador} ${b.motivo}`.toLowerCase();
+      return str.includes(txt);
+    });
+
+    const tbody = $('#des-tbody');
+    const lbl = $('#des-total-lbl');
+    if (!tbody) return;
+
+    if (lbl) {
+      lbl.textContent = `Mostrando ${filtrados.length} de ${listaBloqueos.length} bloqueos vigentes`;
+    }
+
+    if (!filtrados.length) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align:center;padding:2.5rem 1rem;color:var(--tinta-3)">
+            <div style="font-size:1.8rem;margin-bottom:.3rem">&#128077;</div>
+            <div style="font-weight:600">No hay bloqueos con estos filtros</div>
+            <div style="font-size:12px;margin-top:.2rem">Todos los horarios cumplen con los criterios de búsqueda.</div>
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = filtrados.map((b, idx) => {
+      const cls = getClaseMotivo(b.motivo);
+      const diaLargo = fFechaLarga(b.fecha);
+      const esFechaActual = b.fecha === fechaActual;
+      
+      const horarioTxt = b.cant_bloques >= 10
+        ? `<div style="font-weight:700;color:var(--alerta);font-size:13px">Día completo (${b.cant_bloques} bloques)</div>
+           <div style="font-size:11px;color:var(--tinta-2);font-weight:600">${b.desde_hora} a ${b.hasta_hora} hrs</div>`
+        : `<div style="font-weight:700;color:var(--tinta);font-size:13px">${b.desde_hora} a ${b.hasta_hora} hrs</div>
+           <div style="font-size:11px;color:var(--tinta-3)">(${b.cant_bloques} ${b.cant_bloques === 1 ? 'bloque' : 'bloques'})</div>`;
+
+      return `
+        <tr data-idx="${idx}" style="${esFechaActual ? 'background:rgba(2,132,199,0.04)' : ''}">
+          <td style="font-weight:600">
+            <div>${diaLargo}</div>
+            ${esFechaActual ? '<span style="background:#e0f2fe;color:#0369a1;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;display:inline-block;margin-top:2px">Fecha en pantalla</span>' : ''}
+          </td>
+          <td>
+            <div style="display:flex;align-items:center;gap:.4rem">
+              <span style="font-size:12px">&#128100;</span>
+              <span style="font-weight:600">${esc(b.examinador)}</span>
+            </div>
+          </td>
+          <td>
+            <span class="badge-motivo ${cls}">${esc(ETQ_MOTIVO[b.motivo] || b.motivo)}</span>
+          </td>
+          <td>
+            ${horarioTxt}
+          </td>
+          <td style="text-align:center">
+            <div style="display:inline-flex;gap:4px">
+              <button type="button" class="btn btn-desbloq-accion chico btn-desbloq-fila"
+                data-fecha="${b.fecha}"
+                data-exam="${b.examinador_id || ''}"
+                data-motivo="${esc(b.motivo)}" title="Desbloquear todas las horas de este bloqueo">
+                Desbloquear
+              </button>
+              <button type="button" class="btn chico sec btn-desbloq-elegir-horas"
+                data-fecha="${b.fecha}"
+                data-exam="${b.examinador_id || ''}"
+                data-motivo="${esc(b.motivo)}" title="Abrir selector para elegir horas específicas (ej. 08:30 o 11:00)">
+                Elegir horas...
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    tbody.querySelectorAll('.btn-desbloq-fila').forEach((btn) => {
+      btn.onclick = async () => {
+        const fecha = btn.dataset.fecha;
+        const examId = btn.dataset.exam ? Number(btn.dataset.exam) : null;
+        const motivo = btn.dataset.motivo;
+        btn.disabled = true;
+        btn.textContent = 'Desbloqueando...';
+
+        try {
+          const r = await api('/desbloquear-dia', {
+            method: 'POST',
+            body: { desde: fecha, hasta: fecha, examinador_id: examId, motivo }
+          });
+          toast(`${r.desbloqueados || 1} bloques desbloqueados exitosamente`, 'ok');
+          await cargarBloqueos();
+          renderAgenda();
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = 'Desbloquear';
+          toast(err.message, 'err');
+        }
+      };
+    });
+
+    tbody.querySelectorAll('.btn-desbloq-elegir-horas').forEach((btn) => {
+      btn.onclick = () => {
+        const fecha = btn.dataset.fecha;
+        const examId = btn.dataset.exam || '';
+        const panel = $('#des-panel-rango');
+        panel.hidden = false;
+        $('#des-toggle-rango').classList.add('activo');
+        $('#des-rango-desde').value = fecha;
+        $('#des-rango-hasta').value = fecha;
+        $('#des-rango-exam').value = examId;
+        $('#des-radio-especificas').checked = true;
+        desModoHoras = 'especificas';
+        $('#des-contenedor-horas').style.display = 'block';
+        $('#des-h-quick-btns').style.display = 'flex';
+        actualizarDesChips();
+        actualizarDesPreview();
+        panel.scrollIntoView({ behavior: 'smooth' });
+      };
+    });
+  };
+
+  const cargarBloqueos = async () => {
+    try {
+      const hist = $('#des-chk-hist')?.checked ? '1' : '0';
+      listaBloqueos = await api(`/bloqueos?historico=${hist}`);
+      pintarTabla();
+    } catch (e) {
+      const tbody = $('#des-tbody');
+      if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="aviso">${esc(e.message)}</td></tr>`;
+    }
+  };
+
+  $('#des-btn-solo-fecha').onclick = () => {
+    soloFechaActual = true;
+    $('#des-btn-solo-fecha').classList.add('activo');
+    $('#des-btn-todas-fechas').classList.remove('activo');
+    pintarTabla();
+  };
+
+  $('#des-btn-todas-fechas').onclick = () => {
+    soloFechaActual = false;
+    $('#des-btn-solo-fecha').classList.remove('activo');
+    $('#des-btn-todas-fechas').classList.add('activo');
+    pintarTabla();
+  };
+
+  $('#des-buscar').oninput = pintarTabla;
+  $('#des-sel-exam').onchange = () => {
+    if ($('#des-rango-exam')) $('#des-rango-exam').value = $('#des-sel-exam').value;
+    pintarTabla();
+    actualizarDesPreview();
+  };
+  $('#des-chk-hist').onchange = cargarBloqueos;
+
+  $('#des-btn-rango').onclick = async () => {
+    const desde = $('#des-rango-desde').value;
+    const hasta = $('#des-rango-hasta').value;
+    const examId = $('#des-rango-exam').value ? Number($('#des-rango-exam').value) : null;
+    if (!desde || !hasta) return toast('Indica fechas Desde y Hasta', 'err');
+    if (hasta < desde) return toast('Hasta no puede ser menor a Desde', 'err');
+
+    const body = { desde, hasta, examinador_id: examId };
+
+    if (desModoHoras === 'especificas') {
+      const horas = Array.from(desHorasSeleccionadas).sort();
+      if (!horas.length) return toast('Selecciona al menos una hora para desbloquear (ej: 08:30 o 11:00)', 'alerta');
+      body.horas = horas;
+    }
+
+    const btn = $('#des-btn-rango');
+    btn.disabled = true;
+    try {
+      const r = await api('/desbloquear-dia', {
+        method: 'POST',
+        body
+      });
+      const cant = r.desbloqueados || 0;
+      if (desModoHoras === 'especificas') {
+        toast(`${cant} ${cant === 1 ? 'bloque desbloqueado' : 'bloques desbloqueados'} (${body.horas.join(', ')})`, 'ok');
+      } else {
+        toast(`${cant} bloques desbloqueados exitosamente`, 'ok');
+      }
+      btn.disabled = false;
+      await cargarBloqueos();
+      renderAgenda();
+    } catch (err) {
+      btn.disabled = false;
+      toast(err.message, 'err');
+    }
+  };
+
+  await cargarBloqueos();
+}
+
 
 function dialogoMiPerfil() {
   modal('Mi perfil', `
@@ -709,13 +1882,18 @@ function slotCard(b) {
     .filter(Boolean).join(' ');
 
   if (!ocupada) {
-    return `<div class="${cls}" role="button" tabindex="0" data-id="${b.id}">
-      <span class="mas">+</span><span>Agendar</span>
+    return `<div class="${cls}" style="cursor:default">
+      <span class="sub" style="color:var(--tinta-3);font-size:11px">—</span>
       ${b.hora === META.hora_d_a5 ? '<span class="badges"><span class="badge dpesada">Bloque para D y A5</span></span>' : ''}
     </div>`;
   }
 
   const badges = [];
+  if (b.intento) {
+    const int = String(b.intento).toUpperCase();
+    if (int.includes('1') || int.includes('PRIMERA')) badges.push('<span class="badge intento-1">1° vez</span>');
+    else if (int.includes('2') || int.includes('SEGUNDA')) badges.push('<span class="badge intento-2">2° vez</span>');
+  }
   if (b.tipo_cita === 'REAGENDADO') badges.push('<span class="badge reag">Reagendada</span>');
   if (b.pendiente_reagendar) badges.push('<span class="badge reag">Pendiente de reagendar</span>');
   if (b.confirmo_asistencia === 1) badges.push('<span class="badge aprob">Confirmó asistencia</span>');
@@ -732,14 +1910,46 @@ function slotCard(b) {
   </span>` : '';
 
   const problema = problemaDatos(b);
+  const esConfirmado = b.confirmo_asistencia === 1;
+  const numLimpio = String(b.contacto || '').replace(/\D/g, '');
+  const telWa = numLimpio.startsWith('56') ? numLimpio : (numLimpio.length === 9 ? '56' + numLimpio : '');
+
   return `<div class="${cls}" role="button" tabindex="0" data-id="${b.id}">
     ${problema ? `<span class="alerta-dato" title="${esc(problema)}">⚠</span>` : ''}
     <span class="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
-    <span class="sub">
-      ${clasesTagsHtml(b.clase)}
-      <span class="cita-rut num">${esc(b.rut || 'sin RUT')}</span>
-    </span>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+      <span class="sub" style="margin:0">
+        ${clasesTagsHtml(b.clase)}
+        <span class="cita-rut num">${esc(b.rut || 'sin RUT')}</span>
+      </span>
+      ${b.funcionario ? `<span class="slot-func" title="Atendido por ${esc(b.funcionario)}"><svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/></svg> ${esc(b.funcionario)}</span>` : ''}
+    </div>
+    <div class="slot-contacto">
+      <div class="slot-contacto-fila">
+        <span class="sc-item ${b.contacto ? '' : 'sin'}" title="${b.contacto ? 'Teléfono: ' + esc(fTel(b.contacto)) : 'Sin teléfono registrado'}">
+          <svg class="sc-ico" viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M3.654 1.328a.678.678 0 0 0-1.015-.063L1.605 2.3c-.483.484-.661 1.169-.45 1.77a17.568 17.568 0 0 0 4.168 6.608 17.569 17.569 0 0 0 6.608 4.168c.601.211 1.286.033 1.77-.45l1.034-1.034a.678.678 0 0 0-.063-1.015l-2.307-1.794a.678.678 0 0 0-.58-.122l-2.19.547a1.745 1.745 0 0 1-1.657-.459L5.482 8.06a1.745 1.745 0 0 1-.46-1.657l.548-2.19a.678.678 0 0 0-.122-.58L3.654 1.328z"/></svg>
+          <span class="num">${esc(fTel(b.contacto) || 'Sin teléfono')}</span>
+        </span>
+        ${telWa ? `<a href="https://wa.me/${telWa}?text=${encodeURIComponent('Hola ' + (nom(b.nombre) || '') + ', te contactamos desde la Dirección de Tránsito respecto a tu examen práctico de conducir.')}" target="_blank" rel="noopener" class="btn-wa" title="Escribir por WhatsApp a este postulante" onclick="event.stopPropagation()">💬 WhatsApp</a>` : ''}
+      </div>
+      <span class="sc-item ${b.correo ? 'slot-mail' : 'sin'}" title="${b.correo ? 'Correo: ' + esc(b.correo) : 'Sin correo registrado'}">
+        <svg class="sc-ico" viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2zm13 2.383-4.708 2.825L15 11.105V5.383zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741zM1 11.105l4.708-2.897L1 5.383v5.722z"/></svg>
+        <span>${esc(b.correo || 'Sin correo')}</span>
+      </span>
+    </div>
+
+    ${b.fecha_inicio_tramite ? `<span class="slot-fit" title="Fecha inicio trámite">Inicio trámite: <b class="num">${esc(fFecha(b.fecha_inicio_tramite))}</b></span>` : ''}
     ${badges.length ? `<span class="badges">${badges.join('')}</span>` : ''}
+    <div class="slot-acciones" data-id="${b.id}">
+      <button type="button" class="btn-slot-act btn-confirmar ${esConfirmado ? 'es-confirmado' : ''}" data-act="confirmar" title="${esConfirmado ? 'Asistencia confirmada. Clic para modificar estado' : 'Confirmar asistencia y enviar comprobante por correo'}">
+        <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
+        <span>${esConfirmado ? 'Confirmado' : 'Confirmar'}</span>
+      </button>
+      <button type="button" class="btn-slot-act btn-reagendar" data-act="reagendar" title="Derivar directamente a reagendamiento">
+        <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+        <span>Reagendar</span>
+      </button>
+    </div>
     ${acc}
   </div>`;
 }
@@ -775,20 +1985,94 @@ function pintarGrilla(cont, filas, fecha) {
     porKey[`${f.hora}|${f.examinador_id}`] = f;
     if (f.rut || f.nombre) cuenta[f.examinador_id] = (cuenta[f.examinador_id] || 0) + 1;
   });
-  cont.className = 'grilla';
-  cont.style.gridTemplateColumns = `58px repeat(${exs.length}, minmax(0, 1fr))`;
-  let html = `<div class="g-esquina"><span class="gh-n">&nbsp;</span><span class="gh-c">Hora</span></div>` + exs.map((e) =>
-    `<div class="g-head"><span class="gh-n">${esc(e.nombre)}</span><span class="gh-c">${cuenta[e.id] || 0} citas</span></div>`).join('');
-  for (const hora of META.horas) {
-    const pesada = hora === META.hora_d_a5;
-    html += `<div class="g-hora" data-hora="${esc(hora)}">${esc(hora)}${pesada ? '<span class="et">D · A5</span>' : ''}</div>`;
-    for (const e of exs) html += `<div${pesada ? ' class="fila-pesada"' : ''}>${slotCard(porKey[`${hora}|${e.id}`])}</div>`;
+  const modo = estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'vertical';
+
+  if (modo === 'horizontal') {
+    cont.className = 'grilla-horizontal-wrap';
+    cont.style.gridTemplateColumns = '';
+    let html = `<div class="grilla-horizontal" style="grid-template-columns: 200px repeat(${META.horas.length}, 320px)">`;
+    html += `<div class="gh-esquina">Examinador \\ Hora</div>`;
+    for (const hora of META.horas) {
+      const pesada = hora === META.hora_d_a5;
+      html += `<div class="gh-hora-head ${pesada ? 'pesada' : ''}">
+        <span class="gh-h-txt">${esc(hora)}</span>
+        ${pesada ? '<span class="et">D · A5</span>' : ''}
+      </div>`;
+    }
+    for (const e of exs) {
+      html += `<div class="gh-exam-col">
+        <span class="gh-exam-nombre">${esc(e.nombre)}</span>
+        <span class="gh-exam-citas">${cuenta[e.id] || 0} citas</span>
+      </div>`;
+      for (const hora of META.horas) {
+        const pesada = hora === META.hora_d_a5;
+        html += `<div class="gh-slot-col ${pesada ? 'fila-pesada' : ''}">${slotCard(porKey[`${hora}|${e.id}`])}</div>`;
+      }
+    }
+    html += `</div>`;
+    cont.innerHTML = html;
+  } else {
+    cont.className = 'grilla';
+    cont.style.gridTemplateColumns = `58px repeat(${exs.length}, minmax(0, 1fr))`;
+    let html = `<div class="g-esquina"><span class="gh-n">&nbsp;</span><span class="gh-c">Hora</span></div>` + exs.map((e) =>
+      `<div class="g-head"><span class="gh-n">${esc(e.nombre)}</span><span class="gh-c">${cuenta[e.id] || 0} citas</span></div>`).join('');
+    for (const hora of META.horas) {
+      const pesada = hora === META.hora_d_a5;
+      html += `<div class="g-hora" data-hora="${esc(hora)}">${esc(hora)}${pesada ? '<span class="et">D · A5</span>' : ''}</div>`;
+      for (const e of exs) html += `<div${pesada ? ' class="fila-pesada"' : ''}>${slotCard(porKey[`${hora}|${e.id}`])}</div>`;
+    }
+    cont.innerHTML = html;
   }
-  cont.innerHTML = html;
   cont.querySelectorAll('.slot[data-id]').forEach((el) => {
     const abrir = () => abrirSlotPorId(Number(el.dataset.id), recargar(renderAgenda));
-    el.onclick = (ev) => { if (!ev.target.closest('.slot-res')) abrir(); };
-    el.onkeydown = (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && !ev.target.closest('.slot-res')) { ev.preventDefault(); abrir(); } };
+    el.onclick = (ev) => { if (!ev.target.closest('.slot-res') && !ev.target.closest('.slot-acciones')) abrir(); };
+    el.onkeydown = (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && !ev.target.closest('.slot-res') && !ev.target.closest('.slot-acciones')) { ev.preventDefault(); abrir(); } };
+  });
+
+  cont.querySelectorAll('.slot-acciones button').forEach((btn) => {
+    btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      const id = Number(btn.closest('.slot-acciones').dataset.id);
+      const act = btn.dataset.act;
+      if (act === 'confirmar') {
+        const yaConfirmado = btn.classList.contains('es-confirmado');
+        if (yaConfirmado) {
+          if (!confirm('Esta cita ya figura con asistencia confirmada.\n\n¿Deseas volver a marcarla como pendiente de confirmación?')) return;
+          try {
+            await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: null } });
+            toast('Asistencia marcada como pendiente', 'alerta');
+            await renderAgenda();
+            actualizarBadgePorConfirmar();
+          } catch (e) { toast(e.message, 'err'); }
+          return;
+        }
+        btn.disabled = true;
+        try {
+          const res = await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: 1 } });
+          const cita = filas.find((f) => f.id === id);
+          if (res.correo_enviado || (cita && cita.correo)) {
+            toast(`Asistencia confirmada y comprobante enviado a ${cita && cita.correo ? cita.correo : 'su correo'}`, 'ok');
+          } else {
+            toast('Asistencia confirmada exitosamente', 'ok');
+          }
+          await renderAgenda();
+          actualizarBadgePorConfirmar();
+        } catch (e) {
+          btn.disabled = false;
+          toast(e.message, 'err');
+        }
+      } else if (act === 'reagendar') {
+        irA('reagendar');
+        setTimeout(() => {
+          if (typeof detalleReagendar === 'function') {
+            detalleReagendar(id);
+            const det = document.getElementById('r-detalle');
+            if (det) det.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 120);
+        toast('Derivado a reagendamiento: selecciona el nuevo bloque disponible', 'info');
+      }
+    };
   });
   cont.querySelectorAll('.slot-res .sr').forEach((el) => {
     el.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); el.click(); } };
@@ -912,7 +2196,7 @@ async function renderReagendar() {
       el.onclick = async () => {
         const nota = prompt('¿Por qué se descarta? (ej. ya no requiere hora)');
         if (nota === null) return;
-        try { await api(`/cola-reagendar/${el.dataset.desc}/descartar`, { method: 'POST', body: { nota } }); toast('Descartado'); renderReagendar(); }
+        try { await api(`/cola-reagendar/${el.dataset.desc}/descartar`, { method: 'POST', body: { nota } }); toast('Descartado'); renderReagendar(); actualizarBadgeReagendar(); }
         catch (e) { toast(e.message, 'err'); }
       };
     });
@@ -983,28 +2267,103 @@ async function detalleReagendar(id) {
   };
 }
 
-// Asignar hora a una persona de la cola (desplazada por un bloqueo).
-function detalleCola(item) {
+// Asignar hora a una persona de la cola (desplazada por ausencia de examinador o bloqueo).
+async function detalleCola(item) {
   const pesada = String(item.clase || '').split(',').some((c) => META.clases_pesadas.includes(c.trim()));
-  const cont = $('#r-detalle');
-  cont.innerHTML = `
-    <div class="panel">
-      <h3>Asignar hora nueva</h3>
-      <p><b>${esc(nom(item.nombre) || '(SIN NOMBRE)')}</b> · ${esc(item.rut || 'sin RUT')} · Clase ${esc(item.clase || '-')}
-        <br>Tenía: ${esc(fFecha(item.origen_fecha))} ${esc(item.origen_hora)} — bloqueado por ${esc(item.motivo)}</p>
-      <div class="fila">
-        <div class="campo"><label>Correo <b class="req">*</b></label><input id="rc-correo" type="email" value="${esc(item.correo)}" placeholder="obligatorio"></div>
+  modal(`Asignar nueva hora · ${esc(nom(item.nombre) || item.rut)}`, `
+    <div class="ancho" style="margin-top:-.3rem;margin-bottom:.8rem">
+      <div style="font-size:1.05rem"><b>${esc(nom(item.nombre) || '(SIN NOMBRE)')}</b> · RUT: <b>${esc(item.rut || 'sin RUT')}</b> · Clase: <b>${esc(item.clase || '-')}</b></div>
+      <div class="muted" style="margin-top:.25rem">Cita original: <b>${esc(fFecha(item.origen_fecha))} ${esc(item.origen_hora)}</b> · Examinador: <b>${esc(item.origen_examinador || 'No asignado')}</b> (${esc(item.motivo || 'Bloqueo')})</div>
+    </div>
+
+    <div class="campo ancho"><label>Correo para confirmación</label>
+      <input id="rc-correo" type="email" value="${esc(item.correo || '')}" placeholder="opcional"></div>
+
+    <div class="ancho" id="rc-sugerencias-cont" style="margin-top:.8rem">
+      <p class="muted">Buscando las primeras horas disponibles...</p>
+    </div>
+
+    <details class="ancho" style="margin-top:1.2rem">
+      <summary style="cursor:pointer;font-weight:600;color:var(--azul)">Búsqueda manual por rango de fechas</summary>
+      <div class="fila" style="margin-top:.75rem">
         <div class="campo"><label>Desde</label><input type="date" id="rc-desde" value="${sumarDias(hoy(), 1)}"></div>
-        <div class="campo"><label>hasta</label><input type="date" id="rc-hasta" value="${sumarDias(hoy(), 30)}"></div>
+        <div class="campo"><label>Hasta</label><input type="date" id="rc-hasta" value="${sumarDias(hoy(), 30)}"></div>
         <div class="campo"><label>Examinador</label><select id="rc-exam"><option value="">Cualquiera</option>
           ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')}</select></div>
-        <button class="btn" id="rc-buscar">Ver bloques libres</button>
+        <button class="btn sec" id="rc-buscar" style="align-self:flex-end">Buscar en rango</button>
       </div>
       ${pesada ? `<p class="muted">Clase ${esc(item.clase)}: solo bloques de las ${esc(META.hora_d_a5)}.</p>` : ''}
-      <div class="tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th class="c"></th></tr></thead>
-        <tbody id="rc-libres"><tr><td colspan="4" class="muted">Elige un rango y busca.</td></tr></tbody></table></div>
-    </div>`;
-  cont.scrollIntoView({ behavior: 'smooth' });
+      <div class="tabla-scroll"><table style="margin-top:.5rem"><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th class="c"></th></tr></thead>
+        <tbody id="rc-libres"><tr><td colspan="4" class="muted">Haz clic en "Buscar en rango" si requieres una fecha específica.</td></tr></tbody></table></div>
+    </details>
+  `, `<button class="btn sec" id="rc-cerrar">Cerrar</button>`);
+
+  $('#rc-cerrar').onclick = cerrarModal;
+  const cont = { scrollIntoView: () => {} };
+
+  async function ejecutarAsignacion(destinoId, fechaStr, horaStr, examStr) {
+    const nomP = nom(item.nombre) || item.rut;
+    if (!confirm('¿Confirmar asignación de hora para ' + nomP + '?\n\nFecha: ' + fechaStr + '\nHora: ' + horaStr + '\nExaminador: ' + examStr)) return;
+    try {
+      const r = await api(`/cola-reagendar/${item.id}/asignar`, {
+        method: 'POST',
+        body: { destino_id: destinoId, correo: $('#rc-correo').value }
+      });
+      toast('Hora asignada exitosamente');
+      cerrarModal();
+      actualizarBadgeReagendar();
+      (r.avisos || []).forEach((a) => toast(a, 'alerta'));
+      if (location.hash === '#reagendar') renderReagendar(); else if (!location.hash || location.hash === '#agenda') renderAgenda();
+    } catch (e) {
+      toast(e.message, 'err');
+    }
+  }
+
+  // Cargar sugerencias automáticas de inmediato
+  try {
+    const sug = await api(`/cola-reagendar/${item.id}/sugerencias`);
+    const sCont = $('#rc-sugerencias-cont');
+    let html = '';
+
+    const renderCard = (c) => `
+      <div class="card-cupo">
+        <div>
+          <div class="cupo-fecha">📅 ${esc(fFecha(c.fecha))}</div>
+          <div class="cupo-hora">⏰ ${esc(c.hora)}</div>
+          <div class="cupo-exam">👤 ${esc(c.examinador)}</div>
+        </div>
+        <button class="btn chico btn-asignar" data-asig="${c.id}" data-f="${esc(fFecha(c.fecha))}" data-h="${esc(c.hora)}" data-e="${esc(c.examinador)}">Asignar este cupo</button>
+      </div>`;
+
+    if (sug.mismo_examinador && sug.mismo_examinador.length) {
+      html += `
+        <div class="sug-seccion">
+          <h4>Próximas horas disponibles con el mismo examinador (${esc(sug.origen_examinador || 'Original')})</h4>
+          <div class="sug-grid">${sug.mismo_examinador.map(renderCard).join('')}</div>
+        </div>`;
+    }
+
+    if (sug.otros_examinadores && sug.otros_examinadores.length) {
+      html += `
+        <div class="sug-seccion">
+          <h4>Primeras horas disponibles con otros examinadores</h4>
+          <div class="sug-grid">${sug.otros_examinadores.map(renderCard).join('')}</div>
+        </div>`;
+    }
+
+    if (!html) {
+      html = '<div class="aviso">No se encontraron cupos libres en los próximos días. Utiliza la búsqueda manual por rango.</div>';
+    }
+
+    sCont.innerHTML = html;
+    sCont.querySelectorAll('button[data-asig]').forEach((btn) => {
+      btn.onclick = () => ejecutarAsignacion(Number(btn.dataset.asig), btn.dataset.f, btn.dataset.h, btn.dataset.e);
+    });
+  } catch (err) {
+    $('#rc-sugerencias-cont').innerHTML = `<p class="muted">No se pudieron cargar sugerencias automáticas (${esc(err.message)}).</p>`;
+  }
+
+  // Búsqueda manual
   $('#rc-buscar').onclick = async () => {
     const q = new URLSearchParams({ desde: $('#rc-desde').value, hasta: $('#rc-hasta').value });
     if ($('#rc-exam').value) q.set('examinador_id', $('#rc-exam').value);
@@ -1012,20 +2371,10 @@ function detalleCola(item) {
     const libres = await api(`/disponibles?${q}`);
     $('#rc-libres').innerHTML = libres.length ? libres.map((l) => `<tr>
       <td class="c">${esc(fFecha(l.fecha))}</td><td class="c">${esc(l.hora)}</td><td>${esc(l.examinador)}</td>
-      <td class="c"><button class="btn chico" data-id="${l.id}">Asignar aquí</button></td></tr>`).join('')
-      : '<tr><td colspan="4" class="muted">Sin bloques libres.</td></tr>';
+      <td class="c"><button class="btn chico" data-id="${l.id}" data-f="${esc(fFecha(l.fecha))}" data-h="${esc(l.hora)}" data-e="${esc(l.examinador)}">Asignar aquí</button></td></tr>`).join('')
+      : '<tr><td colspan="4" class="muted">Sin bloques libres en el rango seleccionado.</td></tr>';
     $('#rc-libres').querySelectorAll('button[data-id]').forEach((el) => {
-      el.onclick = async () => {
-        if (!$('#rc-correo').value.trim()) return toast('Falta el correo: es obligatorio para dar hora.', 'err');
-        if (!confirm('¿Confirmar la nueva hora?')) return;
-        try {
-          const r = await api(`/cola-reagendar/${item.id}/asignar`, { method: 'POST', body: { destino_id: Number(el.dataset.id), correo: $('#rc-correo').value } });
-          toast('Hora asignada');
-          (r.avisos || []).forEach((a) => toast(a, 'err'));
-          cont.innerHTML = '';
-          renderReagendar();
-        } catch (e) { toast(e.message, 'err'); }
-      };
+      el.onclick = () => ejecutarAsignacion(Number(el.dataset.id), el.dataset.f, el.dataset.h, el.dataset.e);
     });
   };
 }
@@ -1187,17 +2536,34 @@ function formatoImpresion() {
   try { return PAGINAS[localStorage.getItem('agenda-formato')] ? localStorage.getItem('agenda-formato') : 'carta'; }
   catch (_) { return 'carta'; }
 }
-function aplicarFormatoImpresion(f) {
-  const p = PAGINAS[f] || PAGINAS.carta;
+function orientacionImpresion() {
+  try { return localStorage.getItem('agenda-orientacion') || 'vertical'; }
+  catch (_) { return 'vertical'; }
+}
+function aplicarFormatoImpresion(f, ori) {
+  const formato = f || formatoImpresion();
+  const orientacion = ori || orientacionImpresion();
+  const p = PAGINAS[formato] || PAGINAS.carta;
   let st = document.getElementById('estilo-pagina');
   if (!st) { st = document.createElement('style'); st.id = 'estilo-pagina'; document.head.appendChild(st); }
-  // La hoja unica (todos los examinadores) va en horizontal para que quepan las columnas.
-  const horizontal = p.size.split(' ').reverse().join(' ');
-  st.textContent = `@media print { @page { size: ${p.size}; margin: 14mm 12mm; }
-    @page unica { size: ${horizontal}; margin: 8mm; } .hoja-unica { page: unica; } }`;
-  try { localStorage.setItem('agenda-formato', f); } catch (_) { /* ignore */ }
+  
+  const dim = p.size.split(' ');
+  const w = orientacion === 'horizontal' ? dim[1] : dim[0];
+  const h = orientacion === 'horizontal' ? dim[0] : dim[1];
+  const pageSize = `${w} ${h}`;
+  const margins = orientacion === 'horizontal' ? '8mm' : '8mm 6mm';
+  
+  st.textContent = `@media print {
+    @page { size: ${pageSize}; margin: ${margins}; }
+    @page unica { size: ${pageSize}; margin: ${margins}; }
+    .hoja-unica { page: unica; }
+  }`;
+  try {
+    localStorage.setItem('agenda-formato', formato);
+    localStorage.setItem('agenda-orientacion', orientacion);
+  } catch (_) { /* ignore */ }
 }
-aplicarFormatoImpresion(formatoImpresion());
+aplicarFormatoImpresion(formatoImpresion(), orientacionImpresion());
 
 function disenoDia() {
   try { return localStorage.getItem('agenda-diseno-dia') === 'porexam' ? 'porexam' : 'unica'; }
@@ -1212,8 +2578,10 @@ function hojaUnicaDia(data, exs, largaFecha, generado) {
     if (!r) return '<td class="hu-vacio">—</td>';
     if (r.bloqueado) return `<td class="hu-bloq">${esc(r.bloqueo_motivo || 'BLOQUEADO')}</td>`;
     if (!(r.rut || r.nombre)) return '<td class="hu-libre">Disponible</td>';
+    const intBadge = r.intento ? (r.intento.includes('1') ? ' · 1° vez' : r.intento.includes('2') ? ' · 2° vez' : '') : '';
+    const fitBadge = r.fecha_inicio_tramite ? ` · F.I.T: ${esc(fFecha(r.fecha_inicio_tramite))}` : '';
     return `<td><b class="hu-nom">${esc(nom(r.nombre))}</b>
-      <span class="hu-det">${esc(r.rut || '')} · ${r.clase ? esc(r.clase) : 's/clase'}</span></td>`;
+      <span class="hu-det">${esc(r.rut || '')} · ${r.clase ? esc(r.clase) : 's/clase'}${intBadge}${fitBadge}</span></td>`;
   };
   const tot = exs.map((ex) => data.examinadores[ex].filter((r) => !r.bloqueado && (r.rut || r.nombre)).length);
   return `<article class="hoja-dia hoja-unica">
@@ -1242,6 +2610,11 @@ async function renderDia() {
       <div class="campo"><label>Formato de hoja</label>
         <select id="dd-formato">${Object.entries(PAGINAS).map(([k, v]) =>
           `<option value="${k}" ${k === formatoImpresion() ? 'selected' : ''}>${esc(v.etq)}</option>`).join('')}</select></div>
+      <div class="campo"><label>Orientación</label>
+        <select id="dd-orientacion">
+          <option value="vertical" ${orientacionImpresion() === 'vertical' ? 'selected' : ''}>Vertical</option>
+          <option value="horizontal" ${orientacionImpresion() === 'horizontal' ? 'selected' : ''}>Horizontal</option>
+        </select></div>
       <div class="campo"><label>Diseño</label>
         <select id="dd-diseno">
           <option value="unica" ${disenoDia() === 'unica' ? 'selected' : ''}>Todos los examinadores en una hoja</option>
@@ -1251,11 +2624,11 @@ async function renderDia() {
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6V2h8v4M4 12H2V6h12v6h-2M4 10h8v4H4z"/></svg>
         Imprimir informe
       </button>
-      <span class="muted">"Una hoja" muestra a todos los examinadores lado a lado (se imprime horizontal) para que cada uno vea las citas de su compañero.</span>
     </div></div>
     <div id="dd-cont" class="dd-cont">Cargando...</div>`;
   $('#dd-fecha').onchange = (e) => { estadoAgenda.fecha = e.target.value; renderDia(); };
   $('#dd-formato').onchange = (e) => { aplicarFormatoImpresion(e.target.value); toast(`Formato: ${PAGINAS[e.target.value].etq}`); };
+  $('#dd-orientacion').onchange = (e) => { aplicarFormatoImpresion(null, e.target.value); toast(`Orientación: ${e.target.value === 'vertical' ? 'Vertical' : 'Horizontal'}`); document.body.classList.toggle('orientacion-horizontal', e.target.value === 'horizontal'); };
   $('#dd-print').onclick = () => window.print();
   $('#dd-diseno').onchange = (e) => { try { localStorage.setItem('agenda-diseno-dia', e.target.value); } catch (_) { /* ignore */ } renderDia(); };
 
@@ -1396,10 +2769,10 @@ function graficoStack(id, labels, series) {
 async function renderAnalitica() {
   const r = META.rango_agenda || {};
   view.innerHTML = `
-    <div class="panel no-print"><div class="fila">
+    <div class="panel no-print"><div class="fila" style="justify-content:center;align-items:flex-end;gap:14px">
       <div class="campo"><label>Desde</label><input type="date" id="an-desde" value="${r.desde || ''}"></div>
       <div class="campo"><label>Hasta</label><input type="date" id="an-hasta" value="${r.hasta || ''}"></div>
-      <button class="btn" id="an-ok">Aplicar</button>
+      <button class="btn" id="an-ok">Aplicar filtro</button>
     </div></div>
     <div class="kpis" id="an-kpis"></div>
     <div class="grid2">
@@ -1473,6 +2846,24 @@ function pintarBadge(id, n) {
 }
 // Los contadores se refrescan con cada dibujo de la Agenda; reutilizan una
 // respuesta de menos de 1 minuto para no repetir el pedido en cada clic.
+async function actualizarBadgePorConfirmar() {
+  try {
+    const hasta = sumarDias(hoy(), 7);
+    const rows = (await apiReciente('/agenda?estado=porconfirmar', 30e3))
+      .filter((r) => r.fecha >= hoy() && r.fecha <= hasta);
+    pintarBadge('badge-porconfirmar', rows.length);
+  } catch (_) {
+    pintarBadge('badge-porconfirmar', 0);
+  }
+}
+
+async function actualizarBadgeReagendar() {
+  try {
+    const list = await apiReciente('/cola-reagendar', 30e3);
+    pintarBadge('badge-reagendar', list.length);
+  } catch (_) { pintarBadge('badge-reagendar', 0); }
+}
+
 async function actualizarBadgePapelera() {
   try { pintarBadge('badge-papelera', (await apiReciente('/papelera', 60e3)).length); }
   catch (_) { pintarBadge('badge-papelera', 0); }
@@ -1500,7 +2891,7 @@ async function renderPapelera() {
       <p class="muted">Citas retiradas de un bloque al <b>liberarlo</b>, <b>bloquearlo</b>, <b>pisarlo</b> con otra cita
         o <b>reagendarlo</b>. Se conservan las últimas 200; se listan las 80 más recientes.
         Restaurar solo funciona si el bloque original sigue libre.</p>
-      <div class="tabla-scroll"><table><thead><tr>
+      <div class="tabla-scroll tabla-papelera"><table><thead><tr>
         <th class="c">Cuándo</th><th class="c">Motivo</th><th class="c">Bloque original</th>
         <th class="c">Nombre</th><th class="c">RUT</th><th class="c">Clase</th><th class="c">Por</th><th class="c"></th>
       </tr></thead><tbody id="pap-body"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
@@ -1559,7 +2950,7 @@ async function renderDatos() {
     ${esAdmin ? '' : '<div class="panel aviso">Esta sección es de solo lectura. Los cambios de configuración los hace un administrador.</div>'}
     <div class="panel"><h2>Importar / Exportar</h2>
       <div class="fila">
-        <div class="campo"><label>Archivo Excel de origen (.xlsx)</label><input type="file" id="im-file" accept=".xlsx"></div>
+        <div class="campo"><label>Archivo Excel de origen (.xlsx, .xls)</label><input type="file" id="im-file" accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div>
         <label style="align-self:center"><input type="checkbox" id="im-limpiar"> Reemplazar todo (borra lo actual)</label>
         <button class="btn" id="im-btn">Importar</button>
       </div>
@@ -1624,7 +3015,7 @@ async function renderDatos() {
   const HOJAS_IMPORTAR = ['AGO-DIC', 'ENE-JUN 2027', 'AGENDA', 'CITAS DISPONIBLES'];
   $('#im-btn').onclick = async () => {
     const f = $('#im-file').files[0];
-    if (!f) return toast('Elige un archivo .xlsx', 'err');
+    if (!f) return toast('Elige un archivo .xlsx o .xls', 'err');
     $('#im-res').innerHTML = '<p class="muted">Leyendo archivo...</p>';
     try {
       const buf = await f.arrayBuffer();
@@ -1635,6 +3026,22 @@ async function renderDatos() {
         if (!ws) continue;
         const filas = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, cellDates: true, defval: null });
         hojas[nombre] = filas.map((fila) => Array.isArray(fila) ? fila.map(celdaASerializable) : fila);
+      }
+      // Si no tiene hojas con nombres estándar, procesar todas las hojas existentes
+      if (Object.keys(hojas).length === 0 && wb.SheetNames && wb.SheetNames.length > 0) {
+        for (const nombre of wb.SheetNames) {
+          const ws = wb.Sheets[nombre];
+          if (!ws) continue;
+          const filas = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, cellDates: true, defval: null });
+          if (filas && filas.length > 1) {
+            hojas[nombre] = filas.map((fila) => Array.isArray(fila) ? fila.map(celdaASerializable) : fila);
+          }
+        }
+      }
+      const encontradas = Object.keys(hojas);
+      if (encontradas.length === 0) {
+        const hojasArchivo = (wb.SheetNames || []).join(', ') || 'ninguna';
+        return toast(`El archivo no contiene filas con datos. Hojas: ${hojasArchivo}`, 'err');
       }
       $('#im-res').innerHTML = '<p class="muted">Importando...</p>';
       const r = await api('/import', { method: 'POST', body: { hojas, limpiar: $('#im-limpiar').checked } });
@@ -1795,7 +3202,7 @@ async function init({ forzarAgenda = false } = {}) {
     $('#estado').innerHTML = `${r.desde ? `Agenda ${fFecha(r.desde)} – ${fFecha(r.hasta)} · ` : ''}hoy ${fFecha(META.hoy)}
       ${META.usuario ? `· <b>${esc(META.usuario)}</b>
         <button id="mi-perfil" class="btn chico sec" style="padding:.1rem .4rem">mi perfil</button>
-        <button id="salir" class="btn chico sec" style="padding:.1rem .4rem">salir</button>` : ''}`;
+        ` : ''}`;
     const salir = $('#salir');
     if (salir) salir.onclick = async () => { await api('/logout', { method: 'POST' }); pantallaLogin(); };
     const miPerfil = $('#mi-perfil');
@@ -1804,10 +3211,12 @@ async function init({ forzarAgenda = false } = {}) {
     // URL guardada traiga otra pestaña (#datos, etc.). Solo un F5 conserva la actual.
     // replaceState no dispara hashchange, asi la vista no se dibuja dos veces.
     const esRecarga = performance.getEntriesByType('navigation')[0]?.type === 'reload';
-    if (forzarAgenda || !esRecarga || !location.hash) history.replaceState(null, '', '#agenda');
+    const curTab = (location.hash.slice(1) || '').split('?')[0];
+    if (forzarAgenda || (!tabs[curTab] && !location.hash)) history.replaceState(null, '', '#disponibles');
     ruta();
     actualizarBadgePapelera();
     actualizarBadgeErrores();
+    actualizarBadgePorConfirmar();
   } catch (e) {
     if (e.message === 'Sesion requerida') return;
     view.innerHTML = `<div class="panel"><h2>No se pudo conectar</h2><p>${esc(e.message)}</p></div>`;
@@ -1834,3 +3243,295 @@ document.querySelectorAll('#nav button[data-tab]').forEach((b) => { b.onclick = 
 })();
 
 init();
+
+
+/* ================= GUÍA INTERACTIVA / SIMULADOR ================= */
+let tourPasoActual = 0;
+const PASOS_TOUR = [
+  {
+    target: '#nav',
+    titulo: '1. Pestañas y Módulos Principales',
+    icono: '🧭',
+    descripcion: 'Desde aquí accedes a todos los módulos: <b>Citas disponibles</b> (donde se buscan y agendan las horas a los contribuyentes), <b>Agenda</b> (operación y control diario), <b>Reagendar</b> (postulantes desplazados por bloqueos), <b>Por confirmar</b> (gestión de asistencia), <b>Agenda del día</b> (impresión vertical en una hoja), <b>Estadísticas</b> y <b>Papelera</b>.'
+  },
+  {
+    target: '#a-fecha',
+    titulo: '2. Navegación por Fechas',
+    icono: '📅',
+    descripcion: 'Permite avanzar o retroceder días fácilmente con las flechas o elegir una fecha exacta en el calendario. El botón <b>Hoy</b> te regresa de inmediato a la jornada actual.'
+  },
+  {
+    target: '#a-exam',
+    titulo: '3. Filtro de Examinadores',
+    icono: '👤',
+    descripcion: 'Puedes ver la grilla completa con todos los examinadores en columnas paralelas, o seleccionar uno específico para concentrarte en sus citas y cupos.'
+  },
+  {
+    target: '#a-libres',
+    titulo: '4. Contador de Bloques Libres',
+    icono: '📊',
+    descripcion: 'Esta pastilla te indica en tiempo real cuántas horas libres quedan disponibles para agendar en la fecha y examinador seleccionados.'
+  },
+  {
+    target: 'header.top nav button[data-tab="porconfirmar"]',
+    titulo: '5. Confirmación Telefónica de Citas',
+    icono: '📞',
+    descripcion: 'Abre un listado rápido de las personas citadas en los próximos 7 días para marcar directamente si confirmaron o no su asistencia.'
+  },
+  {
+    target: '#a-bloqdia',
+    titulo: '6. Bloquear Días u Horas (Ausencias)',
+    icono: '🔒',
+    descripcion: 'Usa este botón para inhabilitar horarios cuando un examinador tenga <b>licencia médica, feriado legal, capacitación o terreno</b>. El sistema protege automáticamente a los postulantes que tenían hora y los traslada a <b>Reagendar</b>.'
+  },
+  {
+    target: '#a-desbloqdia',
+    titulo: '7. Desbloquear y Reactivar Horas',
+    icono: '🔓',
+    descripcion: 'Si una ausencia se cancela o un examinador regresa antes, este botón libera los bloques inhabilitados para que vuelvan a estar disponibles para citaciones.'
+  },
+  {
+    target: '#a-grid',
+    titulo: '8. Grilla Operativa y Ficha de Examen',
+    icono: '📝',
+    descripcion: 'Cada celda muestra el nombre centrado del postulante, su RUT y clase. Al hacer clic sobre una cita puedes ver sus datos, registrar si <b>Aprobó</b> o <b>Reprobó</b>, y guardar notas del examen.'
+  }
+];
+
+let tourKeyHandler = null;
+
+function iniciarGuiaInteractiva() {
+  const tip = document.getElementById('tooltip-flotante');
+  if (tip) tip.classList.remove('visible');
+  cerrarGuiaInteractiva();
+  tourPasoActual = 0;
+  
+  const overlay = document.createElement('div');
+  overlay.id = 'tour-overlay';
+  overlay.className = 'tour-overlay';
+  overlay.innerHTML = `
+    <button class="tour-btn-salir-flotante" id="tour-salir-flotante" title="Terminar y cerrar la guía">
+      <span>✕</span> Cerrar guía
+    </button>
+    <div id="tour-spotlight" class="tour-spotlight"></div>
+    <div id="tour-card" class="tour-card">
+      <div class="tour-card-header">
+        <span class="tour-paso-badge" id="tour-badge">Paso 1 de ${PASOS_TOUR.length}</span>
+        <button class="tour-btn-cerrar" id="tour-cerrar" title="Cerrar guía">&times;</button>
+      </div>
+      <div class="tour-card-body">
+        <h3 id="tour-titulo" class="tour-card-titulo"></h3>
+        <p id="tour-desc" class="tour-card-desc"></p>
+      </div>
+      <div class="tour-card-footer">
+        <button class="btn chico sec" id="tour-prev">Anterior</button>
+        <div class="tour-dots" id="tour-dots"></div>
+        <button class="btn chico" id="tour-next">Siguiente</button>
+      </div>
+      <div id="tour-flecha" class="tour-flecha"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  $('#tour-cerrar').onclick = cerrarGuiaInteractiva;
+  $('#tour-salir-flotante').onclick = cerrarGuiaInteractiva;
+  overlay.onclick = (e) => {
+    if (e.target === overlay) cerrarGuiaInteractiva();
+  };
+
+  tourKeyHandler = (e) => {
+    if (e.key === 'Escape') cerrarGuiaInteractiva();
+    else if (e.key === 'ArrowRight' && tourPasoActual < PASOS_TOUR.length - 1) { tourPasoActual++; renderPasoTour(); }
+    else if (e.key === 'ArrowLeft' && tourPasoActual > 0) { tourPasoActual--; renderPasoTour(); }
+  };
+  window.addEventListener('keydown', tourKeyHandler);
+
+  $('#tour-prev').onclick = () => { if (tourPasoActual > 0) { tourPasoActual--; renderPasoTour(); } };
+  $('#tour-next').onclick = () => {
+    if (tourPasoActual < PASOS_TOUR.length - 1) {
+      tourPasoActual++;
+      renderPasoTour();
+    } else {
+      cerrarGuiaInteractiva();
+      toast('¡Guía interactiva completada!', 'ok');
+    }
+  };
+
+  renderPasoTour(true);
+}
+
+function renderPasoTour(esPrimerRender = false) {
+  const paso = PASOS_TOUR[tourPasoActual];
+  const target = document.querySelector(paso.target) || document.querySelector('.panel-fijo');
+  if (!target) return;
+
+  $('#tour-badge').textContent = `Paso ${tourPasoActual + 1} de ${PASOS_TOUR.length}`;
+  $('#tour-titulo').innerHTML = `<span class="tour-ico">${paso.icono}</span> ${paso.titulo}`;
+  $('#tour-desc').innerHTML = paso.descripcion;
+  $('#tour-prev').disabled = tourPasoActual === 0;
+
+  const esUltimo = tourPasoActual === PASOS_TOUR.length - 1;
+  const btnNext = $('#tour-next');
+  if (esUltimo) {
+    btnNext.textContent = '✔ ¡Finalizar!';
+    btnNext.style.background = '#10b981';
+    btnNext.style.borderColor = '#059669';
+    btnNext.style.color = '#fff';
+    btnNext.style.fontWeight = '700';
+  } else {
+    btnNext.textContent = 'Siguiente';
+    btnNext.style.background = '';
+    btnNext.style.borderColor = '';
+    btnNext.style.color = '';
+    btnNext.style.fontWeight = '';
+  }
+
+  // Dots
+  $('#tour-dots').innerHTML = PASOS_TOUR.map((_, i) =>
+    `<span class="tour-dot ${i === tourPasoActual ? 'activo' : ''}"></span>`
+  ).join('');
+
+  const posicionar = () => {
+    const r = target.getBoundingClientRect();
+    const spot = $('#tour-spotlight');
+    const card = $('#tour-card');
+    const flecha = $('#tour-flecha');
+    if (!spot || !card) return;
+
+    const cardW = 390;
+    const cardH = 250;
+    const pad = 6;
+    const esGrilla = paso.target === '#a-grid' || r.height > window.innerHeight * 0.55;
+
+    // Al iniciar el tour (paso 1), desactivar temporalmente transiciones para evitar
+    // el salto visible ("pestañeo") desde (0,0) hacia la posición calculada.
+    if (esPrimerRender) {
+      spot.style.transition = 'none';
+      card.style.transition = 'none';
+    }
+
+    if (esGrilla) {
+      const spotTop = Math.max(12, Math.round(r.top));
+      const spotH = Math.min(Math.round(r.height), window.innerHeight - spotTop - 24);
+      spot.style.left = `${Math.max(10, Math.round(r.left - pad))}px`;
+      spot.style.top = `${spotTop}px`;
+      spot.style.width = `${Math.min(window.innerWidth - 20, Math.round(r.width + pad * 2))}px`;
+      spot.style.height = `${Math.max(220, spotH)}px`;
+
+      const cardLeft = Math.round((window.innerWidth - cardW) / 2);
+      const cardTop = Math.round(Math.max(80, (window.innerHeight - cardH) / 2));
+      card.style.left = `${cardLeft}px`;
+      card.style.top = `${cardTop}px`;
+      flecha.style.display = 'none';
+    } else {
+      flecha.style.display = 'block';
+
+      // Spotlight regular
+      spot.style.left = `${Math.max(0, Math.round(r.left - pad))}px`;
+      spot.style.top = `${Math.max(0, Math.round(r.top - pad))}px`;
+      spot.style.width = `${Math.round(r.width + pad * 2)}px`;
+      spot.style.height = `${Math.round(r.height + pad * 2)}px`;
+
+      // Posicionar tarjeta
+      let cardLeft = Math.round(r.left + (r.width / 2) - (cardW / 2));
+      if (cardLeft < 16) cardLeft = 16;
+      if (cardLeft + cardW > window.innerWidth - 16) cardLeft = window.innerWidth - cardW - 16;
+
+      let cardTop = Math.round(r.bottom + 14);
+      let flechaArriba = true;
+
+      // Si se sale por abajo, poner arriba del elemento
+      if (cardTop + cardH > window.innerHeight - 16) {
+        cardTop = Math.round(r.top - cardH - 14);
+        flechaArriba = false;
+      }
+
+      if (cardTop < 16) cardTop = 16;
+      if (cardTop + cardH > window.innerHeight - 16) cardTop = window.innerHeight - cardH - 16;
+
+      card.style.left = `${cardLeft}px`;
+      card.style.top = `${cardTop}px`;
+
+      flecha.className = `tour-flecha ${flechaArriba ? 'flecha-arriba' : 'flecha-abajo'}`;
+      const flechaX = Math.max(24, Math.min(cardW - 36, (r.left + r.width / 2) - cardLeft));
+      flecha.style.left = `${Math.round(flechaX)}px`;
+    }
+
+    if (esPrimerRender) {
+      // Forzar reflow para que el navegador aplique left/top antes de habilitar transición y opacidad
+      void card.offsetHeight;
+      spot.style.transition = '';
+      card.style.transition = '';
+    }
+
+    spot.classList.add('visible');
+    card.classList.add('visible');
+  };
+
+  const rect = target.getBoundingClientRect();
+  const yaVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
+
+  if (yaVisible || esPrimerRender) {
+    posicionar();
+  } else {
+    target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    setTimeout(posicionar, 80);
+  }
+}
+
+function cerrarGuiaInteractiva() {
+  if (tourKeyHandler) {
+    window.removeEventListener('keydown', tourKeyHandler);
+    tourKeyHandler = null;
+  }
+  const o = document.getElementById('tour-overlay');
+  if (o) o.remove();
+}
+
+/* ================= INICIALIZACIÓN DE TOOLTIPS ================= */
+function iniciarTooltipsGlobales() {
+  let tip = document.getElementById('tooltip-flotante');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'tooltip-flotante';
+    tip.className = 'tooltip-flotante';
+    document.body.appendChild(tip);
+  }
+
+  document.addEventListener('mouseover', (e) => {
+    const el = e.target.closest('[data-tooltip]');
+    if (!el) {
+      tip.classList.remove('visible');
+      return;
+    }
+    const texto = el.getAttribute('data-tooltip');
+    if (!texto) return;
+    tip.textContent = texto;
+    tip.classList.add('visible');
+
+    const rect = el.getBoundingClientRect();
+    const tipRect = tip.getBoundingClientRect();
+    let left = rect.left + rect.width / 2 - tipRect.width / 2;
+    if (left < 10) left = 10;
+    if (left + tipRect.width > window.innerWidth - 10) left = window.innerWidth - tipRect.width - 10;
+    let top = rect.bottom + 8;
+    if (top + tipRect.height > window.innerHeight - 8) {
+      top = rect.top - tipRect.height - 8;
+      tip.classList.add('pos-arriba');
+    } else {
+      tip.classList.remove('pos-arriba');
+    }
+    tip.style.left = `${Math.round(left)}px`;
+    tip.style.top = `${Math.round(top)}px`;
+  });
+
+  document.addEventListener('mouseout', (e) => {
+    const el = e.target.closest('[data-tooltip]');
+    if (el && !e.relatedTarget?.closest('[data-tooltip]')) {
+      tip.classList.remove('visible');
+    }
+  });
+}
+
+// Iniciar tooltips
+iniciarTooltipsGlobales();
+

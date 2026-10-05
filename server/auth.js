@@ -7,7 +7,8 @@ const usuarios = require('./usuarios');
 // configurada todavia (arranque inicial / respaldo). Cambiar con AGENDA_PIN.
 const PIN = String(process.env.AGENDA_PIN || '1234');
 // Si AGENDA_SIN_LOGIN=1, la app no pide login (util para un PC de un solo usuario).
-const SIN_LOGIN = String(process.env.AGENDA_SIN_LOGIN || '') === '1';
+// Modo embebido: sin barrera de login porque la aplicacion padre ya tiene autenticacion
+const SIN_LOGIN = String(process.env.AGENDA_SIN_LOGIN || '1') !== '0';
 
 const secreto = process.env.AGENDA_SECRET
   || crypto.createHash('sha256').update(`agenda-practicos::${PIN}`).digest('hex');
@@ -38,7 +39,7 @@ function guard(req, res, next) {
 // Bloquea acciones de configuracion (funcionarios, examinadores, catalogos,
 // feriados, importar Excel, generar bloques) a quien no sea administrador.
 function soloAdmin(req, res, next) {
-  if (req.session && req.session.rol === 'admin') return next();
+  if (SIN_LOGIN || (req.session && req.session.rol === 'admin')) return next();
   res.status(403).json({ error: 'Esta accion es solo para administradores.' });
 }
 
@@ -81,6 +82,6 @@ function logout(req, res) {
 }
 
 const actor = (req) => (req && req.session && req.session.funcionario) || null;
-const esAdmin = (req) => Boolean(req && req.session && req.session.rol === 'admin');
+const esAdmin = (req) => Boolean(SIN_LOGIN || (req && req.session && req.session.rol === 'admin'));
 
 module.exports = { middleware, guard, soloAdmin, login, sesion, logout, actor, esAdmin, SIN_LOGIN };

@@ -45,3 +45,20 @@ test('filtroBloqueo arma condiciones por rango, examinador y ocupados', () => {
     { where: 'fecha BETWEEN ? AND ? AND bloqueado = ?', params: ['2026-09-01', '2026-09-01', 1] },
   );
 });
+
+test('leerRangoBloqueo acepta horas especificas', () => {
+  assert.deepEqual(
+    leerRangoBloqueo({ fecha: '2026-10-05', horas: ['09:00', '09:30'], motivo: 'terreno' }),
+    { desde: '2026-10-05', hasta: '2026-10-05', examinador_id: null, motivo: 'TERRENO', horas: ['09:00', '09:30'] },
+  );
+});
+
+test('filtroBloqueo incluye horas si estan presentes', () => {
+  assert.deepEqual(
+    filtroBloqueo({ desde: '2026-10-05', hasta: '2026-10-05', examinador_id: 1, horas: ['09:00', '09:30'] }, { bloqueado: 0, incluirOcupados: true }),
+    {
+      where: 'fecha BETWEEN ? AND ? AND bloqueado = ? AND examinador_id = ? AND hora IN (?,?)',
+      params: ['2026-10-05', '2026-10-05', 0, 1, '09:00', '09:30'],
+    },
+  );
+});

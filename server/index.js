@@ -15,8 +15,11 @@ const { generarXlsx, generarXlsxOriginal } = require('./export');
 const { importar } = require('./migrate');
 const backupMod = require('./backup');
 const { hoyISO } = require('./fechas');
+const ahoraTS = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
 const feriados = require('./feriados');
 const papelera = require('./papelera');
+const cola = require('./cola');
+const bloqueo = require('./bloqueo');
 const pesada = require('./pesada');
 const correo = require('./correo');
 const recordatorios = require('./recordatorios');
@@ -27,7 +30,16 @@ const telefono = require('./telefono');
 
 const app = express();
 app.disable('x-powered-by');
-app.use(express.json({ limit: '4mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api/')) {
+    const t0 = Date.now();
+    res.on('finish', () => {
+      console.log(`[HTTP] ${req.method} ${req.url} -> ${res.statusCode} (${Date.now() - t0}ms)`);
+    });
+  }
+  next();
+});
 app.use(auth.middleware);
 app.use(express.static(path.join(RAIZ, 'public'), {
   etag: false, lastModified: false,
@@ -65,6 +77,23 @@ function paginaPublica(titulo, mensaje, ok) {
       </div>
     </body></html>`;
 }
+
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function fFecha(iso) {
+  if (!iso) return '';
+  const [y, m, d] = String(iso).split('-');
+  return (d && m && y) ? `${d}/${m}/${y}` : String(iso);
+}
+
 function tokenValido(bloque, token) {
   if (!bloque || !bloque.token_confirmacion || !token) return false;
   const a = Buffer.from(bloque.token_confirmacion);
@@ -102,6 +131,128 @@ app.get('/rechazar/:id/:token', (req, res) => {
     res.status(500).send(paginaPublica('Ocurrió un error', 'No pudimos procesar tu aviso. Contacta a la oficina.', false));
   }
 });
+app.get('/reagendar/:id/:token', (req, res) => { try {
+  const bloque = db.prepare('SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id WHERE a.id = ?').get(Number(req.params.id));
+  if (!tokenValido(bloque, req.params.token)) {
+    return res.status(404).send(paginaPublica('Link no válido', 'Este enlace ya fue utilizado o ha expirado.', false));
+  }
+
+  const disponibles = db.prepare(`
+    SELECT a.id, a.fecha, a.hora, e.nombre as examinador
+    FROM agenda a
+    JOIN examinadores e ON e.id = a.examinador_id
+    WHERE a.fecha >= date('now', '+1 day') AND a.fecha <= date('now', '+35 days')
+      AND a.bloqueado = 0 AND (a.rut IS NULL OR a.rut = '') AND (a.nombre IS NULL OR a.nombre = '')
+    ORDER BY a.fecha ASC, a.hora ASC
+    LIMIT 25
+  `).all();
+
+  const opcionesHtml = disponibles.length ? disponibles.map(d => `
+    <div style="background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:12px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 1px 3px rgba(0,0,0,0.05)">
+      <div>
+        <div style="font-weight:700;color:#0f172a;font-size:14px">📅 ${fFecha(d.fecha)} a las ${d.hora} hrs</div>
+        <div style="font-size:12px;color:#64748b">Examinador/a: ${esc(d.examinador)}</div>
+      </div>
+      <form method="POST" action="/reagendar/${bloque.id}/${bloque.token_confirmacion}/elegir" style="margin:0">
+        <input type="hidden" name="nuevo_slot_id" value="${d.id}">
+        <button type="submit" style="background:#0284c7;color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer">
+          Elegir este horario
+        </button>
+      </form>
+    </div>
+  `).join('') : '<p style="color:#64748b">No hay cupos libres en los próximos 35 días. Por favor contacta directamente a la Dirección de Tránsito.</p>';
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reagendamiento de Examen Práctico</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; color: #1e293b; padding: 20px; margin: 0; }
+    .card { max-width: 640px; margin: 20px auto; background: #fff; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+    h1 { font-size: 20px; color: #0f172a; margin: 0 0 12px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔄 Reagendar Examen Práctico de Conducir</h1>
+    <div style="background:#f1f5f9;padding:12px 16px;border-radius:8px;margin-bottom:18px;font-size:13px">
+      <div><b>Postulante:</b> ${esc(bloque.nombre)} (${esc(bloque.rut || '')})</div>
+      <div><b>Hora actual agendada:</b> ${fFecha(bloque.fecha)} a las ${bloque.hora} hrs (Examinador: ${esc(bloque.examinador)})</div>
+    </div>
+    <p style="font-size:13.5px;color:#334155;margin-bottom:16px">
+      Selecciona tu <b>nueva fecha y horario</b>. Tu hora anterior se liberará automáticamente y el nuevo horario quedará agendado de inmediato:
+    </p>
+    <div>${opcionesHtml}</div>
+  </div>
+</body>
+</html>`;
+
+  res.send(html);
+} catch (e) { res.status(500).send(paginaPublica('Error', e.message, false)); } });
+
+app.post('/reagendar/:id/:token/elegir', express.urlencoded({ extended: true }), async (req, res) => { try {
+  const bloque = db.prepare('SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id WHERE a.id = ?').get(Number(req.params.id));
+  if (!tokenValido(bloque, req.params.token)) {
+    return res.status(404).send(paginaPublica('Link no válido', 'Este enlace ya fue utilizado o ha expirado.', false));
+  }
+
+  const nuevoId = Number(req.body.nuevo_slot_id);
+  const nuevoSlot = db.prepare('SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id WHERE a.id = ?').get(nuevoId);
+  if (!nuevoSlot || nuevoSlot.bloqueado || nuevoSlot.rut || nuevoSlot.nombre) {
+    return res.status(400).send(paginaPublica('Horario ya no disponible', 'Ese horario acaba de ser ocupado. Por favor regresa y selecciona otra fecha.', false));
+  }
+
+  const nuevoToken = crypto.randomBytes(16).toString('hex');
+
+  db.prepare(`
+    UPDATE agenda SET
+      rut = @rut, nombre = @nombre, clase = @clase, contacto = @contacto, correo = @correo,
+      tipo_cita = 'REAGENDADO', motivo_reagendamiento = 'Reagendamiento autónomo por correo',
+      nacionalidad = @nacionalidad, funcionario_id = @funcionario_id,
+      fecha_inicio_tramite = @fecha_inicio_tramite, confirmo_asistencia = 1,
+      token_confirmacion = @token, actualizado_en = datetime('now', 'localtime')
+    WHERE id = @nuevoId
+  `).run({
+    rut: bloque.rut,
+    nombre: bloque.nombre,
+    clase: bloque.clase,
+    contacto: bloque.contacto,
+    correo: bloque.correo,
+    nacionalidad: bloque.nacionalidad || 'CHILENA',
+    funcionario_id: bloque.funcionario_id,
+    fecha_inicio_tramite: bloque.fecha_inicio_tramite,
+    token: nuevoToken,
+    nuevoId: nuevoSlot.id
+  });
+
+  db.prepare(`
+    UPDATE agenda SET
+      rut = NULL, nombre = NULL, clase = NULL, contacto = NULL, correo = NULL,
+      tipo_cita = NULL, motivo_reagendamiento = NULL, lista_espera = NULL,
+      intento = NULL, funcionario_id = NULL, fecha_inicio_tramite = NULL,
+      confirmo_asistencia = NULL, resultado = NULL, comentarios = NULL,
+      bloqueado = 0, bloqueo_motivo = NULL, pendiente_reagendar = 0, pendiente_nota = NULL,
+      token_confirmacion = NULL, correo_confirmacion_enviado = 0, correo_recordatorio_enviado = 0,
+      actualizado_en = datetime('now', 'localtime')
+    WHERE id = ?
+  `).run(bloque.id);
+
+  log(nuevoSlot.id, 'reagendar', `${bloque.fecha} ${bloque.hora} -> ${nuevoSlot.fecha} ${nuevoSlot.hora} (Autoservicio ciudadano por correo)`);
+
+  const nuevoFinal = traer(nuevoSlot.id);
+  if (nuevoFinal.correo) {
+    correo.confirmacion(nuevoFinal).catch(() => {});
+  }
+
+  res.send(paginaPublica(
+    '¡Hora reagendada con éxito!',
+    `Tu examen práctico ha sido reprogramado para el <b>${fFecha(nuevoSlot.fecha)} a las ${nuevoSlot.hora} hrs</b> con ${nuevoSlot.examinador}. Hemos enviado tu nuevo comprobante a tu correo.`,
+    true
+  ));
+} catch (e) { res.status(500).send(paginaPublica('Error', e.message, false)); } });
+
 
 app.use(auth.guard);
 
@@ -125,12 +276,22 @@ function enCatalogo(tipo, valor) {
 
 // ---------- META ----------
 app.get('/api/meta', wrap((req, res) => {
+  const actor = actorDe(req);
+  let funcionario_id = (req.session && req.session.funcionario_id) || null;
+  if (!funcionario_id && actor) {
+    const f = db.prepare('SELECT id FROM funcionarios WHERE LOWER(nombre) = LOWER(?) OR LOWER(usuario) = LOWER(?)').get(actor, actor);
+    if (f) {
+      funcionario_id = f.id;
+      if (req.session) req.session.funcionario_id = f.id;
+    }
+  }
   res.json({
     horas: HORAS,
     hora_d_a5: HORA_D_A5,
     clases_pesadas: CLASES_PESADAS,
     hoy: hoyISO(),
-    usuario: actorDe(req),
+    usuario: actor,
+    funcionario_id,
     rol: (req.session && req.session.rol) || null,
     examinadores: db.prepare('SELECT id, nombre, activo FROM examinadores ORDER BY nombre').all(),
     funcionarios: db.prepare('SELECT id, nombre, activo, usuario, rol FROM funcionarios ORDER BY nombre').all(),
@@ -251,8 +412,13 @@ app.put('/api/agenda/:id', wrap((req, res) => {
 
   // --- Bloqueo administrativo ---
   if (body.bloqueado) {
-    papelera.guardar(bloque, 'bloquear', actorDe(req));
     const motivo = String(body.bloqueo_motivo || 'BLOQUEADO').trim().toUpperCase();
+    let aReagendar = false;
+    if (bloque.rut || bloque.nombre) {
+      papelera.guardar(bloque, 'bloquear', actorDe(req));
+      cola.encolar(bloque, motivo, actorDe(req));
+      aReagendar = true;
+    }
     db.prepare(`
       UPDATE agenda SET bloqueado = 1, bloqueo_motivo = @motivo,
         rut=NULL, nombre=NULL, clase=NULL, contacto=NULL, correo=NULL, tipo_cita=NULL,
@@ -266,7 +432,7 @@ app.put('/api/agenda/:id', wrap((req, res) => {
       pesada.liberar(bloque.fecha, bloque.examinador_id);
     }
     logReq(req, id, 'bloquear', `${bloque.fecha} ${bloque.hora} (${motivo})`);
-    return res.json({ ok: true, avisos: [], bloque: traer(id) });
+    return res.json({ ok: true, avisos: [], bloque: traer(id), a_reagendar: aReagendar });
   }
 
   const { avisos, rutFmt, clase } = validarBloque(body, bloque);
@@ -278,6 +444,14 @@ app.put('/api/agenda/:id', wrap((req, res) => {
 
   let funcionario_id = body.funcionario_id ? Number(body.funcionario_id) : null;
   if (!funcionario_id && body.funcionario_nombre) funcionario_id = upsertFuncionario(String(body.funcionario_nombre).trim().toUpperCase());
+  if (!funcionario_id) {
+    funcionario_id = (req.session && req.session.funcionario_id) || null;
+    if (!funcionario_id && actorDe(req)) {
+      const f = db.prepare('SELECT id FROM funcionarios WHERE LOWER(nombre) = LOWER(?) OR LOWER(usuario) = LOWER(?)').get(actorDe(req), actorDe(req));
+      if (f) funcionario_id = f.id;
+    }
+  }
+  // Auto session funcionario fallback
 
   const nombre = body.nombre ? String(body.nombre).trim().replace(/\s+/g, ' ').toUpperCase() : null;
   const estabaOcupada = Boolean(bloque.rut || bloque.nombre);
@@ -345,6 +519,10 @@ app.put('/api/agenda/:id', wrap((req, res) => {
 
   const bloqueFinal = traer(id);
   if (accion === 'agendar' && bloqueFinal.correo) {
+    if (!bloqueFinal.token_confirmacion) {
+      bloqueFinal.token_confirmacion = crypto.randomBytes(16).toString('hex');
+      db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').run(bloqueFinal.token_confirmacion, id);
+    }
     correo.confirmacion(bloqueFinal)
       .then((ok) => { if (ok) db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').run(id); })
       .catch((e) => console.error('Correo de confirmacion fallo:', e.message));
@@ -364,12 +542,84 @@ app.post('/api/agenda/:id/liberar', wrap((req, res) => {
   const id = Number(req.params.id);
   const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
   if (!bloque) throw bad('Bloque no encontrado', 404);
-  papelera.guardar(bloque, 'liberar', actorDe(req));
+  const actor = actorDe(req);
+  const motivo = (req.body && req.body.motivo) || 'Examinador no disponible';
+  const teniaPersona = Boolean(bloque.rut || bloque.nombre);
+
+  if (teniaPersona) {
+    cola.encolar(bloque, motivo, actor);
+  }
+  papelera.guardar(bloque, 'liberar', actor);
+
   db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL} WHERE id = ?`).run(id);
   if (pesada.esPesadaEnHoraValida(bloque) && (bloque.rut || bloque.nombre)) {
     pesada.liberar(bloque.fecha, bloque.examinador_id);
   }
   logReq(req, id, 'liberar', `${bloque.fecha} ${bloque.hora} ${bloque.nombre || bloque.bloqueo_motivo || ''}`);
+  res.json({ ok: true, encolado: teniaPersona });
+}));
+
+// ---------- COLA DE REAGENDAMIENTO ----------
+app.get('/api/cola-reagendar', wrap((req, res) => {
+  res.json(cola.listarPendientes());
+}));
+
+app.get('/api/cola-reagendar/:id/sugerencias', wrap((req, res) => {
+  res.json(cola.sugerencias(req.params.id));
+}));
+
+app.post('/api/cola-reagendar/:id/asignar', wrap((req, res) => {
+  const item = cola.traerPendiente(req.params.id);
+  if (!item) throw bad('Esta persona ya no está pendiente de reagendar.', 404);
+  const destino_id = Number((req.body && req.body.destino_id) || (req.body && req.body.agenda_id));
+  const destino = db.prepare('SELECT * FROM agenda WHERE id = ?').get(destino_id);
+  if (!destino) throw bad('Bloque de destino no encontrado', 404);
+  if (destino.rut || destino.nombre) throw bad('El bloque de destino ya está ocupado.');
+  if (destino.bloqueado) throw bad('El bloque de destino está bloqueado.');
+
+  const correoFinal = (req.body && req.body.correo) || item.correo;
+
+  const tienePesada = String(item.clase || '').toUpperCase().split(',').map((s) => s.trim())
+    .some((cl) => CLASES_PESADAS.includes(cl));
+  if (tienePesada && destino.hora !== HORA_D_A5) throw bad(`La clase ${item.clase} solo se agenda en el bloque ${HORA_D_A5}.`);
+
+  const ts = ahoraTS();
+  const motivo = (req.body && req.body.motivo) || `Reagendado por: ${item.motivo || 'Examinador no disponible'}`;
+  const comentarios = [item.comentarios, `Reagendada desde ${item.origen_fecha} ${item.origen_hora} (${item.motivo || ''})`].filter(Boolean).join(' | ');
+
+  tx(() => {
+    db.prepare(`
+      UPDATE agenda SET rut=?, nombre=?, clase=?, contacto=?, correo=?, tipo_cita='REAGENDADO',
+        motivo_reagendamiento=?, lista_espera=?, intento=?, funcionario_id=?, fecha_inicio_tramite=?,
+        confirmo_asistencia=NULL, resultado=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
+        comentarios=?, agendado_en=?, actualizado_en=datetime('now','localtime')
+      WHERE id=? AND (rut IS NULL OR rut='') AND (nombre IS NULL OR nombre='') AND bloqueado = 0
+    `).run(item.rut, item.nombre, item.clase, item.contacto, correoFinal, motivo, item.lista_espera,
+      item.intento, item.funcionario_id, item.fecha_inicio_tramite, comentarios, ts, destino.id);
+
+    db.prepare(`UPDATE cola_reagendar SET estado='reagendado', destino_agenda_id=?, correo=?, resuelto_en=? WHERE id=?`)
+      .run(destino.id, correoFinal, ts, item.id);
+  });
+
+  const avisos = [];
+  if (pesada.esPesadaEnHoraValida({ hora: destino.hora, clase: item.clase })) {
+    avisos.push(...pesada.aplicar(destino.fecha, destino.examinador_id));
+  }
+  logReq(req, destino.id, 'reagendar',
+    `${item.nombre || item.rut}: reasignado ${item.origen_fecha} ${item.origen_hora} -> ${destino.fecha} ${destino.hora}`);
+
+  res.json({ ok: true, avisos, destino: db.prepare('SELECT * FROM agenda WHERE id = ?').get(destino.id) });
+}));
+
+app.post('/api/cola-reagendar/:id/descartar', wrap((req, res) => {
+  const item = cola.traerPendiente(req.params.id);
+  if (!item) throw bad('Esta persona ya no está pendiente de reagendar.', 404);
+  const ts = ahoraTS();
+  const nota = req.body && req.body.nota;
+  const comentarios = [item.comentarios, nota && `Descartado: ${String(nota).trim()}`].filter(Boolean).join(' | ') || null;
+  db.prepare(`UPDATE cola_reagendar SET estado='descartado', comentarios=?, resuelto_en=? WHERE id=?` )
+    .run(comentarios, ts, item.id);
+  logReq(req, null, 'editar', `cola reagendar: descartado ${item.nombre || item.rut}`);
   res.json({ ok: true });
 }));
 
@@ -383,6 +633,86 @@ app.post('/api/agenda/:id/pendiente', wrap((req, res) => {
     .run(valor, valor && req.body && req.body.nota ? String(req.body.nota).trim() : null, id);
   logReq(req, id, 'editar', `pendiente reagendar = ${valor}`);
   res.json({ ok: true, bloque: traer(id) });
+}));
+
+app.post('/api/agenda/enviar-correos-pendientes', wrap(async (req, res) => {
+  const hoy = hoyISO();
+  const filas = db.prepare(`
+    SELECT a.*, e.nombre AS examinador
+    FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
+    WHERE a.fecha >= ? AND a.bloqueado = 0 AND (a.rut IS NOT NULL OR a.nombre IS NOT NULL)
+      AND a.correo IS NOT NULL AND TRIM(a.correo) != ''
+      AND a.confirmo_asistencia IS NULL
+    ORDER BY a.fecha ASC, a.hora ASC
+  `).all(hoy);
+
+  let tokensGenerados = 0;
+  let enviados = 0;
+
+  for (const bloque of filas) {
+    if (!bloque.token_confirmacion) {
+      bloque.token_confirmacion = crypto.randomBytes(16).toString('hex');
+      db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').run(bloque.token_confirmacion, bloque.id);
+      tokensGenerados++;
+    }
+    if (correo.habilitado) {
+      try {
+        const ok = await correo.confirmacion(bloque);
+        if (ok) {
+          db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').run(bloque.id);
+          enviados++;
+        }
+      } catch (e) {
+        console.error(`Error enviando a ${bloque.correo}:`, e.message);
+      }
+    }
+  }
+
+  res.json({
+    ok: true,
+    total_pendientes: filas.length,
+    tokens_generados: tokensGenerados,
+    enviados,
+    smtp_habilitado: correo.habilitado
+  });
+}));
+
+app.post('/api/agenda/:id/confirmar', wrap(async (req, res) => {
+  const id = Number(req.params.id);
+  const { valor } = req.body || {};
+  const bloque = traer(id);
+  if (!bloque) throw bad('Bloque no encontrado', 404);
+  const confirmo = valor === 1 || valor === true ? 1 : (valor === 0 || valor === false ? 0 : null);
+  const r = db.prepare(`UPDATE agenda SET confirmo_asistencia = ?, token_confirmacion = NULL, actualizado_en = datetime('now','localtime')
+    WHERE id = ? AND (rut IS NOT NULL OR nombre IS NOT NULL) AND bloqueado = 0`).run(confirmo, id);
+  if (!r.changes) throw bad('El bloque no tiene una cita.', 404);
+  logReq(req, id, 'confirmar_asistencia', `${bloque.fecha} ${bloque.hora} ${confirmo === 1 ? 'CONFIRMA' : confirmo === 0 ? 'NO ASISTE' : 'SIN CONFIRMAR'}`);
+
+  let correoEnviado = false;
+  const bloqueFinal = traer(id);
+  if (confirmo === 1 && bloqueFinal && bloqueFinal.correo) {
+    try {
+      const ok = await correo.confirmacion(bloqueFinal);
+      if (ok) db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').run(id);
+      correoEnviado = Boolean(ok);
+    } catch (e) {
+      console.error('Error enviando correo de confirmacion:', e.message);
+    }
+  }
+
+  res.json({ ok: true, confirmo_asistencia: confirmo, correo_enviado: correoEnviado });
+}));
+
+app.post('/api/agenda/:id/resultado', wrap((req, res) => {
+  const id = Number(req.params.id);
+  const resultado = (req.body && req.body.resultado) || null;
+  const cats = catalogo('resultado');
+  if (resultado && !cats.includes(resultado)) throw bad(`Resultado no valido: ${resultado}`);
+  const r = db.prepare(`UPDATE agenda SET resultado = ?, actualizado_en = datetime('now','localtime')
+    WHERE id = ? AND (rut IS NOT NULL OR nombre IS NOT NULL) AND bloqueado = 0`).run(resultado, id);
+  if (!r.changes) throw bad('El bloque no tiene una cita.', 404);
+  logReq(req, id, 'editar', `resultado = ${resultado || '(borrado)'}`);
+  res.json({ ok: true });
 }));
 
 app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
@@ -452,34 +782,93 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
 
 // ---------- BLOQUEAR / DESBLOQUEAR DIA ----------
 app.post('/api/bloquear-dia', wrap((req, res) => {
-  const { fecha, examinador_id, motivo, incluir_ocupados } = req.body || {};
-  if (!fecha) throw bad('Indica la fecha');
-  const cond = ['fecha = ?', 'bloqueado = 0'];
-  const p = [fecha];
-  if (examinador_id) { cond.push('examinador_id = ?'); p.push(Number(examinador_id)); }
-  if (!incluir_ocupados) cond.push('rut IS NULL AND nombre IS NULL');
-  const m = String(motivo || 'BLOQUEADO').trim().toUpperCase();
-  const objetivo = db.prepare(`SELECT * FROM agenda WHERE ${cond.join(' AND ')}`).all(...p);
+  const rango = bloqueo.leerRangoBloqueo(req.body);
+  const incluirOcupados = !!req.body.incluir_ocupados;
+
+  if (req.body.simular) {
+    const { where, params } = bloqueo.filtroBloqueo(rango, { bloqueado: 0, incluirOcupados: true });
+    const r = db.prepare(`SELECT COUNT(*) as total,
+        SUM(CASE WHEN (rut IS NOT NULL AND rut != '') OR (nombre IS NOT NULL AND nombre != '') THEN 1 ELSE 0 END) as con_cita
+      FROM agenda WHERE ${where}`).get(...params);
+    const total = Number((r && r.total) || 0);
+    const conCita = Number((r && r.con_cita) || 0);
+    return res.json({ ok: true, bloqueables: incluirOcupados ? total : total - conCita, con_cita: conCita });
+  }
+
+  const { where, params } = bloqueo.filtroBloqueo(rango, { bloqueado: 0, incluirOcupados });
+  const objetivo = db.prepare(`SELECT * FROM agenda WHERE ${where}`).all(...params);
+
+  const actor = actorDe(req);
+  let aReagendar = 0;
   tx(() => {
     for (const b of objetivo) {
-      if (b.rut || b.nombre) papelera.guardar(b, 'bloquear-dia', actorDe(req));
+      if (b.rut || b.nombre) {
+        papelera.guardar(b, 'bloquear-dia', actor);
+        cola.encolar(b, rango.motivo, actor);
+        aReagendar++;
+        if (pesada.esPesadaEnHoraValida(b)) {
+          pesada.liberar(b.fecha, b.examinador_id);
+        }
+      }
       db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL.replace('bloqueado=0, bloqueo_motivo=NULL', 'bloqueado=1, bloqueo_motivo=@m')} WHERE id=@id`)
-        .run({ id: b.id, m });
+        .run({ id: b.id, m: rango.motivo });
     }
   });
-  logReq(req, null, 'bloquear', `dia ${fecha} ${examinador_id ? 'exam ' + examinador_id : 'todos'}: ${objetivo.length} bloques (${m})`);
-  res.json({ ok: true, bloqueados: objetivo.length });
+
+  const quien = rango.examinador_id ? 'exam ' + rango.examinador_id : 'todos';
+  logReq(req, null, 'bloquear', `${rango.desde}..${rango.hasta} ${quien}: ${objetivo.length} bloques (${rango.motivo})`);
+  res.json({ ok: true, bloqueados: objetivo.length, a_reagendar: aReagendar, a_papelera: aReagendar });
 }));
 
 app.post('/api/desbloquear-dia', wrap((req, res) => {
-  const { fecha, examinador_id } = req.body || {};
-  if (!fecha) throw bad('Indica la fecha');
-  const cond = ['fecha = ?', 'bloqueado = 1'];
-  const p = [fecha];
-  if (examinador_id) { cond.push('examinador_id = ?'); p.push(Number(examinador_id)); }
-  const r = db.prepare(`UPDATE agenda SET bloqueado=0, bloqueo_motivo=NULL, actualizado_en=datetime('now','localtime') WHERE ${cond.join(' AND ')}`).run(...p);
-  logReq(req, null, 'editar', `desbloquear dia ${fecha}: ${r.changes}`);
+  const rango = bloqueo.leerRangoBloqueo(req.body);
+  const { where, params } = bloqueo.filtroBloqueo(rango, { bloqueado: 1, incluirOcupados: true });
+  const soloMotivo = req.body.motivo ? ' AND bloqueo_motivo = ?' : '';
+  const pMotivo = soloMotivo ? [rango.motivo] : [];
+
+  if (req.body.simular) {
+    const results = db.prepare(`SELECT COALESCE(bloqueo_motivo, 'BLOQUEADO') as motivo, COUNT(*) as n
+      FROM agenda WHERE ${where}${soloMotivo} GROUP BY 1 ORDER BY n DESC`).all(...params, ...pMotivo);
+    const total = results.reduce((s, x) => s + Number(x.n), 0);
+    return res.json({ ok: true, desbloqueables: total, por_motivo: results });
+  }
+
+  const r = db.prepare(`UPDATE agenda SET bloqueado=0, bloqueo_motivo=NULL, actualizado_en=datetime('now','localtime') WHERE ${where}${soloMotivo}`)
+    .run(...params, ...pMotivo);
+  logReq(req, null, 'editar', `desbloquear ${rango.desde}..${rango.hasta}: ${r.changes}`);
   res.json({ ok: true, desbloqueados: Number(r.changes) });
+}));
+
+app.get('/api/bloqueos', wrap((req, res) => {
+  const { desde, hasta, examinador_id, motivo, historico } = req.query || {};
+  const cond = ['a.bloqueado = 1'];
+  const params = [];
+  if (desde) {
+    cond.push('a.fecha >= ?');
+    params.push(desde);
+  } else if (!historico || historico === '0' || historico === 'false') {
+    // Por defecto solo mostrar bloqueos activos/vigentes desde hoy en adelante (no meses pasados)
+    cond.push('a.fecha >= ?');
+    params.push(hoyISO());
+  }
+  if (hasta) { cond.push('a.fecha <= ?'); params.push(hasta); }
+  if (examinador_id) { cond.push('a.examinador_id = ?'); params.push(Number(examinador_id)); }
+  if (motivo) { cond.push('a.bloqueo_motivo = ?'); params.push(motivo); }
+
+  const rows = db.prepare(`
+    SELECT a.fecha, a.examinador_id, COALESCE(e.nombre, 'Sin examinador') as examinador,
+           COALESCE(a.bloqueo_motivo, 'BLOQUEADO') as motivo,
+           COUNT(*) as cant_bloques,
+           MIN(a.hora) as desde_hora,
+           MAX(a.hora) as hasta_hora
+    FROM agenda a
+    LEFT JOIN examinadores e ON e.id = a.examinador_id
+    WHERE ${cond.join(' AND ')}
+    GROUP BY a.fecha, a.examinador_id, a.bloqueo_motivo
+    ORDER BY a.fecha ASC, e.nombre ASC, desde_hora ASC
+  `).all(...params);
+
+  res.json(rows);
 }));
 
 // ---------- DISPONIBLES ----------
@@ -638,16 +1027,23 @@ app.post('/api/papelera/vaciar', wrap((req, res) => {
 
 // ---------- IMPORT / EXPORT / BACKUP ----------
 app.post('/api/import', auth.soloAdmin, subir.single('archivo'), wrap((req, res) => {
-  if (!req.file) throw bad('Sube un archivo .xlsx en el campo "archivo"');
-  const limpiar = String(req.body.limpiar) === 'true' || req.body.limpiar === '1';
-  try {
-    if (!limpiar) backupMod.backup('pre-import');
-    const r = importar(req.file.path, { limpiar });
-    logReq(req, null, 'importar', JSON.stringify(r));
-    res.json({ ok: true, resumen: r });
-  } finally {
-    fs.unlink(req.file.path, () => {});
+  const limpiar = String(req.body && req.body.limpiar) === 'true' || (req.body && req.body.limpiar === true) || (req.body && req.body.limpiar === '1');
+  if (!limpiar) backupMod.backup('pre-import');
+
+  let r;
+  if (req.body && req.body.hojas && typeof req.body.hojas === 'object') {
+    r = importar(req.body.hojas, { limpiar });
+  } else if (req.file) {
+    try {
+      r = importar(req.file.path, { limpiar });
+    } finally {
+      fs.unlink(req.file.path, () => {});
+    }
+  } else {
+    throw bad('Sube un archivo .xlsx o .xls');
   }
+  logReq(req, null, 'importar', JSON.stringify(r));
+  res.json({ ok: true, resumen: r });
 }));
 
 app.get('/api/export', wrap((req, res) => {
@@ -666,7 +1062,7 @@ app.get('/api/movimientos', wrap((req, res) => {
 
 // ---------- errores ----------
 app.use((err, req, res, next) => {
-  if (!err.status || err.status >= 500) console.error(err);
+  console.error(`[HTTP ERROR] ${req.method} ${req.url}:`, err.message || err);
   const cuerpo = { error: err.message || 'Error interno' };
   if (err.bloque) cuerpo.bloque = err.bloque;
   if (err.login) cuerpo.login = true;

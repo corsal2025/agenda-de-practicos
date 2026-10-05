@@ -19,33 +19,62 @@ const COL = {
 // AGO-DIC / ENE-JUN 2027: formato original (Google Sheets). AGENDA: formato que exporta este dashboard.
 const HOJAS_MAESTRAS = ['AGO-DIC', 'ENE-JUN 2027', 'AGENDA'];
 
-function filaABloque(fila) {
-  const fecha = aISO(fila[COL.fecha]);
-  const hora = aHora(fila[COL.hora]);
-  const examinadorNom = N.examinador(fila[COL.examinador]);
+
+function detectarColumnas(filaEncabezado) {
+  if (!Array.isArray(filaEncabezado)) return COL;
+  const normalizar = (s) => String(s || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const encabezados = filaEncabezado.map(normalizar);
+  const map = { ...COL };
+  encabezados.forEach((h, idx) => {
+    if (h.includes('FECHA') && !h.includes('TRAMITE') && !h.includes('INICIO')) map.fecha = idx;
+    else if (h.includes('HORA') && !h.includes('INICIO')) map.hora = idx;
+    else if (h === 'RUT') map.rut = idx;
+    else if (h.includes('NOMBRE') && !h.includes('FUNCIONARIO')) map.nombre = idx;
+    else if (h.includes('CLASE')) map.clase = idx;
+    else if (h.includes('CONTACTO') || h.includes('TELEFONO')) map.contacto = idx;
+    else if (h.includes('CORREO') || h.includes('EMAIL')) map.correo = idx;
+    else if (h.includes('TIPO') && h.includes('CITA')) map.tipo_cita = idx;
+    else if (h.includes('MOTIVO') && h.includes('REAGEND')) map.motivo = idx;
+    else if (h.includes('ESPERA')) map.lista_espera = idx;
+    else if (h.includes('INTENTO')) map.intento = idx;
+    else if (h.includes('FUNCIONARI')) map.funcionario = idx;
+    else if (h.includes('TRAMITE') || h.includes('INICIO')) map.fecha_tramite = idx;
+    else if (h.includes('CONFIRM')) map.confirmo = idx;
+    else if (h.includes('EXAMINADOR')) map.examinador = idx;
+    else if (h.includes('RESULTADO')) map.resultado = idx;
+    else if (h.includes('COMENTARIO') || h.includes('OBSERVACION')) map.comentarios = idx;
+  });
+  return map;
+}
+
+function filaABloque(fila, colMap = COL) {
+  const c = colMap;
+  const fecha = aISO(fila[c.fecha]);
+  const hora = aHora(fila[c.hora]);
+  const examinadorNom = N.examinador(fila[c.examinador]);
   if (!fecha || !hora || !examinadorNom) return null;
 
   const notas = [];
-  const cl = N.clase(fila[COL.clase]);
+  const cl = N.clase(fila[c.clase]);
   if (cl.nota) notas.push(cl.nota);
-  const res = N.resultado(fila[COL.resultado]);
+  const res = N.resultado(fila[c.resultado]);
   if (res.nota) notas.push(res.nota);
-  const r = N.rutNorm(fila[COL.rut]);
+  const r = N.rutNorm(fila[c.rut]);
   if (r.nota) notas.push(r.nota);
   if (r.invalido && r.valor) notas.push(`RUT con digito verificador invalido: ${r.valor}`);
 
-  let tipo = N.tipoCita(fila[COL.tipo_cita]);
-  let intento = N.intento(fila[COL.intento]);
+  let tipo = N.tipoCita(fila[c.tipo_cita]);
+  let intento = N.intento(fila[c.intento]);
   if (intento && typeof intento === 'object' && intento.mover_a_tipo) {
     tipo = tipo || intento.mover_a_tipo;
     intento = null;
   }
 
-  const comentarioBase = N.s(fila[COL.comentarios]);
+  const comentarioBase = N.s(fila[c.comentarios]);
   const comentarios = [comentarioBase, ...notas].filter(Boolean).join(' | ') || null;
 
-  const fechaTramite = aISO(fila[COL.fecha_tramite]);
-  const nombreRaw = N.nombre(fila[COL.nombre]);
+  const fechaTramite = aISO(fila[c.fecha_tramite]);
+  const nombreRaw = N.nombre(fila[c.nombre]);
   const motivoBloqueo = !r.valor ? N.bloqueo(nombreRaw) : null;
 
   if (motivoBloqueo) {
@@ -63,15 +92,15 @@ function filaABloque(fila) {
     rut: r.valor,
     nombre: nombreRaw,
     clase: cl.valor,
-    contacto: N.contacto(fila[COL.contacto]),
-    correo: N.correo(fila[COL.correo]),
+    contacto: N.contacto(fila[c.contacto]),
+    correo: N.correo(fila[c.correo]),
     tipo_cita: tipo,
-    motivo_reagendamiento: N.s(fila[COL.motivo]) || null,
-    lista_espera: N.listaEspera(fila[COL.lista_espera]),
-    intento: typeof intento === 'string' ? intento : null,
-    funcionarioNom: N.funcionario(fila[COL.funcionario]),
+    motivo_reagendamiento: N.s(fila[c.motivo]) || null,
+    lista_espera: N.listaEspera(fila[c.lista_espera]),
+    intento: (intento && typeof intento === 'object' ? intento.valor : intento) || null,
+    funcionarioNom: N.funcionario(fila[c.funcionario]),
     fecha_inicio_tramite: fechaTramite,
-    confirmo_asistencia: N.siNoBool(fila[COL.confirmo]),
+    confirmo_asistencia: N.siNoBool(fila[c.confirmo]),
     resultado: res.valor,
     comentarios,
   };
@@ -110,12 +139,24 @@ const UPSERT = `
     actualizado_en = datetime('now','localtime')
 `;
 
-function importar(rutaXlsx, { limpiar = false } = {}) {
-  if (!fs.existsSync(rutaXlsx)) throw new Error(`No existe el archivo: ${rutaXlsx}`);
-  const wb = XLSX.readFile(rutaXlsx, { cellDates: true });
+function importar(fuente, { limpiar = false } = {}) {
+  let hojas = {};
+  if (typeof fuente === 'string') {
+    if (!fs.existsSync(fuente)) throw new Error(`No existe el archivo: ${fuente}`);
+    const wb = XLSX.readFile(fuente, { cellDates: true });
+    for (const nombre of [...HOJAS_MAESTRAS, 'CITAS DISPONIBLES']) {
+      const ws = wb.Sheets[nombre];
+      if (!ws) continue;
+      hojas[nombre] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, cellDates: true, defval: null });
+    }
+  } else if (fuente && typeof fuente === 'object') {
+    hojas = fuente;
+  } else {
+    throw new Error('Fuente de importación inválida');
+  }
 
   if (limpiar) {
-    db.exec('DELETE FROM agenda; DELETE FROM movimientos;');
+    db.exec('DELETE FROM agenda; DELETE FROM movimientos; DELETE FROM cola_reagendar; DELETE FROM papelera;');
   }
 
   // 1) Reunir bloques de las hojas maestras, deduplicando por (fecha,hora,examinador).
@@ -123,12 +164,15 @@ function importar(rutaXlsx, { limpiar = false } = {}) {
   let leidas = 0;
   let saltadas = 0;
 
-  for (const hoja of HOJAS_MAESTRAS) {
-    const ws = wb.Sheets[hoja];
-    if (!ws) continue;
-    const filas = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, cellDates: true, defval: null });
+  const hojasAProcesar = HOJAS_MAESTRAS.filter((h) => hojas[h]);
+  const listaHojas = hojasAProcesar.length > 0 ? hojasAProcesar : Object.keys(hojas).filter((h) => h !== 'CITAS DISPONIBLES');
+
+  for (const hoja of listaHojas) {
+    const filas = hojas[hoja];
+    if (!filas || filas.length < 2) continue;
+    const colMap = detectarColumnas(filas[0]);
     for (let i = 1; i < filas.length; i++) {
-      const b = filaABloque(filas[i]);
+      const b = filaABloque(filas[i], colMap);
       if (!b) { if (filas[i] && filas[i].some((c) => c != null && c !== '')) saltadas++; continue; }
       leidas++;
       const key = `${b.fecha}|${b.hora}|${b.examinadorNom}`;
@@ -171,17 +215,16 @@ function importar(rutaXlsx, { limpiar = false } = {}) {
 
   // 4) Rescatar reservas sueltas de CITAS DISPONIBLES (solo si el bloque esta libre).
   let rescatadas = 0;
-  const wsCD = wb.Sheets['CITAS DISPONIBLES'];
-  if (wsCD) {
-    const filas = XLSX.utils.sheet_to_json(wsCD, { header: 1, raw: true, cellDates: true, defval: null });
+  const filasCD = hojas['CITAS DISPONIBLES'];
+  if (filasCD) {
     const upd = db.prepare(`
       UPDATE agenda SET rut=@rut, nombre=@nombre, clase=@clase, contacto=@contacto, correo=@correo,
         tipo_cita=@tipo_cita, funcionario_id=@funcionario_id, agendado_en=COALESCE(agendado_en, @fecha),
         actualizado_en=datetime('now','localtime')
       WHERE fecha=@fecha AND hora=@hora AND examinador_id=@examinador_id
         AND rut IS NULL AND nombre IS NULL AND bloqueado = 0`);
-    for (let i = 1; i < filas.length; i++) {
-      const f = filas[i];
+    for (let i = 1; i < filasCD.length; i++) {
+      const f = filasCD[i];
       if (!f) continue;
       const rr = N.rutNorm(f[4]);
       const nom = N.nombre(f[5]);

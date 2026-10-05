@@ -1,5 +1,14 @@
 'use strict';
 const path = require('node:path');
+const fs = require('node:fs');
+
+// Carga automática de .env si existe en el directorio raíz del proyecto
+try {
+  const envPath = path.join(__dirname, '..', '.env');
+  if (fs.existsSync(envPath) && typeof process.loadEnvFile === 'function') {
+    process.loadEnvFile(envPath);
+  }
+} catch (_) {}
 
 // Bloques horarios de cada dia habil (uno por examinador).
 const HORAS = [

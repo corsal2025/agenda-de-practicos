@@ -85,3 +85,28 @@ CREATE TABLE IF NOT EXISTS papelera (
   actor      TEXT,
   ts         TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
+
+CREATE TABLE IF NOT EXISTS cola_reagendar (
+  id                   INTEGER PRIMARY KEY,
+  rut                  TEXT,
+  nombre               TEXT,
+  clase                TEXT,
+  contacto             TEXT,
+  correo               TEXT,
+  intento              TEXT,
+  lista_espera         TEXT,
+  funcionario_id       INTEGER,
+  fecha_inicio_tramite TEXT,
+  comentarios          TEXT,
+  origen_agenda_id     INTEGER,
+  origen_fecha         TEXT,
+  origen_hora          TEXT,
+  origen_examinador_id INTEGER,
+  motivo               TEXT,
+  estado               TEXT NOT NULL DEFAULT 'pendiente',
+  destino_agenda_id    INTEGER,
+  creado_por           TEXT,
+  creado_en            TEXT NOT NULL,
+  resuelto_en          TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_cola_reagendar_estado ON cola_reagendar(estado);

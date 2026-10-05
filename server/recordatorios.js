@@ -1,16 +1,17 @@
 'use strict';
-// Recordatorio automatico un dia antes del examen, por correo.
+// Recordatorio automático 3 días antes del examen práctico, por correo electrónico.
 const crypto = require('node:crypto');
 const { db } = require('./db');
 const correo = require('./correo');
 const { hoyISO } = require('./fechas');
 
-function mañanaISO() {
+function tresDiasISO() {
   const d = new Date(`${hoyISO()}T12:00:00`);
-  d.setDate(d.getDate() + 1);
+  d.setDate(d.getDate() + 3);
   return d.toISOString().slice(0, 10);
 }
 
+// Busca citas en la fecha objetivo (3 días antes) que tengan correo y no se les haya enviado el recordatorio
 const SELECT = `
   SELECT a.*, e.nombre AS examinador
   FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
@@ -18,11 +19,10 @@ const SELECT = `
     AND a.correo IS NOT NULL AND a.correo != '' AND a.correo_recordatorio_enviado = 0
 `;
 
-// Manda el recordatorio a todas las citas de mañana con correo pendiente.
-// Idempotente: cada fila enviada se marca, asi corra una o diez veces no duplica.
 async function enviarPendientes() {
   if (!correo.habilitado) return { enviados: 0, habilitado: false };
-  const filas = db.prepare(SELECT).all(mañanaISO());
+  const fechaObjetivo = tresDiasISO();
+  const filas = db.prepare(SELECT).all(fechaObjetivo);
   let enviados = 0;
   for (const bloque of filas) {
     if (!bloque.token_confirmacion) {
@@ -35,15 +35,18 @@ async function enviarPendientes() {
       enviados++;
     }
   }
-  return { enviados, habilitado: true, revisados: filas.length };
+  return { enviados, habilitado: true, revisados: filas.length, fecha: fechaObjetivo };
 }
 
-// Revisa cada hora mientras el servidor este arriba (y una vez al arrancar).
 function programar() {
-  enviarPendientes().catch((e) => console.error('Recordatorios: fallo el envio inicial:', e.message));
+  setTimeout(() => {
+    enviarPendientes().catch((e) => console.error('Fallo recordatorios inicial:', e.message));
+  }, 5000);
+
+  // Cada 6 horas revisa si hay pendientes por notificar
   setInterval(() => {
-    enviarPendientes().catch((e) => console.error('Recordatorios: fallo el envio:', e.message));
-  }, 3600 * 1000).unref();
+    enviarPendientes().catch((e) => console.error('Fallo recordatorios:', e.message));
+  }, 6 * 3600 * 1000);
 }
 
 module.exports = { enviarPendientes, programar };

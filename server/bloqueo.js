@@ -1,8 +1,6 @@
-// Bloqueo de bloques por rango de fechas (permisos, licencias, vacaciones...).
-// Logica pura (sin DB) para poder testearla con node --test: valida el cuerpo
-// del request y arma el WHERE que usan /bloquear-dia y /desbloquear-dia.
+'use strict';
 
-export const MOTIVOS_BLOQUEO = [
+const MOTIVOS_BLOQUEO = [
   'PERMISO ADMINISTRATIVO',
   'LICENCIA MEDICA',
   'FERIADO LEGAL',
@@ -11,7 +9,6 @@ export const MOTIVOS_BLOQUEO = [
   'TERRENO',
 ];
 
-// Tope para que un error de tipeo en el año no bloquee media agenda.
 const MAX_DIAS = 366;
 
 function error400(msg) {
@@ -22,8 +19,7 @@ function error400(msg) {
 
 const esISO = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
 
-// Acepta { desde, hasta } o, por compatibilidad, { fecha } (un solo dia).
-export function leerRangoBloqueo(body = {}) {
+function leerRangoBloqueo(body = {}) {
   const desde = body.desde || body.fecha;
   const hasta = body.hasta || desde;
   if (!esISO(desde) || !esISO(hasta)) throw error400('Indica una fecha valida (desde / hasta)');
@@ -53,10 +49,7 @@ export function leerRangoBloqueo(body = {}) {
   return res;
 }
 
-// WHERE + parametros para seleccionar los bloques del rango.
-// bloqueado: 0 para bloquear (solo los que estan libres de bloqueo), 1 para desbloquear.
-// incluirOcupados=false deja fuera los bloques que ya tienen una cita.
-export function filtroBloqueo({ desde, hasta, examinador_id, horas, hora_desde, hora_hasta }, { bloqueado, incluirOcupados }) {
+function filtroBloqueo({ desde, hasta, examinador_id, horas, hora_desde, hora_hasta }, { bloqueado, incluirOcupados }) {
   const cond = ['fecha BETWEEN ? AND ?', 'bloqueado = ?'];
   const params = [desde, hasta, bloqueado];
   if (examinador_id) { cond.push('examinador_id = ?'); params.push(examinador_id); }
@@ -68,6 +61,8 @@ export function filtroBloqueo({ desde, hasta, examinador_id, horas, hora_desde, 
     cond.push('hora BETWEEN ? AND ?');
     params.push(hora_desde, hora_hasta);
   }
-  if (!incluirOcupados) cond.push('rut IS NULL AND nombre IS NULL');
+  if (!incluirOcupados) cond.push('(rut IS NULL OR rut = \'\') AND (nombre IS NULL OR nombre = \'\')');
   return { where: cond.join(' AND '), params };
 }
+
+module.exports = { MOTIVOS_BLOQUEO, leerRangoBloqueo, filtroBloqueo };
