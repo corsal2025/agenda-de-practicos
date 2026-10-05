@@ -701,12 +701,11 @@ async function renderPorConfirmar() {
               <th class="c" style="width:65px">Clase</th>
               <th class="c" style="width:150px">Teléfono</th>
               <th class="c" style="min-width:180px">Correo</th>
-              <th class="c" style="width:170px">Examinador</th>
               <th class="c" style="min-width:280px">Gestión de asistencia</th>
             </tr>
           </thead>
           <tbody id="pc-tbody">
-            <tr><td colspan="9" class="c muted" style="padding:2rem">Cargando citas por confirmar...</td></tr>
+            <tr><td colspan="8" class="c muted" style="padding:2rem">Cargando citas por confirmar...</td></tr>
           </tbody>
         </table>
       </div>
@@ -730,7 +729,7 @@ async function renderPorConfirmar() {
     if (!filtradas.length) {
       $('#pc-tbody').innerHTML = `
         <tr>
-          <td colspan="9" class="c muted" style="padding:2.5rem 1rem">
+          <td colspan="8" class="c muted" style="padding:2.5rem 1rem">
             ${q ? 'No se encontraron postulantes que coincidan con la búsqueda.' : '🎉 No hay citas pendientes de confirmación en este rango.'}
           </td>
         </tr>
@@ -766,7 +765,6 @@ async function renderPorConfirmar() {
         <td class="c" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
           ${r.correo ? `<a href="mailto:${esc(r.correo)}" style="color:var(--azul)" title="${esc(r.correo)}">${esc(r.correo)}</a>` : '<span class="muted">Sin correo</span>'}
         </td>
-        <td class="c">${esc(r.examinador || 'No asignado')}</td>
         <td class="c" style="white-space:nowrap">
           <button class="btn chico" data-si="${r.id}" style="background:#10b981;border-color:#059669;color:#fff;font-weight:700;margin-right:4px">✔ Confirmó</button>
           <button class="btn chico sec" data-no="${r.id}" style="color:#b91c1c;font-weight:600;margin-right:4px">✖ No asiste</button>
