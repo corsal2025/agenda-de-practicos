@@ -701,7 +701,7 @@ async function renderPorConfirmar() {
               <th class="c" style="width:65px">Clase</th>
               <th class="c" style="width:150px">Teléfono</th>
               <th class="c" style="min-width:180px">Correo</th>
-              <th class="c" style="min-width:280px">Gestión de asistencia</th>
+              <th class="c" style="min-width:230px">Gestión de asistencia</th>
             </tr>
           </thead>
           <tbody id="pc-tbody">
@@ -769,7 +769,6 @@ async function renderPorConfirmar() {
           <button class="btn chico" data-si="${r.id}" style="background:#10b981;border-color:#059669;color:#fff;font-weight:700;margin-right:4px">✔ Confirmó</button>
           <button class="btn chico sec" data-no="${r.id}" style="color:#b91c1c;font-weight:600;margin-right:4px">✖ No asiste</button>
           <button class="btn chico sec" data-reag="${r.id}" style="color:var(--azul);font-weight:600;margin-right:4px" title="Derivar a Reagendar">🔄 Reagendar</button>
-          <button class="btn chico sec" data-ver="${r.id}" title="Ver o editar cita completa">Ficha</button>
         </td>
       </tr>
       `;
@@ -795,16 +794,6 @@ async function renderPorConfirmar() {
           setTimeout(() => {
             if (typeof detalleReagendar === 'function') detalleReagendar(id);
           }, 120);
-        } catch (e) {
-          toast(e.message, 'err');
-        }
-      };
-    });
-    $('#pc-tbody').querySelectorAll('button[data-ver]').forEach((el) => {
-      el.onclick = async () => {
-        try {
-          const b = await api(`/agenda/${el.dataset.ver}`);
-          editorSlot(b, () => cargarDatos());
         } catch (e) {
           toast(e.message, 'err');
         }
