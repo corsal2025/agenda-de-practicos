@@ -79,6 +79,14 @@ queda registrada con el nombre de quien la hizo. Para desactivarlo: `AGENDA_SIN_
 Además, en **Agenda** → "Bloquear día..." se bloquea un día completo (o el de un examinador)
 de un clic, y las citas que ya estaban van a la papelera.
 
+## Reporte de errores por correo y PDF de la agenda
+
+- **Reporte por correo:** requiere SMTP (`SMTP_HOST`/`SMTP_USER`/`SMTP_PASS`) y
+  `AGENDA_REPORTE_DESTINATARIOS=a@x.cl,b@x.cl`. Botón **Enviar por correo** en *Reporte de errores*
+  (solo administradores); además se envía solo una vez cada 24 h mientras el servidor esté arriba.
+- **PDF de la agenda del día:** botón **Descargar PDF** en *Agenda del día* (una hoja por examinador,
+  generado en el servidor con `pdfkit`; `GET /api/dia/pdf?fecha=AAAA-MM-DD`).
+
 ## Reglas de negocio
 
 - 11 bloques por día hábil y por examinador: 08:30, 09:00, ... 13:30.
