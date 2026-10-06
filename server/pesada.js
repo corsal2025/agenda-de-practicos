@@ -73,7 +73,7 @@ function ocupadosDependientes(fecha, examinador_id) {
   return db.prepare(
     `SELECT hora, rut, nombre FROM agenda
      WHERE fecha = ? AND examinador_id = ? AND hora IN (${placeholders})
-       AND (rut IS NOT NULL OR nombre IS NOT NULL)`
+       AND ((rut IS NOT NULL AND rut != '') OR (nombre IS NOT NULL AND nombre != ''))`
   ).all(fecha, examinador_id, ...HORAS_A_BLOQUEAR);
 }
 
