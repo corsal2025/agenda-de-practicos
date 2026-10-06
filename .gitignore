@@ -29,3 +29,6 @@ public/logo.webp
 .atl/
 .claude/
 public/screenshot.png
+
+# Credenciales locales (SMTP). NO subir.
+.env
