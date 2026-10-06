@@ -10,6 +10,8 @@ const { db, tx, upsertFuncionario, upsertExaminador, log } = require('./db');
 const { PUERTO, RAIZ, HORAS, HORA_D_A5, CLASES_PESADAS } = require('./config');
 const { generar } = require('./slots');
 const { reporte } = require('./errores');
+const reporteCorreo = require('./reporte-correo');
+const { generarPdfDia } = require('./pdf-dia');
 const { resumen } = require('./analitica');
 const { generarXlsx, generarXlsxOriginal } = require('./export');
 const { importar } = require('./migrate');
@@ -58,6 +60,8 @@ app.get('/api/sesion', (req, res) => {
     funcionario: (req.session && req.session.funcionario) || null,
     sin_login: auth.SIN_LOGIN,
     logo: logoDisponible(),
+    // Funciones que dependen de la plataforma (el frontend es el mismo en Node local y en Cloudflare).
+    capacidades: { pdf: true, backup: true },
     organismo: process.env.AGENDA_ORGANISMO || 'Municipalidad de Valparaíso',
     unidad: process.env.AGENDA_UNIDAD || 'Departamento de Licencias de Conducir',
   });
@@ -1054,8 +1058,27 @@ app.get('/api/dia', wrap((req, res) => {
   res.json({ fecha, examinadores: porExaminador });
 }));
 
+// PDF de la agenda del dia generado en el servidor (una hoja por examinador).
+app.get('/api/dia/pdf', wrap((req, res) => {
+  const fecha = String(req.query.fecha || hoyISO());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw bad('Fecha invalida.');
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="agenda-${fecha}.pdf"`);
+  const doc = generarPdfDia(fecha,
+    process.env.AGENDA_ORGANISMO || 'Municipalidad de Valparaíso',
+    process.env.AGENDA_UNIDAD || 'Departamento de Licencias de Conducir');
+  doc.pipe(res);
+  doc.end();
+}));
+
 // ---------- ERRORES ----------
 app.get('/api/errores', wrap((req, res) => res.json(reporte())));
+
+app.post('/api/errores/enviar', auth.soloAdmin, wrap(async (req, res) => {
+  const r = await reporteCorreo.enviarReporte();
+  logReq(req, null, 'editar', `reporte de errores enviado a ${r.destinatarios.join(', ')} (${r.total})`);
+  res.json({ ok: true, ...r });
+}));
 
 // ---------- ANALITICA ----------
 app.get('/api/analitica', wrap((req, res) => res.json(resumen(req.query.desde, req.query.hasta))));
@@ -1238,7 +1261,7 @@ function iniciar() {
     const n = db.prepare('SELECT COUNT(*) n FROM agenda').get().n;
     if (!n) console.log('  Base vacia. Importa el Excel desde "Datos" o corre: npm run migrar\n');
     backupMod.programar();
-    if (correo.habilitado) recordatorios.programar();
+    if (correo.habilitado) { recordatorios.programar(); reporteCorreo.programar(); }
     else console.log('  Correos deshabilitados (falta configurar SMTP_HOST/SMTP_USER/SMTP_PASS)\n');
   });
 }

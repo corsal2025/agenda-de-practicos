@@ -56,6 +56,8 @@ ver **[INSTALACION.md](INSTALACION.md)**.
 
 ## Login
 
+Tras 5 intentos fallidos desde una misma IP se bloquea el login por 60 s (`AGENDA_LOGIN_BLOQUEO_MS`).
+
 Por defecto pide un PIN compartido (`1234`, cambiable con `AGENDA_PIN`). Cada acción
 queda registrada con el nombre de quien la hizo. Para desactivarlo: `AGENDA_SIN_LOGIN=1`.
 
@@ -77,6 +79,28 @@ queda registrada con el nombre de quien la hizo. Para desactivarlo: `AGENDA_SIN_
 Además, en **Agenda** → "Bloquear día..." se bloquea un día completo (o el de un examinador)
 de un clic, y las citas que ya estaban van a la papelera.
 
+## Reporte de errores por correo y PDF de la agenda
+
+- **Reporte por correo:** requiere SMTP (`SMTP_HOST`/`SMTP_USER`/`SMTP_PASS`) y
+  `AGENDA_REPORTE_DESTINATARIOS=a@x.cl,b@x.cl`. Botón **Enviar por correo** en *Reporte de errores*
+  (solo administradores); además se envía solo una vez cada 24 h mientras el servidor esté arriba.
+- **PDF de la agenda del día:** botón **Descargar PDF** en *Agenda del día* (una hoja por examinador,
+  generado en el servidor con `pdfkit`; `GET /api/dia/pdf?fecha=AAAA-MM-DD`).
+
+## Versión en Cloudflare (producción en línea)
+
+La misma app corre en Cloudflare Pages + D1 (`functions/`, `worker/`, `reminder-worker/`, `migrations/`); el
+despliegue es automático al hacer push a `main` (`.github/workflows/deploy.yml`). Diferencias con la versión local:
+
+- **Correo** por Resend (`RESEND_API_KEY`, `RESEND_FROM`, `AGENDA_URL_PUBLICA`), no SMTP. Los recordatorios salen 3 días
+  antes y el reporte de errores diario a las 08:00 (Chile) desde `reminder-worker` (que necesita sus propios secrets,
+  incluido `AGENDA_REPORTE_DESTINATARIOS`; ver `reminder-worker/wrangler.toml`).
+- **Reporte por correo manual:** botón *Enviar por correo* (el secret `AGENDA_REPORTE_DESTINATARIOS` también va en el proyecto Pages).
+- **Login:** bloqueo por IP tras 5 intentos fallidos (tabla `login_intentos`, migración `0004`).
+- **Sin** backup de archivo ni PDF de servidor: la base D1 se restaura con Time Travel y la agenda del día se imprime
+  desde el navegador. El frontend oculta esos botones según `capacidades` de `/api/meta`.
+- Las rutas públicas de los correos (`/confirmar`, `/rechazar`, `/reagendar`) deben figurar en `public/_routes.json`.
+
 ## Reglas de negocio
 
 - 11 bloques por día hábil y por examinador: 08:30, 09:00, ... 13:30.
@@ -97,6 +121,8 @@ Tras cambiar feriados, volver a generar los bloques del período afectado.
 
 - Automático: uno al arrancar el servidor (si el último tiene +20 h) y luego cada 24 h,
   en `data/backups/`. Se conservan los últimos 30 (`AGENDA_BACKUPS` para cambiarlo).
+- Copia externa opcional: `AGENDA_BACKUP_OFFSITE=D:\\respaldo` (disco de red o carpeta sincronizada con
+  OneDrive/Drive). Si no está disponible solo se avisa por consola; el backup local no se interrumpe.
 - Cada importación que **no** usa "reemplazar todo" hace un backup antes.
 - Backup manual: botón en la pestaña Datos, o `npm run backup`.
 - Para restaurar: detener el servidor y copiar el archivo `.db` deseado sobre `data/agenda.db`.

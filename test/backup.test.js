@@ -139,3 +139,31 @@ test('podar nunca toca archivos que no son backups (agenda.db, otros)', () => {
   for (const n of ['agenda.db', 'otro.db', 'agenda-notas.db']) assert.ok(quedan.includes(n), `${n} debe seguir ahi`);
   assert.equal(quedan.filter((f) => /^agenda-\d{4}-/.test(f)).length, 3);
 });
+
+test('el backup tambien se copia a AGENDA_BACKUP_OFFSITE y podar no toca .db ajenos', () => {
+  const offsite = fs.mkdtempSync(path.join(os.tmpdir(), 'agenda-offsite-'));
+  process.env.AGENDA_BACKUP_OFFSITE = offsite;
+  try {
+    const ajeno = path.join(offsite, 'otra-app.db');
+    fs.writeFileSync(ajeno, 'no es un backup de la agenda');
+    const destino = backupMod.backup('offsite');
+    assert.ok(fs.existsSync(path.join(offsite, path.basename(destino))), 'falta la copia externa');
+    assert.ok(fs.existsSync(ajeno), 'un .db ajeno no debe borrarse');
+  } finally {
+    delete process.env.AGENDA_BACKUP_OFFSITE;
+    fs.rmSync(offsite, { recursive: true, force: true });
+  }
+});
+
+test('si la carpeta offsite no es usable, el backup local igual se crea', () => {
+  const archivo = path.join(dirBackups, 'no-es-carpeta.txt');
+  fs.writeFileSync(archivo, 'x');
+  process.env.AGENDA_BACKUP_OFFSITE = path.join(archivo, 'sub'); // mkdir bajo un archivo: falla
+  try {
+    const destino = backupMod.backup('offsite-roto');
+    assert.ok(fs.existsSync(destino));
+  } finally {
+    delete process.env.AGENDA_BACKUP_OFFSITE;
+    fs.unlinkSync(archivo);
+  }
+});

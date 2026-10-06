@@ -24,6 +24,11 @@ const middleware = cookieSession({
 // Rutas que no requieren sesion.
 const LIBRES = new Set(['/api/login', '/api/sesion']);
 
+// Limite de intentos fallidos por IP: evita probar claves/PIN por fuerza bruta.
+const MAX_INTENTOS = 5;
+const bloqueoMs = () => Number(process.env.AGENDA_LOGIN_BLOQUEO_MS) || 60 * 1000;
+const intentos = new Map(); // ip -> { fallos, bloqueadoHasta }
+
 function guard(req, res, next) {
   if (SIN_LOGIN) {
     req.session = req.session || {};
@@ -49,8 +54,17 @@ function login(req, res) {
   if (!usuario || !String(usuario).trim()) { res.status(400).json({ error: 'Indica tu usuario' }); return; }
   if (!clave) { res.status(400).json({ error: 'Indica tu contraseña' }); return; }
 
+  const ip = req.ip || (req.socket && req.socket.remoteAddress) || 'desconocida';
+  const estado = intentos.get(ip) || { fallos: 0, bloqueadoHasta: 0 };
+  if (estado.bloqueadoHasta > Date.now()) {
+    const restante = Math.ceil((estado.bloqueadoHasta - Date.now()) / 1000);
+    res.status(429).json({ error: `Demasiados intentos. Espera ${restante} s antes de volver a probar.` });
+    return;
+  }
+
   const u = usuarios.porUsuario(usuario);
   if (u && u.clave_hash && usuarios.verificarClave(clave, u.clave_hash)) {
+    intentos.delete(ip);
     req.session.funcionario = u.nombre;
     req.session.funcionario_id = u.id;
     req.session.rol = u.rol || 'staff';
@@ -60,11 +74,15 @@ function login(req, res) {
   // maestro deja entrar como administrador (arranque inicial / sin cuentas aun).
   if (!u || !u.clave_hash) {
     if (String(clave) === PIN) {
+      intentos.delete(ip);
       req.session.funcionario = String(usuario).trim().toUpperCase();
       req.session.rol = 'admin';
       return res.json({ ok: true, funcionario: req.session.funcionario, rol: 'admin' });
     }
   }
+  estado.fallos += 1;
+  if (estado.fallos >= MAX_INTENTOS) { estado.bloqueadoHasta = Date.now() + bloqueoMs(); estado.fallos = 0; }
+  intentos.set(ip, estado);
   res.status(401).json({ error: 'Usuario o contraseña incorrectos' });
 }
 

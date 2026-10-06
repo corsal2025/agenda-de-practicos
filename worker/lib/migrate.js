@@ -132,7 +132,7 @@ async function ejecutarPorLotes(db, statements) {
       await db.batch(statements.slice(i, i + TAMANO_LOTE));
     } catch (err) {
       console.error(`importar: fallo el lote ${indiceLote + 1}/${totalLotes} de la importacion (statements ${i}-${Math.min(i + TAMANO_LOTE, statements.length) - 1}):`, err);
-      throw new Error(
+      throw errorUsuario(
         `La importacion fallo en el lote ${indiceLote + 1} de ${totalLotes}. La importacion quedo ` +
         `PARCIAL: los lotes anteriores a este ya se guardaron en la base. Es seguro volver a subir ` +
         `el mismo archivo Excel para reintentar -- el UPSERT es idempotente y va a retomar/sobrescribir ` +
@@ -272,7 +272,7 @@ export async function importar(db, hojas, { limpiar = false } = {}) {
       }
     } catch (err) {
       console.error(`importar: fallo el rescate de CITAS DISPONIBLES en la fila ${filaActual + 1} de la hoja:`, err);
-      throw new Error(
+      throw errorUsuario(
         `La importacion del rescate de CITAS DISPONIBLES fallo en la fila ${filaActual + 1}. El upsert ` +
         `principal y las filas de rescate anteriores a esta ya quedaron guardados. Es seguro volver a ` +
         `subir el mismo archivo Excel para reintentar -- tanto el UPSERT como este UPDATE son idempotentes ` +
@@ -291,3 +291,7 @@ export async function importar(db, hojas, { limpiar = false } = {}) {
   await log(db, null, 'importar', JSON.stringify(resumen));
   return resumen;
 }
+
+// Error con estado HTTP 422: el mensaje (que explica si el lote quedo parcial y como reintentar)
+// debe llegar a la UI; los errores sin estado se ocultan tras un texto generico.
+function errorUsuario(msg) { const e = new Error(msg); e.status = 422; return e; }

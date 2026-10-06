@@ -88,6 +88,32 @@ export async function soloAdmin(c, next) {
   return c.json({ error: 'Esta accion es solo para administradores.' }, 403);
 }
 
+// Limite de intentos fallidos por IP (el contador vive en D1: un Worker no comparte memoria
+// entre isolates). Si la tabla aun no existe (migracion 0004 pendiente), el limite se omite.
+const MAX_INTENTOS = 5;
+const bloqueoMs = (env) => Number(env.AGENDA_LOGIN_BLOQUEO_MS) || 60 * 1000;
+
+async function estadoIntentos(db, ip) {
+  try {
+    return (await db.prepare('SELECT fallos, bloqueado_hasta FROM login_intentos WHERE ip = ?').bind(ip).first())
+      || { fallos: 0, bloqueado_hasta: 0 };
+  } catch { return null; }
+}
+async function registrarFallo(db, env, ip, estado) {
+  if (!estado) return;
+  let fallos = Number(estado.fallos) + 1;
+  let hasta = 0;
+  if (fallos >= MAX_INTENTOS) { hasta = Date.now() + bloqueoMs(env); fallos = 0; }
+  try {
+    await db.prepare(`INSERT INTO login_intentos (ip, fallos, bloqueado_hasta) VALUES (?, ?, ?)
+      ON CONFLICT(ip) DO UPDATE SET fallos = excluded.fallos, bloqueado_hasta = excluded.bloqueado_hasta`)
+      .bind(ip, fallos, hasta).run();
+  } catch { /* ignore */ }
+}
+async function limpiarIntentos(db, ip) {
+  try { await db.prepare('DELETE FROM login_intentos WHERE ip = ?').bind(ip).run(); } catch { /* ignore */ }
+}
+
 export async function login(c) {
   const db = c.env.DB;
   const body = await c.req.json().catch(() => ({}));
@@ -95,8 +121,16 @@ export async function login(c) {
   if (!usuario || !String(usuario).trim()) return c.json({ error: 'Indica tu usuario' }, 400);
   if (!clave) return c.json({ error: 'Indica tu contraseña' }, 400);
 
+  const ip = c.req.header('cf-connecting-ip') || 'desconocida';
+  const estado = await estadoIntentos(db, ip);
+  if (estado && Number(estado.bloqueado_hasta) > Date.now()) {
+    const restante = Math.ceil((Number(estado.bloqueado_hasta) - Date.now()) / 1000);
+    return c.json({ error: `Demasiados intentos. Espera ${restante} s antes de volver a probar.` }, 429);
+  }
+
   const u = await usuarios.porUsuario(db, usuario);
   if (u && u.clave_hash && await usuarios.verificarClave(clave, u.clave_hash)) {
+    if (estado && estado.fallos) await limpiarIntentos(db, ip);
     await establecerSesion(c, { funcionario: u.nombre, funcionario_id: u.id, rol: u.rol || 'staff' });
     return c.json({ ok: true, funcionario: u.nombre, rol: u.rol || 'staff' });
   }
@@ -105,11 +139,13 @@ export async function login(c) {
   if (!u || !u.clave_hash) {
     const PIN = String(c.env.AGENDA_PIN || '1234');
     if (String(clave) === PIN) {
+      if (estado && estado.fallos) await limpiarIntentos(db, ip);
       const funcionario = String(usuario).trim().toUpperCase();
       await establecerSesion(c, { funcionario, rol: 'admin' });
       return c.json({ ok: true, funcionario, rol: 'admin' });
     }
   }
+  await registrarFallo(db, c.env, ip, estado);
   return c.json({ error: 'Usuario o contraseña incorrectos' }, 401);
 }
 

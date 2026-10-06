@@ -150,4 +150,4 @@ function recordatorio(bloque) {
   return enviar(bloque.correo, `Recordatorio oficial (Faltan 3 días) - Examen práctico ${fFecha(bloque.fecha)} ${bloque.hora}`, cuerpo);
 }
 
-module.exports = { habilitado, confirmacion, recordatorio, plantilla };
+module.exports = { habilitado, enviar, confirmacion, recordatorio, plantilla };

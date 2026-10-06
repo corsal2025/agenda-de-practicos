@@ -68,6 +68,7 @@ export const LIMPIAR_SQL = `
   motivo_reagendamiento=NULL, lista_espera=NULL, intento=NULL, funcionario_id=NULL,
   fecha_inicio_tramite=NULL, confirmo_asistencia=NULL, resultado=NULL, comentarios=NULL,
   bloqueado=0, bloqueo_motivo=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
+  token_confirmacion=NULL, correo_confirmacion_enviado=0, correo_recordatorio_enviado=0,
   agendado_en=NULL, actualizado_en=?`;
 
 // Variante para bloquear-dia: deja bloqueado=1 con un motivo en vez de liberar.

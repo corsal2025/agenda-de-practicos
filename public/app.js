@@ -2559,6 +2559,7 @@ let filtErr = { tipo: '' };
 async function renderErrores() {
   view.innerHTML = `<div class="panel"><div class="fila">
       <h2 style="margin:0;flex:1">Reporte de errores</h2>
+      <button class="btn sec" id="e-enviar" title="Envía este reporte a AGENDA_REPORTE_DESTINATARIOS">✉ Enviar por correo</button>
       <button class="btn sec" id="e-refresh">Recalcular</button></div>
     <div class="chips" id="e-chips" style="margin:.6rem 0"></div></div>
     <div class="panel tabla-scroll"><table><thead><tr>
@@ -2588,6 +2589,12 @@ async function renderErrores() {
     });
   };
   $('#e-refresh').onclick = () => { cacheGet.delete('/errores'); cargar(); };
+  $('#e-enviar').onclick = async () => {
+    try {
+      const r = await api('/errores/enviar', { method: 'POST', body: {} });
+      toast(`Reporte enviado a ${r.destinatarios.join(', ')}`);
+    } catch (e) { toast(e.message, 'err'); }
+  };
   cargar();
 }
 
@@ -2695,6 +2702,7 @@ async function renderDia() {
           <option value="unica" ${disenoDia() === 'unica' ? 'selected' : ''}>Todos los examinadores en una hoja</option>
           <option value="porexam" ${disenoDia() === 'porexam' ? 'selected' : ''}>Una hoja por examinador/a</option>
         </select></div>
+      ${META.capacidades && META.capacidades.pdf ? `<a class="btn sec" id="dd-pdf" target="_blank" rel="noopener" href="/api/dia/pdf?fecha=${esc(fecha)}">Descargar PDF</a>` : ''}
       <button class="btn" id="dd-print">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6V2h8v4M4 12H2V6h12v6h-2M4 10h8v4H4z"/></svg>
         Imprimir informe
@@ -3032,11 +3040,11 @@ async function renderDatos() {
         <label style="align-self:center"><input type="checkbox" id="im-limpiar"> Reemplazar todo (borra lo actual)</label>
         <button class="btn" id="im-btn">Importar</button>
       </div>
-      <p class="muted">Sin "reemplazar" se hace un backup antes y se fusionan las citas por (fecha, hora, examinador).</p>
+      <p class="muted">Sin "reemplazar" se fusionan las citas por (fecha, hora, examinador).${META.capacidades && META.capacidades.backup === false ? ' La base (Cloudflare D1) se puede restaurar a un punto anterior con Time Travel.' : ' Se hace un backup antes de importar.'}</p>
       <div class="fila">
         <a class="btn sec" href="/api/export">Exportar (formato dashboard)</a>
         <a class="btn sec" href="/api/export?formato=original">Exportar (formato Excel original)</a>
-        <button class="btn sec" id="bk-btn">Crear backup de la base</button>
+        ${META.capacidades && META.capacidades.backup === false ? '' : '<button class="btn sec" id="bk-btn">Crear backup de la base</button>'}
       </div>
       <div id="im-res"></div>
     </div>
@@ -3129,7 +3137,7 @@ async function renderDatos() {
       toast('Importacion completada');
     } catch (e) { $('#im-res').innerHTML = `<div class="aviso">${esc(e.message)}</div>`; }
   };
-  $('#bk-btn').onclick = async () => {
+  if ($('#bk-btn')) $('#bk-btn').onclick = async () => {
     const r = await api('/backup', { method: 'POST' });
     toast('Backup: ' + r.archivo.split(/[\\/]/).pop());
   };
