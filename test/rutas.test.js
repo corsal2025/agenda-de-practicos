@@ -17,7 +17,9 @@ process.env.AGENDA_SIN_LOGIN = '1';
 const correo = require('../server/correo');
 const enviados = [];
 correo.habilitado = true;
-correo.confirmacion = async (b) => { enviados.push(b.id); return true; };
+const llamadas = [];
+let confirmacionReal = async (b) => { enviados.push(b.id); llamadas.push(b); return true; };
+correo.confirmacion = (b) => confirmacionReal(b);
 correo.recordatorio = async () => true;
 
 const { db } = require('../server/db');
@@ -431,4 +433,86 @@ test('PUT que reenvia pendiente_reagendar/pendiente_nota los conserva', async ()
   assert.equal(x.pendiente_reagendar, 1);
   assert.equal(x.pendiente_nota, 'llamo para cambiar');
   assert.equal(x.confirmo_asistencia, 1);
+});
+
+// ---------- Lote 2: correo de prueba, cambiaPersona, carreras de envio, dependientes ----------
+test('correo_prueba envia UN correo al destino de prueba y no toca banderas ni tokens', async () => {
+  const pend = ocupado(diaNuevo(), '09:00', { token_confirmacion: null, correo_confirmacion_enviado: 0, correo: 'real@x.cl' });
+  const antes = db.prepare('SELECT id, token_confirmacion, correo_confirmacion_enviado, correo FROM agenda').all();
+  llamadas.length = 0; enviados.length = 0;
+  const r = await api('POST', '/agenda/enviar-correos-pendientes', { correo_prueba: ' prueba@dominio.cl ' });
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.datos.prueba, true);
+  assert.equal(r.datos.enviado, true);
+  assert.equal(llamadas.length, 1);
+  assert.equal(llamadas[0].correo, 'prueba@dominio.cl');
+  const despues = db.prepare('SELECT id, token_confirmacion, correo_confirmacion_enviado, correo FROM agenda').all();
+  assert.deepEqual(despues, antes);
+  assert.equal(leer(pend.id).correo, 'real@x.cl');
+});
+
+test('correo_prueba con formato invalido responde 400 y no envia', async () => {
+  llamadas.length = 0;
+  const r = await api('POST', '/agenda/enviar-correos-pendientes', { correo_prueba: 'no-es-correo' });
+  assert.equal(r.status, 400);
+  assert.equal(llamadas.length, 0);
+});
+
+test('correo_prueba sin SMTP habilitado responde enviado=false', async () => {
+  correo.habilitado = false;
+  try {
+    llamadas.length = 0;
+    const r = await api('POST', '/agenda/enviar-correos-pendientes', { correo_prueba: 'a@b.cl' });
+    assert.equal(r.status, 200);
+    assert.equal(r.datos.enviado, false);
+    assert.equal(r.datos.smtp_habilitado, false);
+    assert.equal(llamadas.length, 0);
+  } finally { correo.habilitado = true; }
+});
+
+test('editar comentarios o la capitalizacion del nombre con el mismo RUT no resetea ni reenvia', async () => {
+  const b = ocupado(diaNuevo(), '09:00');
+  llamadas.length = 0;
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '11111111-1', nombre: '  juan   perez ', clase: 'B', correo: 'juan@x.cl', comentarios: 'x' });
+  assert.equal(r.status, 200, r.texto);
+  const x = leer(b.id);
+  assert.equal(x.token_confirmacion, 'tokenviejo');
+  assert.equal(x.correo_confirmacion_enviado, 1);
+  assert.equal(llamadas.length, 0);
+});
+
+test('sin RUT, el mismo nombre normalizado es la misma persona; otro RUT es otra persona', async () => {
+  const a = ocupado(diaNuevo(), '09:00', { rut: null, nombre: 'JUAN PEREZ' });
+  await api('PUT', `/agenda/${a.id}`, { nombre: 'Juan  Perez', clase: 'B' });
+  assert.equal(leer(a.id).token_confirmacion, 'tokenviejo');
+  const b = ocupado(diaNuevo(), '09:00');
+  await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'JUAN PEREZ', clase: 'B' });
+  sinTokens(leer(b.id));
+});
+
+test('el flag de correo enviado no se marca si el bloque fue reasignado durante el envio', async () => {
+  const b = slot(diaNuevo(), '09:00');
+  const original = confirmacionReal;
+  confirmacionReal = async (x) => {
+    // mientras "viaja" el correo, el bloque se libera y lo toma otra persona
+    db.prepare("UPDATE agenda SET rut='99.999.999-9', nombre='OTRO', token_confirmacion=NULL, correo_confirmacion_enviado=0 WHERE id=?").run(x.id);
+    return true;
+  };
+  try {
+    const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B', correo: 'm@x.cl' });
+    assert.equal(r.status, 200, r.texto);
+    await new Promise((ok) => setTimeout(ok, 50));
+    assert.equal(leer(b.id).correo_confirmacion_enviado, 0);
+  } finally { confirmacionReal = original; }
+});
+
+test('ocupadosDependientes trata rut/nombre vacios como libres', () => {
+  const pesada = require('../server/pesada');
+  const dia = diaNuevo();
+  slot(dia, '13:00', { rut: '', nombre: '' });
+  slot(dia, '13:30', { rut: '', nombre: null });
+  assert.deepEqual(pesada.ocupadosDependientes(dia, 1), []);
+  slot(dia, '12:30');
+  db.prepare("UPDATE agenda SET nombre='X' WHERE fecha=? AND hora='13:30'").run(dia);
+  assert.equal(pesada.ocupadosDependientes(dia, 1).length, 1);
 });

@@ -29,7 +29,9 @@ async function enviarPendientes() {
     }
     const ok = await correo.recordatorio(bloque);
     if (ok) {
-      db.prepare('UPDATE agenda SET correo_recordatorio_enviado = 1 WHERE id = ?').run(bloque.id);
+      // Solo si el bloque sigue con el mismo ocupante/token (el SMTP pudo tardar y reasignarse).
+      db.prepare('UPDATE agenda SET correo_recordatorio_enviado = 1 WHERE id = ? AND token_confirmacion IS ? AND rut IS ?')
+        .run(bloque.id, bloque.token_confirmacion ?? null, bloque.rut ?? null);
       enviados++;
     }
   }

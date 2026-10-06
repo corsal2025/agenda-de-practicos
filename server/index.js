@@ -293,7 +293,7 @@ app.post('/reagendar/:id/:token/elegir', express.urlencoded({ extended: true }),
   const nuevoFinal = traer(nuevoSlot.id);
   if (nuevoFinal.correo) {
     correo.confirmacion(nuevoFinal)
-      .then((ok) => { if (ok) db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').run(nuevoSlot.id); })
+      .then((ok) => { if (ok) marcarConfirmacionEnviada(nuevoFinal); })
       .catch((e) => console.error('Correo de confirmacion fallo:', e.message));
   }
 
@@ -310,6 +310,13 @@ app.post('/reagendar/:id/:token/elegir', express.urlencoded({ extended: true }),
 
 
 app.use(auth.guard);
+
+// Marca la confirmacion como enviada solo si el bloque sigue con el mismo ocupante/token al
+// que se le envio (el SMTP puede tardar y el bloque pudo reasignarse mientras tanto).
+function marcarConfirmacionEnviada(b) {
+  return db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ? AND token_confirmacion IS ? AND rut IS ?')
+    .run(b.id, b.token_confirmacion ?? null, b.rut ?? null);
+}
 
 // Captura tanto errores sincronos como rechazos de handlers async.
 const wrap = (fn) => (req, res, next) => {
@@ -532,8 +539,16 @@ app.put('/api/agenda/:id', wrap((req, res) => {
 
   // Cambia el ocupante (se ocupa, se libera o entra otra persona): el token y las
   // banderas de correo del ocupante anterior no deben pasar al nuevo.
-  const cambiaPersona = estabaOcupada !== quedaOcupada
-    || (estabaOcupada && (bloque.rut !== rutFmt || (bloque.nombre || '') !== (nombre || '')));
+  // Es otra persona solo si cambia el RUT (comparado normalizado); sin RUT en ninguno de los
+  // dos, se compara el nombre sin mayusculas ni espacios de mas. Corregir comentarios o la
+  // capitalizacion del nombre del mismo RUT no cuenta como cambio.
+  const normNombre = (n) => String(n || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const rutAntes = rut.limpiar(bloque.rut);
+  const rutAhora = rut.limpiar(rutFmt);
+  const otraPersona = (rutAntes || rutAhora)
+    ? rutAntes !== rutAhora
+    : normNombre(bloque.nombre) !== normNombre(nombre);
+  const cambiaPersona = estabaOcupada !== quedaOcupada || (estabaOcupada && otraPersona);
 
   db.prepare(`
     UPDATE agenda SET
@@ -593,7 +608,7 @@ app.put('/api/agenda/:id', wrap((req, res) => {
       db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').run(bloqueFinal.token_confirmacion, id);
     }
     correo.confirmacion(bloqueFinal)
-      .then((ok) => { if (ok) db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').run(id); })
+      .then((ok) => { if (ok) marcarConfirmacionEnviada(bloqueFinal); })
       .catch((e) => console.error('Correo de confirmacion fallo:', e.message));
   }
 
@@ -708,6 +723,28 @@ app.post('/api/agenda/:id/pendiente', wrap((req, res) => {
 
 app.post('/api/agenda/enviar-correos-pendientes', wrap(async (req, res) => {
   const hoy = hoyISO();
+
+  // Modo prueba: UN solo correo al destino indicado, con datos de la primera cita pendiente
+  // (o de ejemplo). No genera tokens, no cambia banderas, no escribe en la base.
+  if (req.body && req.body.correo_prueba !== undefined) {
+    const destino = String(req.body.correo_prueba || '').trim();
+    if (!/^[^\s@<>",;]+@[^\s@<>",;]+\.[^\s@<>",;]+$/.test(destino)) throw bad('Indica un correo de prueba valido.');
+    const base = db.prepare(`
+      SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
+      WHERE a.fecha >= ? AND a.bloqueado = 0 AND (a.rut IS NOT NULL OR a.nombre IS NOT NULL)
+        AND a.correo IS NOT NULL AND TRIM(a.correo) != '' AND a.confirmo_asistencia IS NULL
+      ORDER BY a.fecha ASC, a.hora ASC LIMIT 1
+    `).get(hoy) || { id: 0, fecha: hoy, hora: HORAS[0], examinador: 'EXAMINADOR DE EJEMPLO', nombre: 'POSTULANTE DE EJEMPLO', rut: '11.111.111-1', clase: 'B' };
+    // Sin token: el correo de prueba no lleva links vivos de la cita real.
+    const muestra = { ...base, correo: destino, token_confirmacion: null };
+    let enviado = false;
+    if (correo.habilitado) {
+      try { enviado = Boolean(await correo.confirmacion(muestra)); }
+      catch (e) { console.error('Error enviando correo de prueba:', e.message); }
+    }
+    return res.json({ ok: true, prueba: true, enviado, enviados: enviado ? 1 : 0, smtp_habilitado: correo.habilitado });
+  }
+
   const filas = db.prepare(`
     SELECT a.*, e.nombre AS examinador
     FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
@@ -731,7 +768,7 @@ app.post('/api/agenda/enviar-correos-pendientes', wrap(async (req, res) => {
       try {
         const ok = await correo.confirmacion(bloque);
         if (ok) {
-          db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').run(bloque.id);
+          marcarConfirmacionEnviada(bloque);
           enviados++;
         }
       } catch (e) {
@@ -765,7 +802,7 @@ app.post('/api/agenda/:id/confirmar', wrap(async (req, res) => {
   if (confirmo === 1 && bloqueFinal && bloqueFinal.correo && !bloqueFinal.correo_confirmacion_enviado) {
     try {
       const ok = await correo.confirmacion(bloqueFinal);
-      if (ok) db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').run(id);
+      if (ok) marcarConfirmacionEnviada(bloqueFinal);
       correoEnviado = Boolean(ok);
     } catch (e) {
       console.error('Error enviando correo de confirmacion:', e.message);
@@ -859,7 +896,7 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
     destinoFinal.token_confirmacion = crypto.randomBytes(16).toString('hex');
     db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').run(destinoFinal.token_confirmacion, destino.id);
     correo.confirmacion(destinoFinal)
-      .then((ok) => { if (ok) db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').run(destino.id); })
+      .then((ok) => { if (ok) marcarConfirmacionEnviada(destinoFinal); })
       .catch((e) => console.error('Correo de confirmacion fallo:', e.message));
   }
 
