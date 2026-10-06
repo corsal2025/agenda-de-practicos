@@ -912,17 +912,25 @@ app.post('/api/desbloquear-dia', wrap((req, res) => {
   const soloMotivo = req.body.motivo ? ' AND bloqueo_motivo = ?' : '';
   const pMotivo = soloMotivo ? [rango.motivo] : [];
 
+  // Los bloqueos automaticos de clase pesada (13:00/13:30) no se liberan mientras el 12:30
+  // del mismo examinador siga ocupado por una clase D/A5: se quitan solos al liberar esa cita.
+  const objetivo = db.prepare(`SELECT * FROM agenda WHERE ${where}${soloMotivo}`).all(...params, ...pMotivo)
+    .filter((b) => !pesada.bloqueoAutoVigente(b));
+
   if (req.body.simular) {
-    const results = db.prepare(`SELECT COALESCE(bloqueo_motivo, 'BLOQUEADO') as motivo, COUNT(*) as n
-      FROM agenda WHERE ${where}${soloMotivo} GROUP BY 1 ORDER BY n DESC`).all(...params, ...pMotivo);
-    const total = results.reduce((s, x) => s + Number(x.n), 0);
-    return res.json({ ok: true, desbloqueables: total, por_motivo: results });
+    const porMotivo = new Map();
+    for (const b of objetivo) {
+      const m = b.bloqueo_motivo || 'BLOQUEADO';
+      porMotivo.set(m, (porMotivo.get(m) || 0) + 1);
+    }
+    const results = [...porMotivo].map(([motivo, n]) => ({ motivo, n })).sort((a, b) => b.n - a.n);
+    return res.json({ ok: true, desbloqueables: objetivo.length, por_motivo: results });
   }
 
-  const r = db.prepare(`UPDATE agenda SET bloqueado=0, bloqueo_motivo=NULL, actualizado_en=datetime('now','localtime') WHERE ${where}${soloMotivo}`)
-    .run(...params, ...pMotivo);
-  logReq(req, null, 'editar', `desbloquear ${rango.desde}..${rango.hasta}: ${r.changes}`);
-  res.json({ ok: true, desbloqueados: Number(r.changes) });
+  const upd = db.prepare("UPDATE agenda SET bloqueado=0, bloqueo_motivo=NULL, actualizado_en=datetime('now','localtime') WHERE id = ?");
+  tx(() => { for (const b of objetivo) upd.run(b.id); });
+  logReq(req, null, 'editar', `desbloquear ${rango.desde}..${rango.hasta}: ${objetivo.length}`);
+  res.json({ ok: true, desbloqueados: objetivo.length });
 }));
 
 app.get('/api/bloqueos', wrap((req, res) => {

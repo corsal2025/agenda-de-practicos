@@ -55,6 +55,15 @@ function liberar(fecha, examinador_id) {
   ).run(fecha, examinador_id, MOTIVO_AUTO, ...HORAS_A_BLOQUEAR);
 }
 
+// true si el bloque es un bloqueo automatico de clase pesada y su 12:30 (mismo examinador y
+// fecha) sigue ocupado por una clase D/A5: liberarlo dejaria al examinador con otra cita encima.
+function bloqueoAutoVigente(b) {
+  if (!b || !b.bloqueado || b.bloqueo_motivo !== MOTIVO_AUTO) return false;
+  const base = db.prepare('SELECT * FROM agenda WHERE fecha = ? AND examinador_id = ? AND hora = ?')
+    .get(b.fecha, b.examinador_id, HORA_D_A5);
+  return Boolean(base && (base.rut || base.nombre) && esPesadaEnHoraValida(base));
+}
+
 // Bloques dependientes (13:00/13:30) que ya tienen una cita real ese
 // examinador/fecha. Se usa para impedir agendar D/A5 a las 12:30 si
 // despues no se puede reservar el resto del examen.
@@ -84,5 +93,5 @@ function sincronizarTodo() {
 }
 
 module.exports = {
-  MOTIVO_AUTO, esPesadaEnHoraValida, aplicar, liberar, ocupadosDependientes, sincronizarTodo,
+  MOTIVO_AUTO, esPesadaEnHoraValida, aplicar, liberar, bloqueoAutoVigente, ocupadosDependientes, sincronizarTodo,
 };

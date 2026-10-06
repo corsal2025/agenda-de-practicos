@@ -393,3 +393,28 @@ test('importar con un archivo/fuente invalido responde 400 con el motivo', async
   const r = await api('POST', '/import', { hojas: 'no-es-un-objeto' });
   assert.equal(r.status, 400);
 });
+
+// ---------- 7b) desbloquear-dia no libera los bloqueos automaticos de una clase pesada vigente ----------
+test('desbloquear-dia respeta los bloqueos automaticos si el 12:30 sigue con clase D/A5', async () => {
+  const dia = diaNuevo();
+  const manual = slot(dia, '09:00', { bloqueado: 1, bloqueo_motivo: 'TERRENO' });
+  ocupado(dia, '12:30', { clase: 'D' });
+  const a1300 = slot(dia, '13:00', { bloqueado: 1, bloqueo_motivo: MOTIVO_AUTO });
+  const a1330 = slot(dia, '13:30', { bloqueado: 1, bloqueo_motivo: MOTIVO_AUTO });
+  const sim = await api('POST', '/desbloquear-dia', { desde: dia, hasta: dia, examinador_id: 1, simular: true });
+  assert.equal(sim.datos.desbloqueables, 1);
+  const r = await api('POST', '/desbloquear-dia', { desde: dia, hasta: dia, examinador_id: 1 });
+  assert.equal(r.datos.desbloqueados, 1);
+  assert.equal(leer(manual.id).bloqueado, 0);
+  assert.equal(leer(a1300.id).bloqueado, 1);
+  assert.equal(leer(a1330.id).bloqueado, 1);
+});
+
+test('desbloquear-dia si libera los bloqueos automaticos huerfanos (12:30 ya sin clase pesada)', async () => {
+  const dia = diaNuevo();
+  slot(dia, '12:30');
+  const a1300 = slot(dia, '13:00', { bloqueado: 1, bloqueo_motivo: MOTIVO_AUTO });
+  const r = await api('POST', '/desbloquear-dia', { desde: dia, hasta: dia, examinador_id: 1 });
+  assert.equal(r.datos.desbloqueados, 1);
+  assert.equal(leer(a1300.id).bloqueado, 0);
+});
