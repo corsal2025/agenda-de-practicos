@@ -290,6 +290,96 @@ agendaRoutes.post('/agenda/:id/resultado', async (c) => {
   return c.json({ ok: true });
 });
 
+// ---------- CONFIRMAR ASISTENCIA (DESDE DASHBOARD) ----------
+agendaRoutes.post('/agenda/:id/confirmar', async (c) => {
+  const db = c.env.DB;
+  const id = Number(c.req.param('id'));
+  const body = (await c.req.json().catch(() => ({}))) || {};
+  const { valor } = body;
+  const bloque = await traer(db, id);
+  if (!bloque) throw bad('Bloque no encontrado', 404);
+  const confirmo = valor === 1 || valor === true ? 1 : (valor === 0 || valor === false ? 0 : null);
+  const r = await db.prepare(`
+    UPDATE agenda SET confirmo_asistencia = ?, token_confirmacion = NULL, actualizado_en = ?
+    WHERE id = ? AND (rut IS NOT NULL OR nombre IS NOT NULL) AND bloqueado = 0
+  `).bind(confirmo, ahoraChile(), id).run();
+
+  if (!r.meta.changes) throw bad('El bloque no tiene una cita.', 404);
+  await logReq(c, db, id, 'confirmar_asistencia', `${bloque.fecha} ${bloque.hora} ${confirmo === 1 ? 'CONFIRMA' : confirmo === 0 ? 'NO ASISTE' : 'SIN CONFIRMAR'}`);
+
+  let correoEnviado = false;
+  const bloqueFinal = await traer(db, id);
+  if (confirmo === 1 && bloqueFinal && bloqueFinal.correo) {
+    try {
+      const ok = await correo.confirmacion(c.env, db, bloqueFinal);
+      if (ok) {
+        await db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').bind(id).run();
+      }
+      correoEnviado = Boolean(ok);
+    } catch (e) {
+      console.error('Error enviando correo de confirmacion:', e.message);
+    }
+  }
+
+  return c.json({ ok: true, confirmo_asistencia: confirmo, correo_enviado: correoEnviado });
+});
+
+// ---------- ENVIAR CORREOS MASIVOS A PENDIENTES ----------
+agendaRoutes.post('/agenda/enviar-correos-pendientes', async (c) => {
+  const db = c.env.DB;
+  const body = (await c.req.json().catch(() => ({}))) || {};
+  const correoPrueba = body.correo_prueba ? String(body.correo_prueba).trim().toLowerCase() : null;
+  const hoy = hoyISOChile();
+
+  const { results: filas } = await db.prepare(`
+    SELECT a.*, e.nombre AS examinador
+    FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
+    WHERE a.fecha >= ? AND a.bloqueado = 0 AND (a.rut IS NOT NULL OR a.nombre IS NOT NULL)
+      AND a.correo IS NOT NULL AND TRIM(a.correo) != ''
+      AND a.confirmo_asistencia IS NULL
+    ORDER BY a.fecha ASC, a.hora ASC
+  `).bind(hoy).all();
+
+  let tokensGenerados = 0;
+  let enviados = 0;
+  const smtpHabilitado = correo.habilitado(c.env);
+
+  for (const bloque of filas) {
+    if (!bloque.token_confirmacion) {
+      bloque.token_confirmacion = crypto.randomUUID().replace(/-/g, '');
+      await db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?')
+        .bind(bloque.token_confirmacion, bloque.id).run();
+      tokensGenerados++;
+    }
+
+    if (smtpHabilitado) {
+      try {
+        const bloqueParaEnvio = correoPrueba ? { ...bloque, correo: correoPrueba } : bloque;
+        const ok = await correo.confirmacion(c.env, db, bloqueParaEnvio);
+        if (ok) {
+          if (!correoPrueba) {
+            await db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').bind(bloque.id).run();
+          }
+          enviados++;
+        }
+      } catch (e) {
+        console.error('Error enviando correo:', e.message);
+      }
+    }
+  }
+
+  await logReq(c, db, null, 'correo_masivo', `enviados ${enviados}/${filas.length} (modo prueba: ${correoPrueba || 'no'})`);
+
+  return c.json({
+    ok: true,
+    total_pendientes: filas.length,
+    tokens_generados: tokensGenerados,
+    enviados,
+    smtp_habilitado: smtpHabilitado,
+    correo_prueba: correoPrueba
+  });
+});
+
 agendaRoutes.post('/agenda/:id/reagendar', async (c) => {
   const db = c.env.DB;
   const origenId = Number(c.req.param('id'));
