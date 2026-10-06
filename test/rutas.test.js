@@ -1,0 +1,86 @@
+'use strict';
+// Tests de rutas HTTP. Usan una base temporal y un puerto efimero: NUNCA tocan data/.
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const os = require('node:os');
+const fs = require('node:fs');
+const path = require('node:path');
+
+// Variables de entorno ANTES de requerir los modulos del servidor.
+const tmpDb = path.join(os.tmpdir(), `agenda-rutas-${Date.now()}.db`);
+const tmpBackups = fs.mkdtempSync(path.join(os.tmpdir(), 'agenda-rutas-bk-'));
+process.env.AGENDA_DB = tmpDb;
+process.env.AGENDA_BACKUP_DIR = tmpBackups;
+process.env.AGENDA_SIN_LOGIN = '1';
+
+// Correo falso: nunca se envia nada real (el .env local podria traer SMTP).
+const correo = require('../server/correo');
+const enviados = [];
+correo.habilitado = true;
+correo.confirmacion = async (b) => { enviados.push(b.id); return true; };
+correo.recordatorio = async () => true;
+
+const { db } = require('../server/db');
+const { hoyISO } = require('../server/fechas');
+const app = require('../server/index');
+
+let servidor;
+let base;
+test.before(async () => {
+  await new Promise((ok) => { servidor = app.listen(0, '127.0.0.1', ok); });
+  base = `http://127.0.0.1:${servidor.address().port}`;
+});
+test.after(() => {
+  servidor.close();
+  for (const s of ['', '-shm', '-wal']) { try { fs.unlinkSync(tmpDb + s); } catch (_) {} }
+  fs.rmSync(tmpBackups, { recursive: true, force: true });
+});
+
+// ---------- helpers ----------
+async function http(metodo, ruta, { json, form } = {}) {
+  const init = { method: metodo, headers: {} };
+  if (json !== undefined) { init.headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(json); }
+  if (form !== undefined) { init.headers['Content-Type'] = 'application/x-www-form-urlencoded'; init.body = new URLSearchParams(form).toString(); }
+  const r = await fetch(base + ruta, init);
+  const texto = await r.text();
+  let datos = null;
+  try { datos = JSON.parse(texto); } catch (_) { /* html */ }
+  return { status: r.status, texto, datos };
+}
+const api = (m, ruta, json) => http(m, '/api' + ruta, { json });
+
+const hoyMas = (n) => {
+  const d = new Date(`${hoyISO()}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+// Cada test usa un dia propio para no pisarse con los demas.
+let diaN = 100;
+const diaNuevo = () => hoyMas(diaN++);
+
+function slot(fecha, hora, extra = {}, examinador_id = 1) {
+  db.prepare('INSERT INTO agenda (fecha, hora, examinador_id) VALUES (?, ?, ?)').run(fecha, hora, examinador_id);
+  const fila = db.prepare('SELECT * FROM agenda WHERE fecha=? AND hora=? AND examinador_id=?').get(fecha, hora, examinador_id);
+  const cols = Object.keys(extra);
+  if (cols.length) {
+    db.prepare(`UPDATE agenda SET ${cols.map((c) => `${c}=@${c}`).join(',')} WHERE id=@id`).run({ ...extra, id: fila.id });
+  }
+  return leer(fila.id);
+}
+const leer = (id) => db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
+// Slot ocupado con token y banderas de correo ya "usadas".
+const ocupado = (fecha, hora, extra = {}, examinador_id = 1) => slot(fecha, hora, {
+  rut: '11.111.111-1', nombre: 'JUAN PEREZ', clase: 'B', correo: 'juan@x.cl',
+  token_confirmacion: 'tokenviejo', correo_confirmacion_enviado: 1, correo_recordatorio_enviado: 1,
+  ...extra,
+}, examinador_id);
+const sinTokens = (b) => {
+  assert.equal(b.token_confirmacion, null, 'token_confirmacion debe quedar NULL');
+  assert.equal(b.correo_confirmacion_enviado, 0, 'correo_confirmacion_enviado debe quedar 0');
+  assert.equal(b.correo_recordatorio_enviado, 0, 'correo_recordatorio_enviado debe quedar 0');
+};
+
+test('la app se puede importar sin escuchar en el puerto 4900', async () => {
+  const r = await api('GET', '/meta');
+  assert.equal(r.status, 200);
+});

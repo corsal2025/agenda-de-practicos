@@ -1089,14 +1089,26 @@ function ipsLan() {
   return out;
 }
 
-app.listen(PUERTO, () => {
-  console.log(`\n  Agenda de Practicos`);
-  console.log(`  Este PC:        http://localhost:${PUERTO}`);
-  for (const ip of ipsLan()) console.log(`  Otros PC (LAN): http://${ip}:${PUERTO}`);
-  console.log(auth.SIN_LOGIN ? '  Modo sin login\n' : '  Login con PIN\n');
-  const n = db.prepare('SELECT COUNT(*) n FROM agenda').get().n;
-  if (!n) console.log('  Base vacia. Importa el Excel desde "Datos" o corre: npm run migrar\n');
-  backupMod.programar();
-  if (correo.habilitado) recordatorios.programar();
-  else console.log('  Correos deshabilitados (falta configurar SMTP_HOST/SMTP_USER/SMTP_PASS)\n');
-});
+function iniciar() {
+  // Un rechazo no capturado se registra pero no tumba el servidor.
+  process.on('unhandledRejection', (motivo) => {
+    console.error('[unhandledRejection]', motivo);
+  });
+  app.listen(PUERTO, () => {
+    console.log(`\n  Agenda de Practicos`);
+    console.log(`  Este PC:        http://localhost:${PUERTO}`);
+    for (const ip of ipsLan()) console.log(`  Otros PC (LAN): http://${ip}:${PUERTO}`);
+    console.log(auth.SIN_LOGIN ? '  Modo sin login\n' : '  Login con PIN\n');
+    const n = db.prepare('SELECT COUNT(*) n FROM agenda').get().n;
+    if (!n) console.log('  Base vacia. Importa el Excel desde "Datos" o corre: npm run migrar\n');
+    backupMod.programar();
+    if (correo.habilitado) recordatorios.programar();
+    else console.log('  Correos deshabilitados (falta configurar SMTP_HOST/SMTP_USER/SMTP_PASS)\n');
+  });
+}
+
+// Solo escucha al arrancar con `node server/index.js` (npm start / iniciar.bat);
+// los tests importan la app y la levantan en un puerto efimero.
+if (require.main === module) iniciar();
+
+module.exports = app;
