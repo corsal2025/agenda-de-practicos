@@ -393,7 +393,7 @@ agendaRoutes.post('/agenda/:id/reagendar', async (c) => {
     const mot = String(motivo || 'POSTULANTE SOLICITA CAMBIO').trim();
     await db.prepare('UPDATE agenda SET pendiente_reagendar = 1, pendiente_nota = ?, motivo_reagendamiento = ?, actualizado_en = ? WHERE id = ?')
       .bind(mot, mot, ahoraChile(), origenId).run();
-    await audit(c, origenId, 'editar', `pendiente reagendar: ${mot}`);
+    await logReq(c, db, origenId, 'editar', `pendiente reagendar: ${mot}`);
     return c.json({ ok: true });
   }
 
