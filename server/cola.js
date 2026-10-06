@@ -1,7 +1,6 @@
 'use strict';
 const { db } = require('./db');
-const { hoyISO } = require('./fechas');
-const ahoraTS = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
+const { hoyISO, ahoraTS } = require('./fechas');
 const { CLASES_PESADAS, HORA_D_A5 } = require('./config');
 
 function encolar(bloque, motivo, actor) {

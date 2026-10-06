@@ -31,3 +31,22 @@ test('diasHabiles cuenta bien una semana', () => {
   const d = F.diasHabiles('2026-08-03', '2026-08-09'); // lun a dom
   assert.equal(d.length, 5);
 });
+
+test('isoLocal usa la fecha local, no la UTC', () => {
+  assert.equal(F.isoLocal(new Date(2026, 0, 1, 23, 30)), '2026-01-01');
+  assert.equal(F.isoLocal(new Date(2026, 0, 1, 0, 5)), '2026-01-01');
+});
+
+test('ahoraTS entrega la hora local con formato de SQLite', () => {
+  const ahora = new Date();
+  const ts = F.ahoraTS(ahora);
+  assert.match(ts, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+  assert.equal(ts.slice(0, 10), F.isoLocal(ahora));
+  assert.equal(Number(ts.slice(11, 13)), ahora.getHours());
+  assert.equal(F.ahoraTS(new Date(2026, 5, 7, 23, 59, 58)), '2026-06-07 23:59:58');
+});
+
+test('sumarDias cruza meses y años en hora local', () => {
+  assert.equal(F.sumarDias('2026-12-31', 1), '2027-01-01');
+  assert.equal(F.sumarDias('2026-03-01', -1), '2026-02-28');
+});

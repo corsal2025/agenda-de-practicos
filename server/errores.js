@@ -1,7 +1,7 @@
 'use strict';
 const { db } = require('./db');
 const { HORA_D_A5, CLASES_PESADAS } = require('./config');
-const { hoyISO, esHabil } = require('./fechas');
+const { hoyISO, esHabil, sumarDias } = require('./fechas');
 const feriados = require('./feriados');
 const rut = require('./rut');
 const telefono = require('./telefono');
@@ -15,7 +15,7 @@ const telefono = require('./telefono');
 // agregan validaciones utiles (RUT modulo 11, clase en bloque, sin contacto, en feriado).
 function reporte() {
   const hoy = hoyISO();
-  const hace30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const hace30 = sumarDias(hoy, -30);
   const fset = feriados.set();
   const filas = db.prepare(`
     SELECT a.*, e.nombre AS examinador

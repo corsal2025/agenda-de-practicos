@@ -3,12 +3,10 @@
 const crypto = require('node:crypto');
 const { db } = require('./db');
 const correo = require('./correo');
-const { hoyISO } = require('./fechas');
+const { hoyISO, sumarDias } = require('./fechas');
 
 function tresDiasISO() {
-  const d = new Date(`${hoyISO()}T12:00:00`);
-  d.setDate(d.getDate() + 3);
-  return d.toISOString().slice(0, 10);
+  return sumarDias(hoyISO(), 3);
 }
 
 // Busca citas en la fecha objetivo (3 días antes) que tengan correo y no se les haya enviado el recordatorio

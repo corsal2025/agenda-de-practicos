@@ -82,16 +82,26 @@ function diasHabiles(desde, hasta, feriados) {
   return out;
 }
 
-function hoyISO() {
-  const d = new Date();
+// 'YYYY-MM-DD' en hora local (toISOString entrega la fecha UTC, que de noche ya es "manana").
+function isoLocal(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function hoyISO() {
+  return isoLocal(new Date());
+}
+
+// 'YYYY-MM-DD HH:MM:SS' en hora local: mismo formato que datetime('now','localtime') de SQLite.
+function ahoraTS(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${isoLocal(d)} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 // Suma `n` dias a una fecha ISO ('YYYY-MM-DD') en hora local.
 function sumarDias(isoFecha, n) {
   const d = new Date(`${isoFecha}T12:00:00`);
   d.setDate(d.getDate() + n);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return isoLocal(d);
 }
 
-module.exports = { FERIADOS_SEMILLA, aISO, aHora, esHabil, diasHabiles, hoyISO, sumarDias };
+module.exports = { FERIADOS_SEMILLA, aISO, aHora, esHabil, diasHabiles, hoyISO, isoLocal, ahoraTS, sumarDias };
