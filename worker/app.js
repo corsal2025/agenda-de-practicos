@@ -48,13 +48,18 @@ api.route('/', authPrivateRoutes); // /mi-clave: exige sesion pero no rol admin
 app.route('/api', api);
 
 // ---------- errores ----------
-// Mismo shape que el middleware de error de Express: {error, bloque?, login?}.
+// Mismo contrato que el manejador de server/index.js: con status es un error previsto
+// (bad(), validaciones) y su mensaje llega a la UI; sin status es un error inesperado
+// (SQL, bug): se registra y al cliente solo le llega un texto generico.
 app.onError((err, c) => {
-  if (!err.status || err.status >= 500) console.error(err);
-  const cuerpo = { error: err.message || 'Error interno' };
+  if (!err.status || err.status >= 500) {
+    console.error(err);
+    return c.json({ error: 'Error interno del servidor. Intenta de nuevo; si persiste, avisa al administrador.' }, 500);
+  }
+  const cuerpo = { error: err.message || 'Error' };
   if (err.bloque) cuerpo.bloque = err.bloque;
   if (err.login) cuerpo.login = true;
-  return c.json(cuerpo, err.status || 400);
+  return c.json(cuerpo, err.status);
 });
 
 export default app;

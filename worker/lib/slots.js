@@ -23,7 +23,7 @@ async function ejecutarPorLotes(db, statements) {
       resultados.push(...r);
     } catch (err) {
       console.error(`generar: fallo el lote ${indiceLote + 1}/${totalLotes} (statements ${i}-${Math.min(i + TAMANO_LOTE, statements.length) - 1}):`, err);
-      throw new Error(
+      throw errorUsuario(
         `La generacion de bloques fallo en el lote ${indiceLote + 1} de ${totalLotes}. Los lotes ` +
         `anteriores a este ya quedaron guardados. Es seguro reintentar: el INSERT OR IGNORE es ` +
         `idempotente y no duplica bloques ya creados. Detalle: ${err && err.message}`
@@ -57,3 +57,7 @@ export async function generar(db, desde, hasta) {
   await log(db, null, 'generar', `${desde}..${hasta}: ${creados} bloques nuevos`);
   return { dias: dias.length, creados };
 }
+
+// Error con estado HTTP 422: el mensaje (que explica si el lote quedo parcial y como reintentar)
+// debe llegar a la UI; los errores sin estado se ocultan tras un texto generico.
+function errorUsuario(msg) { const e = new Error(msg); e.status = 422; return e; }

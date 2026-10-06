@@ -2,7 +2,7 @@
 // pasar a async/await sobre D1 y usar hoyISOChile() (no hoyISO(), que en un
 // Worker corre en UTC) para el corte de "hoy".
 import { HORA_D_A5, CLASES_PESADAS } from './config.js';
-import { hoyISOChile, esHabil } from './fechas.js';
+import { hoyISOChile, esHabil, sumarDias } from './fechas.js';
 import * as feriados from './feriados.js';
 import * as rut from './rut.js';
 import * as telefono from './telefono.js';
@@ -22,7 +22,7 @@ const HORAS_TRAS_PESADA = HORAS.slice(HORAS.indexOf(HORA_D_A5) + 1);
 // agregan validaciones utiles (RUT modulo 11, clase en bloque, sin contacto, en feriado).
 export async function reporte(db) {
   const hoy = hoyISOChile();
-  const hace30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const hace30 = sumarDias(hoy, -30);
   const fset = await feriados.set(db);
   const { results: filas } = await db.prepare(`
     SELECT a.*, e.nombre AS examinador

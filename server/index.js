@@ -60,6 +60,8 @@ app.get('/api/sesion', (req, res) => {
     funcionario: (req.session && req.session.funcionario) || null,
     sin_login: auth.SIN_LOGIN,
     logo: logoDisponible(),
+    // Funciones que dependen de la plataforma (el frontend es el mismo en Node local y en Cloudflare).
+    capacidades: { pdf: true, backup: true },
     organismo: process.env.AGENDA_ORGANISMO || 'Municipalidad de Valparaíso',
     unidad: process.env.AGENDA_UNIDAD || 'Departamento de Licencias de Conducir',
   });

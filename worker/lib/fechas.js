@@ -113,6 +113,14 @@ export function hoyISOChile(fecha) {
   return ahoraChile(fecha).slice(0, 10);
 }
 
+// Suma `n` dias a una fecha ISO ('YYYY-MM-DD') (aritmetica de calendario pura, sin zona horaria).
+export function sumarDias(isoFecha, n) {
+  const [y, m, d] = String(isoFecha).split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
+}
+
 // Dia siguiente a hoy en fecha de Chile ('YYYY-MM-DD').
 export function mananaISOChile(fecha) {
   const [y, m, d] = hoyISOChile(fecha).split('-').map(Number);

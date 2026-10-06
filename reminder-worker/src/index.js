@@ -6,8 +6,9 @@
 // Importa directo de worker/lib/ (no se duplica logica): wrangler empaqueta
 // cada Worker por separado, asi que este import relativo se resuelve y
 // empaqueta bien en el build de este Worker satelite.
-import { habilitado, recordatorio } from '../../worker/lib/correo.js';
-import { mananaISOChile } from '../../worker/lib/fechas.js';
+import { habilitado, recordatorio, marcarRecordatorioEnviado } from '../../worker/lib/correo.js';
+import { hoyISOChile, ahoraChile, sumarDias } from '../../worker/lib/fechas.js';
+import { enviarReporte, destinatarios } from '../../worker/lib/reporte-correo.js';
 
 const SELECT = `
   SELECT a.*, e.nombre AS examinador
@@ -21,7 +22,7 @@ function tokenAleatorio() {
   return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Manda el recordatorio a todas las citas de mañana con correo pendiente.
+// Manda el recordatorio a todas las citas que son en 3 dias (igual que server/recordatorios.js).
 // Idempotente: cada fila enviada se marca, asi corra una o diez veces no duplica.
 export async function enviarPendientes(env) {
   const db = env.DB;
@@ -34,7 +35,7 @@ export async function enviarPendientes(env) {
     console.warn('Recordatorios: RESEND_API_KEY no configurado en este Worker -- recordatorios no se envian.');
     return { enviados: 0, habilitado: false };
   }
-  const { results: filas } = await db.prepare(SELECT).bind(mananaISOChile()).all();
+  const { results: filas } = await db.prepare(SELECT).bind(sumarDias(hoyISOChile(), 3)).all();
   let enviados = 0;
   for (const bloque of filas) {
     if (!bloque.token_confirmacion) {
@@ -44,7 +45,7 @@ export async function enviarPendientes(env) {
     }
     const ok = await recordatorio(env, db, bloque);
     if (ok) {
-      await db.prepare('UPDATE agenda SET correo_recordatorio_enviado = 1 WHERE id = ?').bind(bloque.id).run();
+      await marcarRecordatorioEnviado(db, bloque);
       enviados++;
     }
   }
@@ -64,5 +65,12 @@ export default {
     ctx.waitUntil(
       enviarPendientes(env).catch((e) => console.error('Recordatorios: fallo el envio:', e.message))
     );
+    // Reporte de errores diario: una vez al dia (el cron corre cada hora), a las 08:00 de Chile,
+    // solo si hay correo y destinatarios configurados en ESTE Worker.
+    if (ahoraChile().slice(11, 13) === '08' && habilitado(env) && destinatarios(env).length) {
+      ctx.waitUntil(
+        enviarReporte(env, env.DB).catch((e) => console.error('Reporte de errores: fallo el envio:', e.message))
+      );
+    }
   },
 };

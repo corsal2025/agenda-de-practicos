@@ -87,6 +87,20 @@ de un clic, y las citas que ya estaban van a la papelera.
 - **PDF de la agenda del día:** botón **Descargar PDF** en *Agenda del día* (una hoja por examinador,
   generado en el servidor con `pdfkit`; `GET /api/dia/pdf?fecha=AAAA-MM-DD`).
 
+## Versión en Cloudflare (producción en línea)
+
+La misma app corre en Cloudflare Pages + D1 (`functions/`, `worker/`, `reminder-worker/`, `migrations/`); el
+despliegue es automático al hacer push a `main` (`.github/workflows/deploy.yml`). Diferencias con la versión local:
+
+- **Correo** por Resend (`RESEND_API_KEY`, `RESEND_FROM`, `AGENDA_URL_PUBLICA`), no SMTP. Los recordatorios salen 3 días
+  antes y el reporte de errores diario a las 08:00 (Chile) desde `reminder-worker` (que necesita sus propios secrets,
+  incluido `AGENDA_REPORTE_DESTINATARIOS`; ver `reminder-worker/wrangler.toml`).
+- **Reporte por correo manual:** botón *Enviar por correo* (el secret `AGENDA_REPORTE_DESTINATARIOS` también va en el proyecto Pages).
+- **Login:** bloqueo por IP tras 5 intentos fallidos (tabla `login_intentos`, migración `0004`).
+- **Sin** backup de archivo ni PDF de servidor: la base D1 se restaura con Time Travel y la agenda del día se imprime
+  desde el navegador. El frontend oculta esos botones según `capacidades` de `/api/meta`.
+- Las rutas públicas de los correos (`/confirmar`, `/rechazar`, `/reagendar`) deben figurar en `public/_routes.json`.
+
 ## Reglas de negocio
 
 - 11 bloques por día hábil y por examinador: 08:30, 09:00, ... 13:30.

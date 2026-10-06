@@ -7,7 +7,7 @@
 import { Hono } from 'hono';
 import * as auth from '../lib/auth.js';
 import { HORAS, HORA_D_A5, CLASES_PESADAS } from '../lib/config.js';
-import { hoyISOChile, ahoraChile, mananaISOChile } from '../lib/fechas.js';
+import { hoyISOChile, ahoraChile, mananaISOChile, sumarDias } from '../lib/fechas.js';
 import { upsertFuncionario } from '../lib/db.js';
 import { generar } from '../lib/slots.js';
 import * as feriados from '../lib/feriados.js';
@@ -16,6 +16,7 @@ import { leerRangoBloqueo, filtroBloqueo, MOTIVOS_BLOQUEO } from '../lib/bloqueo
 import * as pesada from '../lib/pesada.js';
 import * as correo from '../lib/correo.js';
 import * as rut from '../lib/rut.js';
+import { esc } from '../lib/html.js';
 import * as telefono from '../lib/telefono.js';
 import {
   bad, actorDe, logReq, catalogo, SELECT_BLOQUE, traer,
@@ -25,6 +26,8 @@ import {
 import * as cola from '../lib/cola.js';
 
 export const agendaRoutes = new Hono();
+
+const nuevoToken = () => crypto.randomUUID().replace(/-/g, '');
 
 // ---------- META ----------
 agendaRoutes.get('/meta', async (c) => {
@@ -59,6 +62,9 @@ agendaRoutes.get('/meta', async (c) => {
     feriados: listaFeriados,
     rango_agenda,
     logo,
+    // PDF en el servidor y backup de archivo solo existen en la version Node local; en Cloudflare
+    // la base es D1 (con Time Travel para restaurar) y el PDF se genera con "Imprimir informe".
+    capacidades: { pdf: false, backup: false },
     organismo: c.env.AGENDA_ORGANISMO || 'Municipalidad de Valparaíso',
     unidad: c.env.AGENDA_UNIDAD || 'Departamento de Licencias de Conducir',
   });
@@ -135,6 +141,7 @@ agendaRoutes.put('/agenda/:id', async (c) => {
         motivo_reagendamiento=NULL, lista_espera=NULL, intento=NULL, funcionario_id=NULL,
         fecha_inicio_tramite=NULL, confirmo_asistencia=NULL, resultado=NULL,
         pendiente_reagendar=0, pendiente_nota=NULL,
+        token_confirmacion=NULL, correo_confirmacion_enviado=0, correo_recordatorio_enviado=0,
         comentarios=?, agendado_en=NULL, actualizado_en=?
       WHERE id = ?
     `).bind(motivo, body.comentarios ? String(body.comentarios).trim() : null, ts, id).run();
@@ -144,10 +151,15 @@ agendaRoutes.put('/agenda/:id', async (c) => {
     await logReq(c, db, id, 'bloquear', `${bloque.fecha} ${bloque.hora} (${motivo})`);
     const avisosBloq = teniaPersona
       ? [`${bloque.nombre || bloque.rut} pasó a la lista de reagendamiento.`] : [];
-    return c.json({ ok: true, avisos: avisosBloq, bloque: await traer(db, id) });
+    return c.json({ ok: true, avisos: avisosBloq, bloque: await traer(db, id), a_reagendar: teniaPersona });
   }
 
   const { avisos, rutFmt, clase } = await validarBloque(db, body, bloque);
+
+  // Un bloque bloqueado no se ocupa en silencio: hay que desbloquearlo antes (POST /liberar).
+  if (bloque.bloqueado && (rutFmt || (body.nombre && String(body.nombre).trim()))) {
+    throw bad(`El bloque esta bloqueado: ${bloque.bloqueo_motivo || 'BLOQUEADO'}. Desbloquealo primero.`, 409);
+  }
 
   const tel = telefono.normalizar(body.contacto);
   if (!tel.vacio && !tel.valido) {
@@ -167,6 +179,14 @@ agendaRoutes.put('/agenda/:id', async (c) => {
   if (!funcionario_id && body.funcionario_nombre) {
     funcionario_id = await upsertFuncionario(db, String(body.funcionario_nombre).trim().toUpperCase());
   }
+  if (!funcionario_id) {
+    const sesion = await auth.obtenerSesion(c);
+    funcionario_id = (sesion && sesion.funcionario_id) || null;
+    if (!funcionario_id && actor) {
+      const f = await db.prepare('SELECT id FROM funcionarios WHERE LOWER(nombre) = LOWER(?) OR LOWER(usuario) = LOWER(?)').bind(actor, actor).first();
+      if (f) funcionario_id = f.id;
+    }
+  }
 
   const nombre = nombreNuevo;
   const estabaOcupada = Boolean(bloque.rut || bloque.nombre);
@@ -184,6 +204,18 @@ agendaRoutes.put('/agenda/:id', async (c) => {
 
   const pendiente = body.pendiente_reagendar ? 1 : 0;
 
+  // Cambia el ocupante (se ocupa, se libera o entra otra persona): el token y las banderas de
+  // correo del ocupante anterior no deben pasar al nuevo. Es otra persona solo si cambia el RUT
+  // (normalizado); sin RUT en ninguno de los dos, se compara el nombre sin mayusculas ni espacios
+  // de mas. Corregir comentarios o la capitalizacion del nombre del mismo RUT no cuenta.
+  const normNombre = (n) => String(n || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const rutAntes = rut.limpiar(bloque.rut);
+  const rutAhora = rut.limpiar(rutFmt);
+  const otraPersona = (rutAntes || rutAhora)
+    ? rutAntes !== rutAhora
+    : normNombre(bloque.nombre) !== normNombre(nombre);
+  const cambiaPersona = estabaOcupada !== quedaOcupada || (estabaOcupada && otraPersona);
+
   await db.prepare(`
     UPDATE agenda SET
       bloqueado = 0, bloqueo_motivo = NULL,
@@ -193,6 +225,9 @@ agendaRoutes.put('/agenda/:id', async (c) => {
       fecha_inicio_tramite = ?, confirmo_asistencia = ?,
       resultado = ?, comentarios = ?,
       pendiente_reagendar = ?, pendiente_nota = ?,
+      token_confirmacion = CASE WHEN ? = 1 THEN NULL ELSE token_confirmacion END,
+      correo_confirmacion_enviado = CASE WHEN ? = 1 THEN 0 ELSE correo_confirmacion_enviado END,
+      correo_recordatorio_enviado = CASE WHEN ? = 1 THEN 0 ELSE correo_recordatorio_enviado END,
       agendado_en = CASE WHEN ? = 1 THEN COALESCE(agendado_en, ?) ELSE NULL END,
       actualizado_en = ?
     WHERE id = ?
@@ -213,6 +248,9 @@ agendaRoutes.put('/agenda/:id', async (c) => {
     body.comentarios ? String(body.comentarios).trim() : null,
     pendiente,
     pendiente && body.pendiente_nota ? String(body.pendiente_nota).trim() : null,
+    cambiaPersona ? 1 : 0,
+    cambiaPersona ? 1 : 0,
+    cambiaPersona ? 1 : 0,
     quedaOcupada ? 1 : 0,
     ts,
     ts,
@@ -234,11 +272,15 @@ agendaRoutes.put('/agenda/:id', async (c) => {
   }
 
   const bloqueFinal = await traer(db, id);
-  if (accion === 'agendar' && bloqueFinal.correo) {
+  if (quedaOcupada && cambiaPersona && bloqueFinal.correo) {
+    if (!bloqueFinal.token_confirmacion) {
+      bloqueFinal.token_confirmacion = nuevoToken();
+      await db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').bind(bloqueFinal.token_confirmacion, id).run();
+    }
     // Fire-and-forget: un fallo de correo no debe demorar/romper la respuesta.
     c.executionCtx.waitUntil(
       correo.confirmacion(c.env, db, bloqueFinal)
-        .then(async (ok) => { if (ok) await db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').bind(id).run(); })
+        .then(async (ok) => { if (ok) await correo.marcarConfirmacionEnviada(db, bloqueFinal); })
         .catch(() => {})
     );
   }
@@ -251,13 +293,18 @@ agendaRoutes.post('/agenda/:id/liberar', async (c) => {
   const id = Number(c.req.param('id'));
   const bloque = await db.prepare('SELECT * FROM agenda WHERE id = ?').bind(id).first();
   if (!bloque) throw bad('Bloque no encontrado', 404);
-  await papelera.guardar(db, bloque, 'liberar', await actorDe(c));
+  const actor = await actorDe(c);
+  const body = (await c.req.json().catch(() => ({}))) || {};
+  const motivo = body.motivo || 'Examinador no disponible';
+  const teniaPersona = Boolean(bloque.rut || bloque.nombre);
+  if (teniaPersona) await cola.sentenciaEncolar(db, bloque, motivo, actor).run();
+  await papelera.guardar(db, bloque, 'liberar', actor);
   await db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL} WHERE id = ?`).bind(ahoraChile(), id).run();
-  if (pesada.esPesadaEnHoraValida(bloque) && (bloque.rut || bloque.nombre)) {
+  if (pesada.esPesadaEnHoraValida(bloque) && teniaPersona) {
     await pesada.liberar(db, bloque.fecha, bloque.examinador_id);
   }
   await logReq(c, db, id, 'liberar', `${bloque.fecha} ${bloque.hora} ${bloque.nombre || bloque.bloqueo_motivo || ''}`);
-  return c.json({ ok: true });
+  return c.json({ ok: true, encolado: teniaPersona });
 });
 
 agendaRoutes.post('/agenda/:id/pendiente', async (c) => {
@@ -309,12 +356,10 @@ agendaRoutes.post('/agenda/:id/confirmar', async (c) => {
 
   let correoEnviado = false;
   const bloqueFinal = await traer(db, id);
-  if (confirmo === 1 && bloqueFinal && bloqueFinal.correo) {
+  if (confirmo === 1 && bloqueFinal && bloqueFinal.correo && !bloqueFinal.correo_confirmacion_enviado) {
     try {
       const ok = await correo.confirmacion(c.env, db, bloqueFinal);
-      if (ok) {
-        await db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').bind(id).run();
-      }
+      if (ok) await correo.marcarConfirmacionEnviada(db, bloqueFinal);
       correoEnviado = Boolean(ok);
     } catch (e) {
       console.error('Error enviando correo de confirmacion:', e.message);
@@ -328,8 +373,29 @@ agendaRoutes.post('/agenda/:id/confirmar', async (c) => {
 agendaRoutes.post('/agenda/enviar-correos-pendientes', async (c) => {
   const db = c.env.DB;
   const body = (await c.req.json().catch(() => ({}))) || {};
-  const correoPrueba = body.correo_prueba ? String(body.correo_prueba).trim().toLowerCase() : null;
   const hoy = hoyISOChile();
+  const smtpHabilitado = correo.habilitado(c.env);
+
+  // Modo prueba: UN solo correo al destino indicado, con datos de la primera cita pendiente
+  // (o de ejemplo). No genera tokens, no cambia banderas, no escribe en la base.
+  if (body.correo_prueba !== undefined) {
+    const destino = String(body.correo_prueba || '').trim();
+    if (!/^[^\s@<>",;]+@[^\s@<>",;]+\.[^\s@<>",;]+$/.test(destino)) throw bad('Indica un correo de prueba valido.');
+    const base = await db.prepare(`
+      SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
+      WHERE a.fecha >= ? AND a.bloqueado = 0 AND (a.rut IS NOT NULL OR a.nombre IS NOT NULL)
+        AND a.correo IS NOT NULL AND TRIM(a.correo) != '' AND a.confirmo_asistencia IS NULL
+      ORDER BY a.fecha ASC, a.hora ASC LIMIT 1
+    `).bind(hoy).first() || { id: 0, fecha: hoy, hora: HORAS[0], examinador: 'EXAMINADOR DE EJEMPLO', nombre: 'POSTULANTE DE EJEMPLO', rut: '11.111.111-1', clase: 'B' };
+    // Sin token: el correo de prueba no lleva links vivos de la cita real.
+    const muestra = { ...base, correo: destino, token_confirmacion: null };
+    let enviado = false;
+    if (smtpHabilitado) {
+      try { enviado = Boolean(await correo.confirmacion(c.env, db, muestra)); }
+      catch (e) { console.error('Error enviando correo de prueba:', e.message); }
+    }
+    return c.json({ ok: true, prueba: true, enviado, enviados: enviado ? 1 : 0, smtp_habilitado: smtpHabilitado });
+  }
 
   const { results: filas } = await db.prepare(`
     SELECT a.*, e.nombre AS examinador
@@ -342,24 +408,19 @@ agendaRoutes.post('/agenda/enviar-correos-pendientes', async (c) => {
 
   let tokensGenerados = 0;
   let enviados = 0;
-  const smtpHabilitado = correo.habilitado(c.env);
-
   for (const bloque of filas) {
     if (!bloque.token_confirmacion) {
-      bloque.token_confirmacion = crypto.randomUUID().replace(/-/g, '');
+      bloque.token_confirmacion = nuevoToken();
       await db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?')
         .bind(bloque.token_confirmacion, bloque.id).run();
       tokensGenerados++;
     }
-
-    if (smtpHabilitado) {
+    // Solo a quienes aun no recibieron la confirmacion (evita duplicados al re-ejecutar).
+    if (smtpHabilitado && !bloque.correo_confirmacion_enviado) {
       try {
-        const bloqueParaEnvio = correoPrueba ? { ...bloque, correo: correoPrueba } : bloque;
-        const ok = await correo.confirmacion(c.env, db, bloqueParaEnvio);
+        const ok = await correo.confirmacion(c.env, db, bloque);
         if (ok) {
-          if (!correoPrueba) {
-            await db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').bind(bloque.id).run();
-          }
+          await correo.marcarConfirmacionEnviada(db, bloque);
           enviados++;
         }
       } catch (e) {
@@ -368,7 +429,7 @@ agendaRoutes.post('/agenda/enviar-correos-pendientes', async (c) => {
     }
   }
 
-  await logReq(c, db, null, 'correo_masivo', `enviados ${enviados}/${filas.length} (modo prueba: ${correoPrueba || 'no'})`);
+  await logReq(c, db, null, 'correo_masivo', `enviados ${enviados}/${filas.length}`);
 
   return c.json({
     ok: true,
@@ -376,7 +437,6 @@ agendaRoutes.post('/agenda/enviar-correos-pendientes', async (c) => {
     tokens_generados: tokensGenerados,
     enviados,
     smtp_habilitado: smtpHabilitado,
-    correo_prueba: correoPrueba
   });
 });
 
@@ -394,7 +454,7 @@ agendaRoutes.post('/agenda/:id/reagendar', async (c) => {
     await db.prepare('UPDATE agenda SET pendiente_reagendar = 1, pendiente_nota = ?, motivo_reagendamiento = ?, actualizado_en = ? WHERE id = ?')
       .bind(mot, mot, ahoraChile(), origenId).run();
     await logReq(c, db, origenId, 'editar', `pendiente reagendar: ${mot}`);
-    return c.json({ ok: true });
+    return c.json({ ok: true, bloque: await traer(db, origenId) });
   }
 
   const destino = await db.prepare('SELECT * FROM agenda WHERE id = ?').bind(Number(destino_id)).first();
@@ -428,6 +488,7 @@ agendaRoutes.post('/agenda/:id/reagendar', async (c) => {
         tipo_cita='REAGENDADO', motivo_reagendamiento=?, lista_espera=?,
         intento=?, funcionario_id=?, fecha_inicio_tramite=?,
         confirmo_asistencia=NULL, resultado=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
+        token_confirmacion=NULL, correo_confirmacion_enviado=0, correo_recordatorio_enviado=0,
         comentarios=?, agendado_en=COALESCE(agendado_en, ?),
         actualizado_en=?
       WHERE id=?
@@ -451,9 +512,12 @@ agendaRoutes.post('/agenda/:id/reagendar', async (c) => {
 
   const destinoFinal = await traer(db, destino.id);
   if (destinoFinal.correo) {
+    // El destino parte sin token (se reseteo arriba): se genera uno para que el correo traiga sus links.
+    destinoFinal.token_confirmacion = nuevoToken();
+    await db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').bind(destinoFinal.token_confirmacion, destino.id).run();
     c.executionCtx.waitUntil(
       correo.confirmacion(c.env, db, destinoFinal)
-        .then(async (ok) => { if (ok) await db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').bind(destino.id).run(); })
+        .then(async (ok) => { if (ok) await correo.marcarConfirmacionEnviada(db, destinoFinal); })
         .catch(() => {})
     );
   }
@@ -490,16 +554,19 @@ agendaRoutes.post('/bloquear-dia', async (c) => {
   const ts = ahoraChile();
   const stmts = [];
   let aPapelera = 0;
+  const liberarPesada = [];
   for (const b of objetivo) {
     if (b.rut || b.nombre) {
       stmts.push(papelera.sentenciaGuardar(db, b, 'bloquear-dia', actor));
       stmts.push(cola.sentenciaEncolar(db, b, rango.motivo, actor));
       aPapelera++;
+      if (pesada.esPesadaEnHoraValida(b)) liberarPesada.push(b);
     }
     stmts.push(db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL_BLOQUEAR} WHERE id=?`).bind(rango.motivo, ts, b.id));
   }
   for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50));
   if (aPapelera) await papelera.recortar(db);
+  for (const b of liberarPesada) await pesada.liberar(db, b.fecha, b.examinador_id);
 
   const quien = rango.examinador_id ? 'exam ' + rango.examinador_id : 'todos';
   await logReq(c, db, null, 'bloquear',
@@ -518,17 +585,55 @@ agendaRoutes.post('/desbloquear-dia', async (c) => {
   const soloMotivo = body.motivo ? ' AND bloqueo_motivo = ?' : '';
   const pMotivo = soloMotivo ? [rango.motivo] : [];
 
+  // Los bloqueos automaticos de clase pesada (13:00/13:30) no se liberan mientras el 12:30
+  // del mismo examinador siga ocupado por una clase D/A5: se quitan solos al liberar esa cita.
+  const { results: candidatos } = await db.prepare(`SELECT * FROM agenda WHERE ${where}${soloMotivo}`)
+    .bind(...params, ...pMotivo).all();
+  const objetivo = [];
+  for (const b of candidatos) if (!(await pesada.bloqueoAutoVigente(db, b))) objetivo.push(b);
+
   if (body.simular) {
-    const { results } = await db.prepare(`SELECT COALESCE(bloqueo_motivo, 'BLOQUEADO') motivo, COUNT(*) n
-      FROM agenda WHERE ${where}${soloMotivo} GROUP BY 1 ORDER BY n DESC`).bind(...params, ...pMotivo).all();
-    const total = results.reduce((s, x) => s + Number(x.n), 0);
-    return c.json({ ok: true, desbloqueables: total, por_motivo: results });
+    const porMotivo = new Map();
+    for (const b of objetivo) {
+      const m = b.bloqueo_motivo || 'BLOQUEADO';
+      porMotivo.set(m, (porMotivo.get(m) || 0) + 1);
+    }
+    const results = [...porMotivo].map(([motivo, n]) => ({ motivo, n })).sort((a, b) => b.n - a.n);
+    return c.json({ ok: true, desbloqueables: objetivo.length, por_motivo: results });
   }
 
-  const r = await db.prepare(`UPDATE agenda SET bloqueado=0, bloqueo_motivo=NULL, actualizado_en=? WHERE ${where}${soloMotivo}`)
-    .bind(ahoraChile(), ...params, ...pMotivo).run();
-  await logReq(c, db, null, 'editar', `desbloquear ${rango.desde}..${rango.hasta}: ${r.meta.changes}`);
-  return c.json({ ok: true, desbloqueados: Number(r.meta.changes) });
+  const ts = ahoraChile();
+  const upd = objetivo.map((b) => db.prepare("UPDATE agenda SET bloqueado=0, bloqueo_motivo=NULL, actualizado_en=? WHERE id=?").bind(ts, b.id));
+  for (let i = 0; i < upd.length; i += 50) await db.batch(upd.slice(i, i + 50));
+  await logReq(c, db, null, 'editar', `desbloquear ${rango.desde}..${rango.hasta}: ${objetivo.length}`);
+  return c.json({ ok: true, desbloqueados: objetivo.length });
+});
+
+// ---------- BLOQUEOS (resumen de bloqueos vigentes) ----------
+agendaRoutes.get('/bloqueos', async (c) => {
+  const db = c.env.DB;
+  const { desde, hasta, examinador_id, motivo, historico } = c.req.query();
+  const cond = ['a.bloqueado = 1'];
+  const p = [];
+  if (desde) {
+    cond.push('a.fecha >= ?'); p.push(desde);
+  } else if (!historico || historico === '0' || historico === 'false') {
+    // Por defecto solo bloqueos vigentes desde hoy en adelante (no meses pasados).
+    cond.push('a.fecha >= ?'); p.push(hoyISOChile());
+  }
+  if (hasta) { cond.push('a.fecha <= ?'); p.push(hasta); }
+  if (examinador_id) { cond.push('a.examinador_id = ?'); p.push(Number(examinador_id)); }
+  if (motivo) { cond.push('a.bloqueo_motivo = ?'); p.push(motivo); }
+  const { results } = await db.prepare(`
+    SELECT a.fecha, a.examinador_id, COALESCE(e.nombre, 'Sin examinador') AS examinador,
+           COALESCE(a.bloqueo_motivo, 'BLOQUEADO') AS motivo,
+           COUNT(*) AS cant_bloques, MIN(a.hora) AS desde_hora, MAX(a.hora) AS hasta_hora
+    FROM agenda a LEFT JOIN examinadores e ON e.id = a.examinador_id
+    WHERE ${cond.join(' AND ')}
+    GROUP BY a.fecha, a.examinador_id, a.bloqueo_motivo
+    ORDER BY a.fecha ASC, e.nombre ASC, desde_hora ASC
+  `).bind(...p).all();
+  return c.json(results);
 });
 
 // ---------- DISPONIBLES ----------
@@ -554,6 +659,33 @@ agendaRoutes.get('/disponibles', async (c) => {
 // ---------- COLA DE REAGENDAMIENTO ----------
 // Personas desplazadas por un bloqueo, esperando hora nueva.
 agendaRoutes.get('/cola-reagendar', async (c) => c.json(await cola.listarPendientes(c.env.DB)));
+
+agendaRoutes.get('/cola-reagendar/:id/sugerencias', async (c) => {
+  const db = c.env.DB;
+  const item = await cola.traerPendiente(db, c.req.param('id'));
+  if (!item) return c.json({ mismo_examinador: [], otros_examinadores: [], origen_examinador: null });
+  const origen = item.origen_examinador_id
+    ? await db.prepare('SELECT nombre FROM examinadores WHERE id = ?').bind(item.origen_examinador_id).first() : null;
+  const hoy = hoyISOChile();
+  const tienePesada = String(item.clase || '').toUpperCase().split(',').map((x) => x.trim())
+    .some((cl) => CLASES_PESADAS.includes(cl));
+  const cond = `a.fecha >= ? AND (a.rut IS NULL OR a.rut = '') AND (a.nombre IS NULL OR a.nombre = '') AND a.bloqueado = 0`
+    + (tienePesada ? ' AND a.hora = ?' : '');
+  const extra = tienePesada ? [HORA_D_A5] : [];
+  const sel = `SELECT a.id, a.fecha, a.hora, a.examinador_id, e.nombre AS examinador
+    FROM agenda a JOIN examinadores e ON e.id = a.examinador_id`;
+  let mismo = [];
+  if (item.origen_examinador_id) {
+    ({ results: mismo } = await db.prepare(`${sel} WHERE a.examinador_id = ? AND ${cond} ORDER BY a.fecha, a.hora LIMIT 4`)
+      .bind(item.origen_examinador_id, hoy, ...extra).all());
+  }
+  const { results: otros } = await db.prepare(`${sel} WHERE a.examinador_id != ? AND ${cond} ORDER BY a.fecha, a.hora LIMIT 6`)
+    .bind(item.origen_examinador_id || 0, hoy, ...extra).all();
+  return c.json({
+    mismo_examinador: mismo, otros_examinadores: otros,
+    origen_examinador: origen ? origen.nombre : null, tiene_pesada: tienePesada,
+  });
+});
 
 agendaRoutes.post('/cola-reagendar/:id/asignar', async (c) => {
   const db = c.env.DB;
@@ -584,8 +716,9 @@ agendaRoutes.post('/cola-reagendar/:id/asignar', async (c) => {
       UPDATE agenda SET rut=?, nombre=?, clase=?, contacto=?, correo=?, tipo_cita='REAGENDADO',
         motivo_reagendamiento=?, lista_espera=?, intento=?, funcionario_id=?, fecha_inicio_tramite=?,
         confirmo_asistencia=NULL, resultado=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
+        token_confirmacion=NULL, correo_confirmacion_enviado=0, correo_recordatorio_enviado=0,
         comentarios=?, agendado_en=?, actualizado_en=?
-      WHERE id=? AND rut IS NULL AND nombre IS NULL AND bloqueado = 0
+      WHERE id=? AND (rut IS NULL OR rut='') AND (nombre IS NULL OR nombre='') AND bloqueado = 0
     `).bind(item.rut, item.nombre, item.clase, item.contacto, correoFinal, motivo, item.lista_espera,
       item.intento, item.funcionario_id, item.fecha_inicio_tramite, comentarios, ts, ts, destino.id),
     db.prepare(`UPDATE cola_reagendar SET estado='reagendado', destino_agenda_id=?, correo=?, resuelto_en=? WHERE id=?`)
@@ -600,11 +733,15 @@ agendaRoutes.post('/cola-reagendar/:id/asignar', async (c) => {
     `${item.nombre || item.rut}: bloqueo ${item.origen_fecha} ${item.origen_hora} -> ${destino.fecha} ${destino.hora}`);
 
   const destinoFinal = await traer(db, destino.id);
-  c.executionCtx.waitUntil(
-    correo.confirmacion(c.env, db, destinoFinal)
-      .then(async (ok) => { if (ok) await db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').bind(destino.id).run(); })
-      .catch(() => {})
-  );
+  if (destinoFinal.correo) {
+    destinoFinal.token_confirmacion = nuevoToken();
+    await db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').bind(destinoFinal.token_confirmacion, destino.id).run();
+    c.executionCtx.waitUntil(
+      correo.confirmacion(c.env, db, destinoFinal)
+        .then(async (ok) => { if (ok) await correo.marcarConfirmacionEnviada(db, destinoFinal); })
+        .catch(() => {})
+    );
+  }
   return c.json({ ok: true, avisos, destino: destinoFinal });
 });
 

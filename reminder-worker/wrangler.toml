@@ -41,3 +41,4 @@ database_id = "7f0b5ae1-e5e3-4c72-8727-8d931110d837"
 #   wrangler secret put RESEND_API_KEY      # misma API key de Resend que usa worker/lib/correo.js
 #   wrangler secret put RESEND_FROM         # remitente, ej. "Agenda de Practicos <onboarding@resend.dev>"
 #   wrangler secret put AGENDA_URL_PUBLICA  # URL publica del sitio, para armar los links confirmar/rechazar
+#   wrangler secret put AGENDA_REPORTE_DESTINATARIOS  # correos (separados por coma) que reciben el reporte de errores diario, 08:00 Chile
