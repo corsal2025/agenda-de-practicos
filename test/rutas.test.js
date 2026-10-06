@@ -344,3 +344,20 @@ test('reagendar publico: escapa el nombre del examinador y no filtra errores int
   assert.ok(!r.texto.includes('<i>EXAM</i>'));
   assert.ok(r.texto.includes('&lt;i&gt;EXAM&lt;/i&gt;'));
 });
+
+// ---------- 10) correo: escapar HTML ----------
+test('la plantilla de correo escapa los datos del postulante', () => {
+  const { plantilla } = require('../server/correo');
+  const mal = '<img src=x onerror=alert(1)>';
+  const { html, text } = plantilla({
+    titulo: 'T', intro: 'I',
+    bloque: { nombre: mal, rut: '"><b>', fecha: '2026-01-02', hora: '<u>', examinador: "O'Brien & Co", clase: '<C>' },
+    links: { confirmar: 'http://x/c?a=1&b=2', reagendar: 'http://x/r' },
+  });
+  assert.ok(!html.includes(mal));
+  assert.ok(!html.includes('<u>'));
+  assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));
+  assert.ok(html.includes('O&#39;Brien &amp; Co'));
+  assert.ok(html.includes('href="http://x/c?a=1&amp;b=2"'));
+  assert.ok(text.includes(mal), 'la version texto plano no se escapa');
+});

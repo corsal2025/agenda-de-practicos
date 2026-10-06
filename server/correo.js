@@ -3,6 +3,7 @@
 const nodemailer = require('nodemailer');
 const { SMTP, URL_PUBLICA, PUERTO } = require('./config');
 const { log } = require('./db');
+const { esc } = require('./html');
 
 const habilitado = Boolean(SMTP.host && SMTP.user && SMTP.pass);
 const baseUrl = URL_PUBLICA || `http://localhost:${PUERTO}`;
@@ -28,7 +29,7 @@ function plantilla({ titulo, intro, bloque, links }) {
     ['Examinador/a asignado/a', bloque.examinador || 'Por confirmar'],
     ['Clase de Licencia', bloque.clase || 'B'],
   ];
-  const filasHtml = filas.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#64748b;font-size:13px">${k}</td><td style="padding:6px 0;font-weight:700;color:#0f172a;font-size:14px">${v}</td></tr>`).join('');
+  const filasHtml = filas.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#64748b;font-size:13px">${esc(k)}</td><td style="padding:6px 0;font-weight:700;color:#0f172a;font-size:14px">${esc(v)}</td></tr>`).join('');
   const filasTexto = filas.map(([k, v]) => `${k}: ${v}`).join('\n');
 
   const esClaseC = bloque.clase && bloque.clase.toUpperCase().includes('C');
@@ -79,10 +80,10 @@ INSTRUCCIONES OBLIGATORIAS (Ley de Tránsito N° 18.290):
 
   const botonesHtml = links
     ? `<div style="margin:24px 0 10px;display:flex;gap:12px;flex-wrap:wrap">
-        <a href="${links.confirmar}" style="display:inline-block;padding:11px 20px;background:#15803d;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;font-size:13px;box-shadow:0 2px 6px rgba(21,128,61,0.3)">
+        <a href="${esc(links.confirmar)}" style="display:inline-block;padding:11px 20px;background:#15803d;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;font-size:13px;box-shadow:0 2px 6px rgba(21,128,61,0.3)">
           ✔ Confirmo mi Asistencia
         </a>
-        <a href="${links.reagendar}" style="display:inline-block;padding:11px 20px;background:#0284c7;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;font-size:13px;box-shadow:0 2px 6px rgba(2,132,199,0.3)">
+        <a href="${esc(links.reagendar)}" style="display:inline-block;padding:11px 20px;background:#0284c7;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;font-size:13px;box-shadow:0 2px 6px rgba(2,132,199,0.3)">
           🔄 Reagendar mi Hora (Ver Próximas Fechas)
         </a>
       </div>
@@ -149,4 +150,4 @@ function recordatorio(bloque) {
   return enviar(bloque.correo, `Recordatorio oficial (Faltan 3 días) - Examen práctico ${fFecha(bloque.fecha)} ${bloque.hora}`, cuerpo);
 }
 
-module.exports = { habilitado, confirmacion, recordatorio };
+module.exports = { habilitado, confirmacion, recordatorio, plantilla };

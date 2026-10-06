@@ -22,6 +22,7 @@ const cola = require('./cola');
 const bloqueo = require('./bloqueo');
 const pesada = require('./pesada');
 const correo = require('./correo');
+const { esc } = require('./html');
 const recordatorios = require('./recordatorios');
 const auth = require('./auth');
 const usuarios = require('./usuarios');
@@ -78,16 +79,6 @@ function paginaPublica(titulo, mensaje, ok, extra = '') {
         ${extra}
       </div>
     </body></html>`;
-}
-
-function esc(str) {
-  if (str === null || str === undefined) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function fFecha(iso) {
