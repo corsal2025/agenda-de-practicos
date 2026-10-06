@@ -10,6 +10,9 @@ const CONSERVAR = Math.max(1, Number(process.env.AGENDA_BACKUPS) || 30);
 // Los backups "pre-*" (pre-import, pre-fixes...) son puntos de retorno antes de una operacion
 // destructiva: no entran en la rotacion normal; se conservan hasta este maximo.
 const CONSERVAR_PRE = 10;
+// Carpeta externa opcional (disco de red o carpeta sincronizada con la nube: OneDrive, Drive...)
+// para no depender solo del disco del PC servidor. Se lee al llamar, para poder cambiarla sin reiniciar tests.
+const offsiteDir = () => process.env.AGENDA_BACKUP_OFFSITE || null;
 
 // Copia consistente de la base a data/backups/ con marca de tiempo (hora local).
 // Usa VACUUM INTO con la conexion de la app: copiar el archivo .db a mano ignora lo que
@@ -25,23 +28,39 @@ function backup(etiqueta) {
   for (let n = 2; fs.existsSync(destino); n++) destino = path.join(DIR, `${nombre}-${n}.db`);
   db.prepare('VACUUM INTO ?').run(destino);
   podar();
+  copiarOffsite(destino);
   return destino;
+}
+
+// Best-effort: si la carpeta externa no esta disponible (disco desconectado, sin permisos)
+// se avisa por consola pero no se interrumpe el backup local.
+function copiarOffsite(destino) {
+  const dir = offsiteDir();
+  if (!dir) return;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(destino, path.join(dir, path.basename(destino)));
+    podar(dir);
+  } catch (e) {
+    console.error('No se pudo copiar el backup a AGENDA_BACKUP_OFFSITE:', e.message);
+  }
 }
 
 // Solo se consideran archivos con nombre de backup (agenda-AAAA-MM-DDT...db): nunca agenda.db ni otros.
 const ES_BACKUP = /^agenda-\d{4}-\d{2}-\d{2}T.*\.db$/;
 
 // Deja los CONSERVAR backups normales mas recientes y hasta CONSERVAR_PRE de los "pre-*".
-function podar() {
-  if (!fs.existsSync(DIR)) return;
-  const archivos = fs.readdirSync(DIR)
+// En la carpeta offsite puede haber otros .db ajenos: el filtro por nombre evita tocarlos.
+function podar(dir = DIR) {
+  if (!fs.existsSync(dir)) return;
+  const archivos = fs.readdirSync(dir)
     .filter((f) => ES_BACKUP.test(f))
     .map((f) => ({ f, t: fs.statSync(path.join(DIR, f)).mtimeMs }))
     .sort((a, b) => b.t - a.t);
   const pre = archivos.filter(({ f }) => f.includes('pre-'));
   const normales = archivos.filter(({ f }) => !f.includes('pre-'));
   for (const { f } of [...normales.slice(CONSERVAR), ...pre.slice(CONSERVAR_PRE)]) {
-    try { fs.unlinkSync(path.join(DIR, f)); } catch (_) { /* ignore */ }
+    try { fs.unlinkSync(path.join(dir, f)); } catch (_) { /* ignore */ }
   }
 }
 

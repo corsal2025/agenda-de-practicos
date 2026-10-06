@@ -56,6 +56,8 @@ ver **[INSTALACION.md](INSTALACION.md)**.
 
 ## Login
 
+Tras 5 intentos fallidos desde una misma IP se bloquea el login por 60 s (`AGENDA_LOGIN_BLOQUEO_MS`).
+
 Por defecto pide un PIN compartido (`1234`, cambiable con `AGENDA_PIN`). Cada acción
 queda registrada con el nombre de quien la hizo. Para desactivarlo: `AGENDA_SIN_LOGIN=1`.
 
@@ -97,6 +99,8 @@ Tras cambiar feriados, volver a generar los bloques del período afectado.
 
 - Automático: uno al arrancar el servidor (si el último tiene +20 h) y luego cada 24 h,
   en `data/backups/`. Se conservan los últimos 30 (`AGENDA_BACKUPS` para cambiarlo).
+- Copia externa opcional: `AGENDA_BACKUP_OFFSITE=D:\\respaldo` (disco de red o carpeta sincronizada con
+  OneDrive/Drive). Si no está disponible solo se avisa por consola; el backup local no se interrumpe.
 - Cada importación que **no** usa "reemplazar todo" hace un backup antes.
 - Backup manual: botón en la pestaña Datos, o `npm run backup`.
 - Para restaurar: detener el servidor y copiar el archivo `.db` deseado sobre `data/agenda.db`.
