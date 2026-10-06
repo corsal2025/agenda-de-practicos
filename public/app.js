@@ -991,6 +991,8 @@ async function dialogoPorConfirmar() { irA('porconfirmar'); return;
       motivo_reagendamiento: b.motivo_reagendamiento, lista_espera: b.lista_espera,
       intento: b.intento, funcionario_id: b.funcionario_id, fecha_inicio_tramite: b.fecha_inicio_tramite,
       resultado: b.resultado, comentarios: b.comentarios, confirmo_asistencia: val,
+      // El servidor los reinicia si faltan: se reenvian para no perder la marca de "pendiente de reagendar".
+      pendiente_reagendar: b.pendiente_reagendar, pendiente_nota: b.pendiente_nota,
     } });
     const tr = $(`#pc-body tr[data-id="${id}"]`);
     if (tr) tr.remove();

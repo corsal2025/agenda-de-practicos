@@ -418,3 +418,17 @@ test('desbloquear-dia si libera los bloqueos automaticos huerfanos (12:30 ya sin
   assert.equal(r.datos.desbloqueados, 1);
   assert.equal(leer(a1300.id).bloqueado, 0);
 });
+
+// ---------- 6) PUT desde "Por confirmar" conserva la marca de pendiente de reagendar ----------
+test('PUT que reenvia pendiente_reagendar/pendiente_nota los conserva', async () => {
+  const b = ocupado(diaNuevo(), '09:00', { pendiente_reagendar: 1, pendiente_nota: 'llamo para cambiar' });
+  const r = await api('PUT', `/agenda/${b.id}`, {
+    rut: b.rut, nombre: b.nombre, clase: b.clase, correo: b.correo, confirmo_asistencia: 1,
+    pendiente_reagendar: b.pendiente_reagendar, pendiente_nota: b.pendiente_nota,
+  });
+  assert.equal(r.status, 200, r.texto);
+  const x = leer(b.id);
+  assert.equal(x.pendiente_reagendar, 1);
+  assert.equal(x.pendiente_nota, 'llamo para cambiar');
+  assert.equal(x.confirmo_asistencia, 1);
+});
