@@ -424,6 +424,7 @@ app.put('/api/agenda/:id', wrap((req, res) => {
         motivo_reagendamiento=NULL, lista_espera=NULL, intento=NULL, funcionario_id=NULL,
         fecha_inicio_tramite=NULL, confirmo_asistencia=NULL, resultado=NULL,
         pendiente_reagendar=0, pendiente_nota=NULL,
+        token_confirmacion=NULL, correo_confirmacion_enviado=0, correo_recordatorio_enviado=0,
         comentarios=@com, agendado_en=NULL, actualizado_en=datetime('now','localtime')
       WHERE id = @id
     `).run({ id, motivo, com: body.comentarios ? String(body.comentarios).trim() : null });
@@ -468,6 +469,11 @@ app.put('/api/agenda/:id', wrap((req, res) => {
 
   const pendiente = body.pendiente_reagendar ? 1 : 0;
 
+  // Cambia el ocupante (se ocupa, se libera o entra otra persona): el token y las
+  // banderas de correo del ocupante anterior no deben pasar al nuevo.
+  const cambiaPersona = estabaOcupada !== quedaOcupada
+    || (estabaOcupada && (bloque.rut !== rutFmt || (bloque.nombre || '') !== (nombre || '')));
+
   db.prepare(`
     UPDATE agenda SET
       bloqueado = 0, bloqueo_motivo = NULL,
@@ -477,6 +483,9 @@ app.put('/api/agenda/:id', wrap((req, res) => {
       fecha_inicio_tramite = @fecha_inicio_tramite, confirmo_asistencia = @confirmo_asistencia,
       resultado = @resultado, comentarios = @comentarios,
       pendiente_reagendar = @pendiente, pendiente_nota = @pnota,
+      token_confirmacion = CASE WHEN @cambia = 1 THEN NULL ELSE token_confirmacion END,
+      correo_confirmacion_enviado = CASE WHEN @cambia = 1 THEN 0 ELSE correo_confirmacion_enviado END,
+      correo_recordatorio_enviado = CASE WHEN @cambia = 1 THEN 0 ELSE correo_recordatorio_enviado END,
       agendado_en = CASE WHEN @quedaOcupada = 1 THEN COALESCE(agendado_en, @agendado_en) ELSE NULL END,
       actualizado_en = datetime('now','localtime')
     WHERE id = @id
@@ -499,6 +508,7 @@ app.put('/api/agenda/:id', wrap((req, res) => {
     pendiente,
     pnota: pendiente && body.pendiente_nota ? String(body.pendiente_nota).trim() : null,
     quedaOcupada: quedaOcupada ? 1 : 0,
+    cambia: cambiaPersona ? 1 : 0,
     agendado_en: `${hoyISO()} ${new Date().toTimeString().slice(0, 8)}`,
   });
 
@@ -517,7 +527,7 @@ app.put('/api/agenda/:id', wrap((req, res) => {
   }
 
   const bloqueFinal = traer(id);
-  if (accion === 'agendar' && bloqueFinal.correo) {
+  if (quedaOcupada && cambiaPersona && bloqueFinal.correo) {
     if (!bloqueFinal.token_confirmacion) {
       bloqueFinal.token_confirmacion = crypto.randomBytes(16).toString('hex');
       db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').run(bloqueFinal.token_confirmacion, id);
@@ -535,6 +545,7 @@ const LIMPIAR_SQL = `
   motivo_reagendamiento=NULL, lista_espera=NULL, intento=NULL, funcionario_id=NULL,
   fecha_inicio_tramite=NULL, confirmo_asistencia=NULL, resultado=NULL, comentarios=NULL,
   bloqueado=0, bloqueo_motivo=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
+  token_confirmacion=NULL, correo_confirmacion_enviado=0, correo_recordatorio_enviado=0,
   agendado_en=NULL, actualizado_en=datetime('now','localtime')`;
 
 app.post('/api/agenda/:id/liberar', wrap((req, res) => {
@@ -591,6 +602,7 @@ app.post('/api/cola-reagendar/:id/asignar', wrap((req, res) => {
       UPDATE agenda SET rut=?, nombre=?, clase=?, contacto=?, correo=?, tipo_cita='REAGENDADO',
         motivo_reagendamiento=?, lista_espera=?, intento=?, funcionario_id=?, fecha_inicio_tramite=?,
         confirmo_asistencia=NULL, resultado=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
+        token_confirmacion=NULL, correo_confirmacion_enviado=0, correo_recordatorio_enviado=0,
         comentarios=?, agendado_en=?, actualizado_en=datetime('now','localtime')
       WHERE id=? AND (rut IS NULL OR rut='') AND (nombre IS NULL OR nombre='') AND bloqueado = 0
     `).run(item.rut, item.nombre, item.clase, item.contacto, correoFinal, motivo, item.lista_espera,
@@ -756,6 +768,7 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
         tipo_cita='REAGENDADO', motivo_reagendamiento=@motivo, lista_espera=@lista_espera,
         intento=@intento, funcionario_id=@funcionario_id, fecha_inicio_tramite=@fit,
         confirmo_asistencia=NULL, resultado=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
+        token_confirmacion=NULL, correo_confirmacion_enviado=0, correo_recordatorio_enviado=0,
         comentarios=@comentarios, agendado_en=COALESCE(agendado_en, datetime('now','localtime')),
         actualizado_en=datetime('now','localtime')
       WHERE id=@id
@@ -781,6 +794,9 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
 
   const destinoFinal = traer(destino.id);
   if (destinoFinal.correo) {
+    // El destino parte sin token (se reseteo arriba): se genera uno para que el correo traiga sus links.
+    destinoFinal.token_confirmacion = crypto.randomBytes(16).toString('hex');
+    db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').run(destinoFinal.token_confirmacion, destino.id);
     correo.confirmacion(destinoFinal)
       .then((ok) => { if (ok) db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').run(destino.id); })
       .catch((e) => console.error('Correo de confirmacion fallo:', e.message));

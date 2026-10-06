@@ -107,3 +107,79 @@ test('handler async que lanza responde con su estado en vez de colgarse', async 
   assert.equal(r.status, 404);
   assert.match(r.datos.error, /no encontrado/i);
 });
+
+// ---------- 3) tokens/banderas de correo al liberar, ocupar o mover ----------
+test('liberar deja token y banderas de correo en cero', async () => {
+  const b = ocupado(diaNuevo(), '09:00');
+  const r = await api('POST', `/agenda/${b.id}/liberar`, {});
+  assert.equal(r.status, 200);
+  sinTokens(leer(b.id));
+});
+
+test('bloquear-dia limpia token y banderas de las citas bloqueadas', async () => {
+  const dia = diaNuevo();
+  const b = ocupado(dia, '09:00');
+  const r = await api('POST', '/bloquear-dia', { desde: dia, hasta: dia, motivo: 'TERRENO', incluir_ocupados: true });
+  assert.equal(r.status, 200);
+  const x = leer(b.id);
+  assert.equal(x.bloqueado, 1);
+  sinTokens(x);
+});
+
+test('PUT con bloqueado=true limpia token y banderas', async () => {
+  const b = ocupado(diaNuevo(), '09:00');
+  const r = await api('PUT', `/agenda/${b.id}`, { bloqueado: true, bloqueo_motivo: 'terreno' });
+  assert.equal(r.status, 200);
+  sinTokens(leer(b.id));
+});
+
+test('PUT que cambia a otra persona resetea token y banderas', async () => {
+  const b = ocupado(diaNuevo(), '09:00');
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Otra Persona', clase: 'B' });
+  assert.equal(r.status, 200, r.texto);
+  const x = leer(b.id);
+  assert.equal(x.nombre, 'OTRA PERSONA');
+  sinTokens(x);
+});
+
+test('PUT sobre un bloque libre con token residual lo resetea', async () => {
+  const b = slot(diaNuevo(), '09:00', { token_confirmacion: 'residual', correo_confirmacion_enviado: 1 });
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B' });
+  assert.equal(r.status, 200, r.texto);
+  sinTokens(leer(b.id));
+});
+
+test('PUT de la misma persona en el mismo bloque NO resetea token ni banderas', async () => {
+  const b = ocupado(diaNuevo(), '09:00');
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '11.111.111-1', nombre: 'JUAN PEREZ', clase: 'B', comentarios: 'nota' });
+  assert.equal(r.status, 200, r.texto);
+  const x = leer(b.id);
+  assert.equal(x.token_confirmacion, 'tokenviejo');
+  assert.equal(x.correo_confirmacion_enviado, 1);
+  assert.equal(x.correo_recordatorio_enviado, 1);
+});
+
+test('reagendar interno: origen queda limpio y destino sin banderas heredadas', async () => {
+  const dia = diaNuevo();
+  const origen = ocupado(dia, '09:00');
+  const destino = slot(dia, '10:00', { token_confirmacion: 'residual', correo_recordatorio_enviado: 1 });
+  const r = await api('POST', `/agenda/${origen.id}/reagendar`, { destino_id: destino.id, motivo: 'prueba' });
+  assert.equal(r.status, 200, r.texto);
+  sinTokens(leer(origen.id));
+  const d = leer(destino.id);
+  assert.equal(d.rut, '11.111.111-1');
+  assert.notEqual(d.token_confirmacion, 'residual');
+  assert.equal(d.correo_recordatorio_enviado, 0);
+});
+
+test('cola-reagendar asignar: destino ocupado nuevo parte sin banderas heredadas', async () => {
+  const dia = diaNuevo();
+  const origen = ocupado(dia, '09:00');
+  await api('POST', `/agenda/${origen.id}/liberar`, {});
+  const item = db.prepare("SELECT * FROM cola_reagendar WHERE origen_agenda_id = ? AND estado='pendiente'").get(origen.id);
+  const destino = slot(dia, '10:00', { token_confirmacion: 'residual', correo_confirmacion_enviado: 1, correo_recordatorio_enviado: 1 });
+  const r = await api('POST', `/cola-reagendar/${item.id}/asignar`, { destino_id: destino.id });
+  assert.equal(r.status, 200, r.texto);
+  sinTokens(leer(destino.id));
+  assert.equal(leer(destino.id).rut, '11.111.111-1');
+});
