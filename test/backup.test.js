@@ -57,27 +57,27 @@ test('podar: conserva N recientes y los pre-* hasta 10', () => {
     const t = new Date(Date.now() - minutosAtras * 60000);
     fs.utimesSync(p, t, t);
   };
-  for (let i = 0; i < 5; i++) crear(`agenda-auto-${i}.db`, i + 1);          // 5 normales
-  for (let i = 0; i < 12; i++) crear(`agenda-x${i}-pre-import.db`, 100 + i); // 12 pre-import, mas viejos
+  for (let i = 0; i < 5; i++) crear(`agenda-2026-03-0${i + 1}T10-00-00-auto.db`, i + 1);          // 5 normales
+  for (let i = 0; i < 12; i++) crear(`agenda-2026-04-${String(i + 10)}T10-00-00-pre-import.db`, 100 + i); // 12 pre-import, mas viejos
   backupMod.podar();
   const quedan = archivosBackup();
   const normales = quedan.filter((f) => !f.includes('pre-')).sort();
   const pre = quedan.filter((f) => f.includes('pre-')).sort();
-  assert.deepEqual(normales, ['agenda-auto-0.db', 'agenda-auto-1.db', 'agenda-auto-2.db']);
+  assert.deepEqual(normales, ['agenda-2026-03-01T10-00-00-auto.db', 'agenda-2026-03-02T10-00-00-auto.db', 'agenda-2026-03-03T10-00-00-auto.db']);
   assert.equal(pre.length, 10);
-  assert.ok(!pre.includes('agenda-x10-pre-import.db') && !pre.includes('agenda-x11-pre-import.db'), 'se podan los pre-* mas antiguos');
+  assert.ok(!pre.includes('agenda-2026-04-20T10-00-00-pre-import.db') && !pre.includes('agenda-2026-04-21T10-00-00-pre-import.db'), 'se podan los pre-* mas antiguos');
 });
 
 test('los pre-* no se podan mientras sean 10 o menos', () => {
   fs.rmSync(dirBackups, { recursive: true, force: true });
   fs.mkdirSync(dirBackups, { recursive: true });
   for (let i = 0; i < 8; i++) {
-    const p = path.join(dirBackups, `agenda-n${i}.db`);
+    const p = path.join(dirBackups, `agenda-2026-05-0${i + 1}T10-00-00-n.db`);
     fs.writeFileSync(p, 'x');
     const t = new Date(Date.now() - (i + 1) * 60000);
     fs.utimesSync(p, t, t);
   }
-  const vieja = path.join(dirBackups, 'agenda-vieja-pre-fixes.db');
+  const vieja = path.join(dirBackups, 'agenda-2026-01-01T10-00-00-pre-fixes.db');
   fs.writeFileSync(vieja, 'x');
   const antes = new Date(Date.now() - 30 * 864e5);
   fs.utimesSync(vieja, antes, antes);
@@ -104,4 +104,38 @@ test('importar con limpiar=true toma un backup pre-import ANTES de borrar', asyn
     const copia = new DatabaseSync(ultimo, { readOnly: true });
     try { assert.ok(copia.prepare("SELECT 1 x FROM feriados WHERE fecha='2099-02-02'").get()); } finally { copia.close(); }
   } finally { servidor.close(); }
+});
+
+test('AGENDA_BACKUPS invalido (0 o negativo) nunca borra todo: queda al menos el mas reciente', () => {
+  const { spawnSync } = require('node:child_process');
+  fs.rmSync(dirBackups, { recursive: true, force: true });
+  fs.mkdirSync(dirBackups, { recursive: true });
+  for (let i = 0; i < 3; i++) {
+    const p = path.join(dirBackups, `agenda-2026-01-0${i + 1}T10-00-00-auto.db`);
+    fs.writeFileSync(p, 'x');
+    const t = new Date(Date.now() - (i + 1) * 60000);
+    fs.utimesSync(p, t, t);
+  }
+  const r = spawnSync(process.execPath, ['-e', "require('./server/backup').podar()"], {
+    cwd: path.join(__dirname, '..'),
+    env: { ...process.env, AGENDA_BACKUPS: '-5', AGENDA_DB: tmpDb, AGENDA_BACKUP_DIR: dirBackups },
+  });
+  assert.equal(r.status, 0, String(r.stderr));
+  assert.deepEqual(archivosBackup(), ['agenda-2026-01-01T10-00-00-auto.db']);
+});
+
+test('podar nunca toca archivos que no son backups (agenda.db, otros)', () => {
+  fs.rmSync(dirBackups, { recursive: true, force: true });
+  fs.mkdirSync(dirBackups, { recursive: true });
+  for (const n of ['agenda.db', 'otro.db', 'agenda-notas.db']) fs.writeFileSync(path.join(dirBackups, n), 'x');
+  for (let i = 0; i < 5; i++) {
+    const p = path.join(dirBackups, `agenda-2026-02-0${i + 1}T10-00-00-auto.db`);
+    fs.writeFileSync(p, 'x');
+    const t = new Date(Date.now() - (i + 1) * 60000);
+    fs.utimesSync(p, t, t);
+  }
+  backupMod.podar();
+  const quedan = archivosBackup();
+  for (const n of ['agenda.db', 'otro.db', 'agenda-notas.db']) assert.ok(quedan.includes(n), `${n} debe seguir ahi`);
+  assert.equal(quedan.filter((f) => /^agenda-\d{4}-/.test(f)).length, 3);
 });

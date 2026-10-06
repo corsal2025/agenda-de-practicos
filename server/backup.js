@@ -6,7 +6,7 @@ const { ahoraTS } = require('./fechas');
 
 // AGENDA_BACKUP_DIR permite redirigir los backups (los tests usan una carpeta temporal).
 const DIR = process.env.AGENDA_BACKUP_DIR || path.join(RAIZ, 'data', 'backups');
-const CONSERVAR = Number(process.env.AGENDA_BACKUPS || 30);
+const CONSERVAR = Math.max(1, Number(process.env.AGENDA_BACKUPS) || 30);
 // Los backups "pre-*" (pre-import, pre-fixes...) son puntos de retorno antes de una operacion
 // destructiva: no entran en la rotacion normal; se conservan hasta este maximo.
 const CONSERVAR_PRE = 10;
@@ -28,11 +28,14 @@ function backup(etiqueta) {
   return destino;
 }
 
+// Solo se consideran archivos con nombre de backup (agenda-AAAA-MM-DDT...db): nunca agenda.db ni otros.
+const ES_BACKUP = /^agenda-\d{4}-\d{2}-\d{2}T.*\.db$/;
+
 // Deja los CONSERVAR backups normales mas recientes y hasta CONSERVAR_PRE de los "pre-*".
 function podar() {
   if (!fs.existsSync(DIR)) return;
   const archivos = fs.readdirSync(DIR)
-    .filter((f) => f.endsWith('.db'))
+    .filter((f) => ES_BACKUP.test(f))
     .map((f) => ({ f, t: fs.statSync(path.join(DIR, f)).mtimeMs }))
     .sort((a, b) => b.t - a.t);
   const pre = archivos.filter(({ f }) => f.includes('pre-'));
@@ -47,7 +50,7 @@ function podar() {
 function programar() {
   const ultimo = () => {
     if (!fs.existsSync(DIR)) return 0;
-    const ts = fs.readdirSync(DIR).filter((f) => f.endsWith('.db'))
+    const ts = fs.readdirSync(DIR).filter((f) => ES_BACKUP.test(f))
       .map((f) => fs.statSync(path.join(DIR, f)).mtimeMs);
     return ts.length ? Math.max(...ts) : 0;
   };
