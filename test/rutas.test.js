@@ -183,3 +183,22 @@ test('cola-reagendar asignar: destino ocupado nuevo parte sin banderas heredadas
   sinTokens(leer(destino.id));
   assert.equal(leer(destino.id).rut, '11.111.111-1');
 });
+
+// ---------- 8) no agendar sobre un bloque bloqueado ----------
+test('PUT que ocuparia un bloque bloqueado responde 409 y no lo desbloquea', async () => {
+  const b = slot(diaNuevo(), '09:00', { bloqueado: 1, bloqueo_motivo: 'LICENCIA MEDICA' });
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B' });
+  assert.equal(r.status, 409);
+  assert.match(r.datos.error, /bloqueado: LICENCIA MEDICA\. Desbloquealo primero\./);
+  const x = leer(b.id);
+  assert.equal(x.bloqueado, 1);
+  assert.equal(x.rut, null);
+});
+
+test('el desbloqueo explicito (liberar) sigue funcionando y luego se puede agendar', async () => {
+  const b = slot(diaNuevo(), '09:00', { bloqueado: 1, bloqueo_motivo: 'TERRENO' });
+  assert.equal((await api('POST', `/agenda/${b.id}/liberar`, { motivo: 'Desbloqueo manual' })).status, 200);
+  assert.equal(leer(b.id).bloqueado, 0);
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B' });
+  assert.equal(r.status, 200, r.texto);
+});

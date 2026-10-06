@@ -437,6 +437,11 @@ app.put('/api/agenda/:id', wrap((req, res) => {
 
   const { avisos, rutFmt, clase } = validarBloque(body, bloque);
 
+  // Un bloque bloqueado no se ocupa en silencio: hay que desbloquearlo antes (POST /liberar).
+  if (bloque.bloqueado && (rutFmt || (body.nombre && String(body.nombre).trim()))) {
+    throw bad(`El bloque esta bloqueado: ${bloque.bloqueo_motivo || 'BLOQUEADO'}. Desbloquealo primero.`, 409);
+  }
+
   const tel = telefono.normalizar(body.contacto);
   if (!tel.vacio && !tel.valido) {
     throw bad('Teléfono incompleto. Un número chileno tiene 9 dígitos (celular: 9 XXXX XXXX). Se guarda como +56.');
@@ -476,7 +481,6 @@ app.put('/api/agenda/:id', wrap((req, res) => {
 
   db.prepare(`
     UPDATE agenda SET
-      bloqueado = 0, bloqueo_motivo = NULL,
       rut = @rut, nombre = @nombre, clase = @clase, contacto = @contacto, correo = @correo,
       tipo_cita = @tipo_cita, motivo_reagendamiento = @motivo_reagendamiento,
       lista_espera = @lista_espera, intento = @intento, funcionario_id = @funcionario_id,
