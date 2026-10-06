@@ -210,7 +210,7 @@ app.post('/reagendar/:id/:token/elegir', express.urlencoded({ extended: true }),
     UPDATE agenda SET
       rut = @rut, nombre = @nombre, clase = @clase, contacto = @contacto, correo = @correo,
       tipo_cita = 'REAGENDADO', motivo_reagendamiento = 'Reagendamiento autónomo por correo',
-      nacionalidad = @nacionalidad, funcionario_id = @funcionario_id,
+      funcionario_id = @funcionario_id,
       fecha_inicio_tramite = @fecha_inicio_tramite, confirmo_asistencia = 1,
       token_confirmacion = @token, actualizado_en = datetime('now', 'localtime')
     WHERE id = @nuevoId
@@ -220,7 +220,6 @@ app.post('/reagendar/:id/:token/elegir', express.urlencoded({ extended: true }),
     clase: bloque.clase,
     contacto: bloque.contacto,
     correo: bloque.correo,
-    nacionalidad: bloque.nacionalidad || 'CHILENA',
     funcionario_id: bloque.funcionario_id,
     fecha_inicio_tramite: bloque.fecha_inicio_tramite,
     token: nuevoToken,
@@ -256,9 +255,9 @@ app.post('/reagendar/:id/:token/elegir', express.urlencoded({ extended: true }),
 
 app.use(auth.guard);
 
+// Captura tanto errores sincronos como rechazos de handlers async.
 const wrap = (fn) => (req, res, next) => {
-  try { fn(req, res, next); }
-  catch (e) { next(e); }
+  Promise.resolve().then(() => fn(req, res, next)).catch(next);
 };
 function bad(msg, status = 400) { const e = new Error(msg); e.status = status; return e; }
 const actorDe = (req) => auth.actor(req);

@@ -84,3 +84,26 @@ test('la app se puede importar sin escuchar en el puerto 4900', async () => {
   const r = await api('GET', '/meta');
   assert.equal(r.status, 200);
 });
+
+// ---------- 1) reagendar publico: columna inexistente ----------
+test('reagendar publico: elegir un horario libre mueve la cita (sin columna nacionalidad)', async () => {
+  const dia = diaNuevo();
+  const origen = ocupado(dia, '09:00');
+  const destino = slot(hoyMas(1), '10:00');
+  const r = await http('POST', `/reagendar/${origen.id}/tokenviejo/elegir`, { form: { nuevo_slot_id: destino.id } });
+  assert.equal(r.status, 200, r.texto);
+  const d = leer(destino.id);
+  assert.equal(d.rut, '11.111.111-1');
+  assert.equal(d.tipo_cita, 'REAGENDADO');
+  assert.ok(d.token_confirmacion && d.token_confirmacion !== 'tokenviejo');
+  const o = leer(origen.id);
+  assert.equal(o.rut, null);
+  sinTokens(o);
+});
+
+// ---------- 2) wrap debe capturar rechazos de handlers async ----------
+test('handler async que lanza responde con su estado en vez de colgarse', async () => {
+  const r = await api('POST', '/agenda/99999999/confirmar', { valor: 1 });
+  assert.equal(r.status, 404);
+  assert.match(r.datos.error, /no encontrado/i);
+});
