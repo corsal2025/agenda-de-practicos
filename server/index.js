@@ -670,7 +670,8 @@ app.post('/api/agenda/enviar-correos-pendientes', wrap(async (req, res) => {
       db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').run(bloque.token_confirmacion, bloque.id);
       tokensGenerados++;
     }
-    if (correo.habilitado) {
+    // Solo a quienes aun no recibieron la confirmacion (evita duplicados al re-ejecutar).
+    if (correo.habilitado && !bloque.correo_confirmacion_enviado) {
       try {
         const ok = await correo.confirmacion(bloque);
         if (ok) {
@@ -705,7 +706,7 @@ app.post('/api/agenda/:id/confirmar', wrap(async (req, res) => {
 
   let correoEnviado = false;
   const bloqueFinal = traer(id);
-  if (confirmo === 1 && bloqueFinal && bloqueFinal.correo) {
+  if (confirmo === 1 && bloqueFinal && bloqueFinal.correo && !bloqueFinal.correo_confirmacion_enviado) {
     try {
       const ok = await correo.confirmacion(bloqueFinal);
       if (ok) db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').run(id);

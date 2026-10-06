@@ -202,3 +202,31 @@ test('el desbloqueo explicito (liberar) sigue funcionando y luego se puede agend
   const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B' });
   assert.equal(r.status, 200, r.texto);
 });
+
+// ---------- 7) no reenviar correos de confirmacion ya enviados ----------
+test('enviar-correos-pendientes solo envia a quienes no recibieron la confirmacion', async () => {
+  const dia = diaNuevo();
+  const yaEnviado = ocupado(dia, '09:00', { token_confirmacion: null, correo_confirmacion_enviado: 1, correo_recordatorio_enviado: 0 });
+  const pendiente = ocupado(dia, '09:30', { rut: '33.333.333-3', nombre: 'ANA', token_confirmacion: null, correo_confirmacion_enviado: 0, correo_recordatorio_enviado: 0 });
+  enviados.length = 0;
+  const r = await api('POST', '/agenda/enviar-correos-pendientes', {});
+  assert.equal(r.status, 200, r.texto);
+  assert.ok(!enviados.includes(yaEnviado.id), 'no debe reenviar al que ya recibio la confirmacion');
+  assert.ok(enviados.includes(pendiente.id), 'debe enviar al pendiente');
+  // aun asi se generan tokens para ambos
+  assert.ok(leer(yaEnviado.id).token_confirmacion);
+  assert.ok(leer(pendiente.id).token_confirmacion);
+});
+
+test('confirmar manualmente no reenvia el correo si ya se envio', async () => {
+  const dia = diaNuevo();
+  const enviado = ocupado(dia, '09:00', { correo_confirmacion_enviado: 1 });
+  const nuevo = ocupado(dia, '09:30', { rut: '33.333.333-3', nombre: 'ANA', correo_confirmacion_enviado: 0 });
+  enviados.length = 0;
+  const r1 = await api('POST', `/agenda/${enviado.id}/confirmar`, { valor: 1 });
+  assert.equal(r1.status, 200);
+  assert.equal(r1.datos.correo_enviado, false);
+  const r2 = await api('POST', `/agenda/${nuevo.id}/confirmar`, { valor: 1 });
+  assert.equal(r2.datos.correo_enviado, true);
+  assert.deepEqual(enviados, [nuevo.id]);
+});
