@@ -759,7 +759,7 @@ async function renderPorConfirmar() {
           ${r.contacto ? `
             <div style="display:inline-flex;flex-direction:column;align-items:center;gap:4px">
               <a href="tel:${esc(r.contacto)}" style="text-decoration:none;font-weight:600;color:var(--azul)">📞 ${esc(fTel(r.contacto))}</a>
-              ${telWa ? `<a href="https://wa.me/${telWa}?text=${encodeURIComponent(mensajeWa)}" target="whatsapp_agenda" rel="noopener" class="btn-wa" title="Escribir por WhatsApp a este postulante para confirmar o reagendar">💬 WhatsApp</a>` : ''}
+              ${telWa ? `<a href="whatsapp://send?phone=${telWa}&text=${encodeURIComponent(mensajeWa)}" class="btn-wa" title="Escribir por WhatsApp a este postulante para confirmar o reagendar">💬 WhatsApp</a>` : ''}
             </div>
           ` : '<span class="muted">Sin teléfono</span>'}
         </td>
@@ -1773,7 +1773,7 @@ function slotCard(b) {
           <svg class="sc-ico" viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M3.654 1.328a.678.678 0 0 0-1.015-.063L1.605 2.3c-.483.484-.661 1.169-.45 1.77a17.568 17.568 0 0 0 4.168 6.608 17.569 17.569 0 0 0 6.608 4.168c.601.211 1.286.033 1.77-.45l1.034-1.034a.678.678 0 0 0-.063-1.015l-2.307-1.794a.678.678 0 0 0-.58-.122l-2.19.547a1.745 1.745 0 0 1-1.657-.459L5.482 8.06a1.745 1.745 0 0 1-.46-1.657l.548-2.19a.678.678 0 0 0-.122-.58L3.654 1.328z"/></svg>
           <span class="num">${esc(fTel(b.contacto) || 'Sin teléfono')}</span>
         </span>
-        ${telWa ? `<a href="https://wa.me/${telWa}?text=${encodeURIComponent(mensajeWa)}" target="whatsapp_agenda" rel="noopener" class="btn-wa" title="Escribir por WhatsApp a este postulante con los datos de su cita" onclick="event.stopPropagation()">💬 WhatsApp</a>` : ''}
+        ${telWa ? `<a href="whatsapp://send?phone=${telWa}&text=${encodeURIComponent(mensajeWa)}" class="btn-wa" title="Escribir por WhatsApp a este postulante con los datos de su cita" onclick="event.stopPropagation()">💬 WhatsApp</a>` : ''}
       </div>
       <span class="sc-item ${b.correo ? 'slot-mail' : 'sin'}" title="${b.correo ? 'Correo: ' + esc(b.correo) : 'Sin correo registrado'}">
         <svg class="sc-ico" viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2zm13 2.383-4.708 2.825L15 11.105V5.383zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741zM1 11.105l4.708-2.897L1 5.383v5.722z"/></svg>
