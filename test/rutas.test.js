@@ -273,3 +273,74 @@ test('confirmar/rechazar con token invalido responde 404 (GET y POST)', async ()
   assert.equal((await http('POST', `/rechazar/${b.id}/malo`)).status, 404);
   assert.equal(leer(b.id).token_confirmacion, 'tk4');
 });
+
+// ---------- 9) reagendar publico: regla D/A5, transaccion y pesada ----------
+const MOTIVO_AUTO = require('../server/pesada').MOTIVO_AUTO;
+
+test('reagendar publico: una clase D solo ve bloques de 12:30', async () => {
+  const dia = hoyMas(7);
+  const origen = ocupado(hoyMas(40), '12:30', { clase: 'D', token_confirmacion: 'tkd' });
+  const libre0900 = slot(dia, '09:00');
+  const libre1230 = slot(dia, '12:30');
+  const r = await http('GET', `/reagendar/${origen.id}/tkd`);
+  assert.equal(r.status, 200);
+  assert.ok(r.texto.includes(`value="${libre1230.id}"`), 'debe ofrecer el 12:30');
+  assert.ok(!r.texto.includes(`value="${libre0900.id}"`), 'no debe ofrecer 09:00 a una clase D');
+});
+
+test('reagendar publico: elegir 09:00 con clase D se rechaza sin cambios', async () => {
+  const origen = ocupado(hoyMas(41), '12:30', { clase: 'D', token_confirmacion: 'tkd2' });
+  const destino = slot(hoyMas(3), '09:30');
+  const r = await http('POST', `/reagendar/${origen.id}/tkd2/elegir`, { form: { nuevo_slot_id: destino.id } });
+  assert.equal(r.status, 400);
+  assert.equal(leer(destino.id).rut, null);
+  assert.equal(leer(origen.id).rut, '11.111.111-1');
+  assert.equal(leer(origen.id).token_confirmacion, 'tkd2');
+});
+
+test('reagendar publico: no admite fechas fuera de la ventana ofrecida', async () => {
+  const origen = ocupado(hoyMas(42), '09:00', { token_confirmacion: 'tkv' });
+  const lejano = slot(hoyMas(90), '09:00');
+  const r = await http('POST', `/reagendar/${origen.id}/tkv/elegir`, { form: { nuevo_slot_id: lejano.id } });
+  assert.equal(r.status, 400);
+  assert.equal(leer(lejano.id).rut, null);
+});
+
+test('reagendar publico: libera y aplica bloqueos automaticos de clase pesada', async () => {
+  const diaO = hoyMas(43);
+  const diaD = hoyMas(4);
+  const origen = ocupado(diaO, '12:30', { clase: 'D', token_confirmacion: 'tkp' });
+  const o1300 = slot(diaO, '13:00', { bloqueado: 1, bloqueo_motivo: MOTIVO_AUTO });
+  const o1330 = slot(diaO, '13:30', { bloqueado: 1, bloqueo_motivo: MOTIVO_AUTO });
+  const destino = slot(diaD, '12:30');
+  const d1300 = slot(diaD, '13:00');
+  const d1330 = slot(diaD, '13:30');
+  const r = await http('POST', `/reagendar/${origen.id}/tkp/elegir`, { form: { nuevo_slot_id: destino.id } });
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(leer(o1300.id).bloqueado, 0);
+  assert.equal(leer(o1330.id).bloqueado, 0);
+  assert.equal(leer(d1300.id).bloqueado, 1);
+  assert.equal(leer(d1330.id).bloqueado, 1);
+  assert.equal(leer(destino.id).rut, '11.111.111-1');
+});
+
+test('reagendar publico: horario ya ocupado se rechaza y la cita original queda intacta', async () => {
+  const origen = ocupado(hoyMas(44), '09:00', { token_confirmacion: 'tko' });
+  const tomado = ocupado(hoyMas(5), '09:00', { rut: '44.444.444-4', nombre: 'OTRO', token_confirmacion: null });
+  const r = await http('POST', `/reagendar/${origen.id}/tko/elegir`, { form: { nuevo_slot_id: tomado.id } });
+  assert.equal(r.status, 400);
+  assert.equal(leer(origen.id).rut, '11.111.111-1');
+  assert.equal(leer(tomado.id).nombre, 'OTRO');
+});
+
+test('reagendar publico: escapa el nombre del examinador y no filtra errores internos', async () => {
+  const exId = Number(db.prepare("INSERT INTO examinadores (nombre) VALUES ('<i>EXAM</i>')").run().lastInsertRowid);
+  const origen = ocupado(hoyMas(45), '09:00', { token_confirmacion: 'tke' });
+  const destino = slot(hoyMas(6), '09:00', {}, exId);
+  const lista = await http('GET', `/reagendar/${origen.id}/tke`);
+  assert.ok(!lista.texto.includes('<i>EXAM</i>'));
+  const r = await http('POST', `/reagendar/${origen.id}/tke/elegir`, { form: { nuevo_slot_id: destino.id } });
+  assert.equal(r.status, 200, r.texto);
+  assert.ok(!r.texto.includes('<i>EXAM</i>'));
+  assert.ok(r.texto.includes('&lt;i&gt;EXAM&lt;/i&gt;'));
+});

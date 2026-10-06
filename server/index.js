@@ -14,7 +14,7 @@ const { resumen } = require('./analitica');
 const { generarXlsx, generarXlsxOriginal } = require('./export');
 const { importar } = require('./migrate');
 const backupMod = require('./backup');
-const { hoyISO } = require('./fechas');
+const { hoyISO, sumarDias } = require('./fechas');
 const ahoraTS = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
 const feriados = require('./feriados');
 const papelera = require('./papelera');
@@ -161,29 +161,46 @@ app.post('/rechazar/:id/:token', (req, res) => {
     res.send(paginaPublica('Gracias por avisar', 'Registramos que no puedes asistir. El equipo te contactará para reagendar tu hora.', true));
   } catch (e) { errorPublico(res, e, 'POST rechazar'); }
 });
+// ---------- reagendar por el propio ciudadano (publico, con token) ----------
+const tieneClasePesada = (clase) => String(clase || '').toUpperCase().split(',').map((s) => s.trim())
+  .some((cl) => CLASES_PESADAS.includes(cl));
+const VENTANA_REAGENDAR_DIAS = 35;
+
+// Horarios que se le ofrecen: libres, no bloqueados, entre manana y +35 dias (hora local) y
+// respetando la regla D/A5 (solo 12:30, y solo si el examinador no tiene citas despues).
+function opcionesReagendar(bloque) {
+  const pesadaCita = tieneClasePesada(bloque.clase);
+  const hoy = hoyISO();
+  const filas = db.prepare(`
+    SELECT a.id, a.fecha, a.hora, a.examinador_id, e.nombre as examinador
+    FROM agenda a
+    JOIN examinadores e ON e.id = a.examinador_id
+    WHERE a.fecha >= ? AND a.fecha <= ?
+      AND a.bloqueado = 0 AND (a.rut IS NULL OR a.rut = '') AND (a.nombre IS NULL OR a.nombre = '')
+      ${pesadaCita ? 'AND a.hora = ?' : ''}
+    ORDER BY a.fecha ASC, a.hora ASC
+    LIMIT 300
+  `).all(sumarDias(hoy, 1), sumarDias(hoy, VENTANA_REAGENDAR_DIAS), ...(pesadaCita ? [HORA_D_A5] : []));
+  return filas
+    .filter((f) => !pesadaCita || !pesada.ocupadosDependientes(f.fecha, f.examinador_id).length)
+    .slice(0, 25);
+}
+
 app.get('/reagendar/:id/:token', (req, res) => { try {
   const bloque = db.prepare('SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id WHERE a.id = ?').get(Number(req.params.id));
   if (!tokenValido(bloque, req.params.token)) {
     return res.status(404).send(paginaPublica('Link no válido', 'Este enlace ya fue utilizado o ha expirado.', false));
   }
 
-  const disponibles = db.prepare(`
-    SELECT a.id, a.fecha, a.hora, e.nombre as examinador
-    FROM agenda a
-    JOIN examinadores e ON e.id = a.examinador_id
-    WHERE a.fecha >= date('now', '+1 day') AND a.fecha <= date('now', '+35 days')
-      AND a.bloqueado = 0 AND (a.rut IS NULL OR a.rut = '') AND (a.nombre IS NULL OR a.nombre = '')
-    ORDER BY a.fecha ASC, a.hora ASC
-    LIMIT 25
-  `).all();
+  const disponibles = opcionesReagendar(bloque);
 
   const opcionesHtml = disponibles.length ? disponibles.map(d => `
     <div style="background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:12px 16px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 1px 3px rgba(0,0,0,0.05)">
       <div>
-        <div style="font-weight:700;color:#0f172a;font-size:14px">📅 ${fFecha(d.fecha)} a las ${d.hora} hrs</div>
+        <div style="font-weight:700;color:#0f172a;font-size:14px">📅 ${esc(fFecha(d.fecha))} a las ${esc(d.hora)} hrs</div>
         <div style="font-size:12px;color:#64748b">Examinador/a: ${esc(d.examinador)}</div>
       </div>
-      <form method="POST" action="/reagendar/${bloque.id}/${bloque.token_confirmacion}/elegir" style="margin:0">
+      <form method="POST" action="/reagendar/${bloque.id}/${esc(req.params.token)}/elegir" style="margin:0">
         <input type="hidden" name="nuevo_slot_id" value="${d.id}">
         <button type="submit" style="background:#0284c7;color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:700;font-size:13px;cursor:pointer">
           Elegir este horario
@@ -209,7 +226,7 @@ app.get('/reagendar/:id/:token', (req, res) => { try {
     <h1>🔄 Reagendar Examen Práctico de Conducir</h1>
     <div style="background:#f1f5f9;padding:12px 16px;border-radius:8px;margin-bottom:18px;font-size:13px">
       <div><b>Postulante:</b> ${esc(bloque.nombre)} (${esc(bloque.rut || '')})</div>
-      <div><b>Hora actual agendada:</b> ${fFecha(bloque.fecha)} a las ${bloque.hora} hrs (Examinador: ${esc(bloque.examinador)})</div>
+      <div><b>Hora actual agendada:</b> ${esc(fFecha(bloque.fecha))} a las ${esc(bloque.hora)} hrs (Examinador: ${esc(bloque.examinador)})</div>
     </div>
     <p style="font-size:13.5px;color:#334155;margin-bottom:16px">
       Selecciona tu <b>nueva fecha y horario</b>. Tu hora anterior se liberará automáticamente y el nuevo horario quedará agendado de inmediato:
@@ -220,67 +237,86 @@ app.get('/reagendar/:id/:token', (req, res) => { try {
 </html>`;
 
   res.send(html);
-} catch (e) { res.status(500).send(paginaPublica('Error', e.message, false)); } });
+} catch (e) { errorPublico(res, e, 'GET reagendar'); } });
 
-app.post('/reagendar/:id/:token/elegir', express.urlencoded({ extended: true }), async (req, res) => { try {
+app.post('/reagendar/:id/:token/elegir', express.urlencoded({ extended: true }), (req, res) => { try {
   const bloque = db.prepare('SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id WHERE a.id = ?').get(Number(req.params.id));
   if (!tokenValido(bloque, req.params.token)) {
     return res.status(404).send(paginaPublica('Link no válido', 'Este enlace ya fue utilizado o ha expirado.', false));
   }
 
-  const nuevoId = Number(req.body.nuevo_slot_id);
-  const nuevoSlot = db.prepare('SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id WHERE a.id = ?').get(nuevoId);
-  if (!nuevoSlot || nuevoSlot.bloqueado || nuevoSlot.rut || nuevoSlot.nombre) {
-    return res.status(400).send(paginaPublica('Horario ya no disponible', 'Ese horario acaba de ser ocupado. Por favor regresa y selecciona otra fecha.', false));
-  }
-
+  const nuevoId = Number((req.body || {}).nuevo_slot_id);
   const nuevoToken = crypto.randomBytes(16).toString('hex');
 
-  db.prepare(`
-    UPDATE agenda SET
-      rut = @rut, nombre = @nombre, clase = @clase, contacto = @contacto, correo = @correo,
-      tipo_cita = 'REAGENDADO', motivo_reagendamiento = 'Reagendamiento autónomo por correo',
-      funcionario_id = @funcionario_id,
-      fecha_inicio_tramite = @fecha_inicio_tramite, confirmo_asistencia = 1,
-      token_confirmacion = @token, actualizado_en = datetime('now', 'localtime')
-    WHERE id = @nuevoId
-  `).run({
-    rut: bloque.rut,
-    nombre: bloque.nombre,
-    clase: bloque.clase,
-    contacto: bloque.contacto,
-    correo: bloque.correo,
-    funcionario_id: bloque.funcionario_id,
-    fecha_inicio_tramite: bloque.fecha_inicio_tramite,
-    token: nuevoToken,
-    nuevoId: nuevoSlot.id
+  // Todo en una transaccion: se relee y valida el destino y se mueve la cita sin dejar
+  // el estado a medias si algo falla.
+  const nuevoSlot = tx(() => {
+    const destino = db.prepare('SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id WHERE a.id = ?').get(nuevoId);
+    const noDisponible = () => bad('Ese horario ya no está disponible. Por favor regresa y selecciona otra fecha.');
+    if (!destino || destino.bloqueado || destino.rut || destino.nombre) throw noDisponible();
+    // Mismas reglas que el listado: ventana de fechas y regla D/A5.
+    const hoy = hoyISO();
+    if (destino.fecha < sumarDias(hoy, 1) || destino.fecha > sumarDias(hoy, VENTANA_REAGENDAR_DIAS)) throw noDisponible();
+    if (tieneClasePesada(bloque.clase)) {
+      if (destino.hora !== HORA_D_A5) throw noDisponible();
+      if (pesada.ocupadosDependientes(destino.fecha, destino.examinador_id).length) throw noDisponible();
+    }
+
+    db.prepare(`
+      UPDATE agenda SET
+        rut = @rut, nombre = @nombre, clase = @clase, contacto = @contacto, correo = @correo,
+        tipo_cita = 'REAGENDADO', motivo_reagendamiento = 'Reagendamiento autónomo por correo',
+        lista_espera = @lista_espera, intento = @intento, funcionario_id = @funcionario_id,
+        fecha_inicio_tramite = @fecha_inicio_tramite, confirmo_asistencia = 1,
+        resultado = NULL, pendiente_reagendar = 0, pendiente_nota = NULL,
+        comentarios = @comentarios, agendado_en = COALESCE(agendado_en, datetime('now','localtime')),
+        token_confirmacion = @token, correo_confirmacion_enviado = 0, correo_recordatorio_enviado = 0,
+        actualizado_en = datetime('now', 'localtime')
+      WHERE id = @nuevoId
+    `).run({
+      rut: bloque.rut,
+      nombre: bloque.nombre,
+      clase: bloque.clase,
+      contacto: bloque.contacto,
+      correo: bloque.correo,
+      lista_espera: bloque.lista_espera,
+      intento: bloque.intento,
+      funcionario_id: bloque.funcionario_id,
+      fecha_inicio_tramite: bloque.fecha_inicio_tramite,
+      comentarios: [bloque.comentarios, `Reagendada desde ${bloque.fecha} ${bloque.hora} (autoservicio por correo)`].filter(Boolean).join(' | '),
+      token: nuevoToken,
+      nuevoId: destino.id,
+    });
+
+    db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL} WHERE id = ?`).run(bloque.id);
+    return destino;
   });
 
-  db.prepare(`
-    UPDATE agenda SET
-      rut = NULL, nombre = NULL, clase = NULL, contacto = NULL, correo = NULL,
-      tipo_cita = NULL, motivo_reagendamiento = NULL, lista_espera = NULL,
-      intento = NULL, funcionario_id = NULL, fecha_inicio_tramite = NULL,
-      confirmo_asistencia = NULL, resultado = NULL, comentarios = NULL,
-      bloqueado = 0, bloqueo_motivo = NULL, pendiente_reagendar = 0, pendiente_nota = NULL,
-      token_confirmacion = NULL, correo_confirmacion_enviado = 0, correo_recordatorio_enviado = 0,
-      actualizado_en = datetime('now', 'localtime')
-    WHERE id = ?
-  `).run(bloque.id);
+  // Regla de clase pesada (D/A5): libera los bloques auto-bloqueados del origen y bloquea los del destino.
+  if (pesada.esPesadaEnHoraValida(bloque)) pesada.liberar(bloque.fecha, bloque.examinador_id);
+  if (pesada.esPesadaEnHoraValida({ hora: nuevoSlot.hora, clase: bloque.clase })) {
+    pesada.aplicar(nuevoSlot.fecha, nuevoSlot.examinador_id);
+  }
 
   log(nuevoSlot.id, 'reagendar', `${bloque.fecha} ${bloque.hora} -> ${nuevoSlot.fecha} ${nuevoSlot.hora} (Autoservicio ciudadano por correo)`);
 
   const nuevoFinal = traer(nuevoSlot.id);
   if (nuevoFinal.correo) {
-    correo.confirmacion(nuevoFinal).catch(() => {});
+    correo.confirmacion(nuevoFinal)
+      .then((ok) => { if (ok) db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ?').run(nuevoSlot.id); })
+      .catch((e) => console.error('Correo de confirmacion fallo:', e.message));
   }
 
   res.send(paginaPublica(
     '¡Hora reagendada con éxito!',
-    `Tu examen práctico ha sido reprogramado para el <b>${fFecha(nuevoSlot.fecha)} a las ${nuevoSlot.hora} hrs</b> con ${nuevoSlot.examinador}. Hemos enviado tu nuevo comprobante a tu correo.`,
+    `Tu examen práctico ha sido reprogramado para el <b>${esc(fFecha(nuevoSlot.fecha))} a las ${esc(nuevoSlot.hora)} hrs</b> con ${esc(nuevoSlot.examinador)}. Hemos enviado tu nuevo comprobante a tu correo.`,
     true
   ));
-} catch (e) { res.status(500).send(paginaPublica('Error', e.message, false)); } });
+} catch (e) {
+  // Errores previstos (bad) se muestran tal cual; cualquier otro se registra y se oculta al ciudadano.
+  if (e.status) return res.status(e.status).send(paginaPublica('No pudimos reagendar', esc(e.message), false));
+  errorPublico(res, e, 'POST reagendar/elegir');
+} });
 
 
 app.use(auth.guard);

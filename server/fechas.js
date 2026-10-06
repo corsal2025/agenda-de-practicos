@@ -87,4 +87,11 @@ function hoyISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-module.exports = { FERIADOS_SEMILLA, aISO, aHora, esHabil, diasHabiles, hoyISO };
+// Suma `n` dias a una fecha ISO ('YYYY-MM-DD') en hora local.
+function sumarDias(isoFecha, n) {
+  const d = new Date(`${isoFecha}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+module.exports = { FERIADOS_SEMILLA, aISO, aHora, esHabil, diasHabiles, hoyISO, sumarDias };
