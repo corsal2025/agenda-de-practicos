@@ -65,7 +65,8 @@ app.get('/api/sesion', (req, res) => {
 app.post('/api/logout', (req, res) => auth.logout(req, res));
 
 // ---------- confirmar / rechazar por correo (publico, sin login) ----------
-function paginaPublica(titulo, mensaje, ok) {
+// `mensaje` y `extra` son HTML: quien llama debe escapar los datos que interpole.
+function paginaPublica(titulo, mensaje, ok, extra = '') {
   return `<!doctype html><html lang="es"><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>${titulo}</title>
@@ -74,6 +75,7 @@ function paginaPublica(titulo, mensaje, ok) {
         <div style="font-size:2.2rem">${ok ? '✅' : '⚠️'}</div>
         <h1 style="font-size:1.2rem;margin:.8rem 0 .4rem">${titulo}</h1>
         <p style="color:#475569;margin:0">${mensaje}</p>
+        ${extra}
       </div>
     </body></html>`;
 }
@@ -100,25 +102,55 @@ function tokenValido(bloque, token) {
   const b = Buffer.from(String(token));
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
+// Los correos traen links GET, pero abrirlos NO ejecuta nada: los escaneres de correo
+// (Outlook SafeLinks, antivirus) visitan los links y confirmarian solos. El GET muestra un
+// boton y solo el POST (click real de la persona) realiza la accion y consume el token.
+function botonPost(accion, id, token, texto, color) {
+  return `<form method="POST" action="/${accion}/${Number(id)}/${esc(token)}" style="margin:1.4rem 0 0">
+    <button type="submit" style="background:${color};color:#fff;border:none;padding:.7rem 1.4rem;border-radius:6px;font-weight:700;font-size:.95rem;cursor:pointer">${texto}</button>
+  </form>`;
+}
+function bloquePorToken(req) {
+  const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(Number(req.params.id));
+  return tokenValido(bloque, req.params.token) ? bloque : null;
+}
+const linkInvalido = (res) => res.status(404).send(paginaPublica('Link no válido', 'Este link ya se usó o no es válido.', false));
+const errorPublico = (res, e, contexto) => {
+  console.error(`[PUBLICO] ${contexto}:`, e);
+  res.status(500).send(paginaPublica('Ocurrió un error', 'No pudimos procesar tu solicitud. Contacta a la oficina.', false));
+};
+
 app.get('/confirmar/:id/:token', (req, res) => {
   try {
-    const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(Number(req.params.id));
-    if (!tokenValido(bloque, req.params.token)) {
-      return res.status(404).send(paginaPublica('Link no válido', 'Este link ya se usó o no es válido.', false));
-    }
+    const bloque = bloquePorToken(req);
+    if (!bloque) return linkInvalido(res);
+    res.send(paginaPublica('Confirma tu asistencia',
+      `Examen práctico el <b>${esc(fFecha(bloque.fecha))}</b> a las <b>${esc(bloque.hora)}</b> hrs.`,
+      true, botonPost('confirmar', bloque.id, req.params.token, '✔ Confirmo mi asistencia', '#15803d')));
+  } catch (e) { errorPublico(res, e, 'GET confirmar'); }
+});
+app.post('/confirmar/:id/:token', (req, res) => {
+  try {
+    const bloque = bloquePorToken(req);
+    if (!bloque) return linkInvalido(res);
     db.prepare("UPDATE agenda SET confirmo_asistencia = 1, token_confirmacion = NULL, actualizado_en = datetime('now','localtime') WHERE id = ?").run(bloque.id);
     log(bloque.id, 'confirmar', `${bloque.fecha} ${bloque.hora} confirmado por correo`);
     res.send(paginaPublica('¡Listo, tu hora quedó confirmada!', 'Te esperamos el día y la hora agendada. Gracias por confirmar.', true));
-  } catch (e) {
-    res.status(500).send(paginaPublica('Ocurrió un error', 'No pudimos procesar tu confirmación. Contacta a la oficina.', false));
-  }
+  } catch (e) { errorPublico(res, e, 'POST confirmar'); }
 });
 app.get('/rechazar/:id/:token', (req, res) => {
   try {
-    const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(Number(req.params.id));
-    if (!tokenValido(bloque, req.params.token)) {
-      return res.status(404).send(paginaPublica('Link no válido', 'Este link ya se usó o no es válido.', false));
-    }
+    const bloque = bloquePorToken(req);
+    if (!bloque) return linkInvalido(res);
+    res.send(paginaPublica('¿No puedes asistir?',
+      `Tu examen práctico es el <b>${esc(fFecha(bloque.fecha))}</b> a las <b>${esc(bloque.hora)}</b> hrs. Si no puedes asistir, avísanos para reagendar.`,
+      false, botonPost('rechazar', bloque.id, req.params.token, 'No puedo asistir', '#b91c1c')));
+  } catch (e) { errorPublico(res, e, 'GET rechazar'); }
+});
+app.post('/rechazar/:id/:token', (req, res) => {
+  try {
+    const bloque = bloquePorToken(req);
+    if (!bloque) return linkInvalido(res);
     db.prepare(`
       UPDATE agenda SET confirmo_asistencia = 0, pendiente_reagendar = 1,
         pendiente_nota = 'No puede asistir (avisado por correo automatico)',
@@ -127,9 +159,7 @@ app.get('/rechazar/:id/:token', (req, res) => {
     `).run(bloque.id);
     log(bloque.id, 'rechazar', `${bloque.fecha} ${bloque.hora} avisó que no puede asistir (correo)`);
     res.send(paginaPublica('Gracias por avisar', 'Registramos que no puedes asistir. El equipo te contactará para reagendar tu hora.', true));
-  } catch (e) {
-    res.status(500).send(paginaPublica('Ocurrió un error', 'No pudimos procesar tu aviso. Contacta a la oficina.', false));
-  }
+  } catch (e) { errorPublico(res, e, 'POST rechazar'); }
 });
 app.get('/reagendar/:id/:token', (req, res) => { try {
   const bloque = db.prepare('SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id WHERE a.id = ?').get(Number(req.params.id));

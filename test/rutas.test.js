@@ -230,3 +230,46 @@ test('confirmar manualmente no reenvia el correo si ya se envio', async () => {
   assert.equal(r2.datos.correo_enviado, true);
   assert.deepEqual(enviados, [nuevo.id]);
 });
+
+// ---------- 5) confirmar/rechazar: GET no muta, POST ejecuta ----------
+test('GET /confirmar muestra una pagina con boton POST y no cambia nada', async () => {
+  const b = ocupado(diaNuevo(), '09:00', { token_confirmacion: 'tk1', confirmo_asistencia: null });
+  const r = await http('GET', `/confirmar/${b.id}/tk1`);
+  assert.equal(r.status, 200);
+  assert.match(r.texto, new RegExp(`<form method="POST" action="/confirmar/${b.id}/tk1"`));
+  const x = leer(b.id);
+  assert.equal(x.confirmo_asistencia, null);
+  assert.equal(x.token_confirmacion, 'tk1');
+});
+
+test('POST /confirmar confirma y consume el token', async () => {
+  const b = ocupado(diaNuevo(), '09:00', { token_confirmacion: 'tk2', confirmo_asistencia: null });
+  const r = await http('POST', `/confirmar/${b.id}/tk2`);
+  assert.equal(r.status, 200);
+  const x = leer(b.id);
+  assert.equal(x.confirmo_asistencia, 1);
+  assert.equal(x.token_confirmacion, null);
+});
+
+test('GET /rechazar no muta; POST /rechazar marca pendiente de reagendar', async () => {
+  const b = ocupado(diaNuevo(), '09:00', { token_confirmacion: 'tk3', confirmo_asistencia: null });
+  const g = await http('GET', `/rechazar/${b.id}/tk3`);
+  assert.equal(g.status, 200);
+  assert.match(g.texto, /<form method="POST"/);
+  assert.equal(leer(b.id).pendiente_reagendar, 0);
+  assert.equal(leer(b.id).token_confirmacion, 'tk3');
+  const p = await http('POST', `/rechazar/${b.id}/tk3`);
+  assert.equal(p.status, 200);
+  const x = leer(b.id);
+  assert.equal(x.pendiente_reagendar, 1);
+  assert.equal(x.confirmo_asistencia, 0);
+  assert.equal(x.token_confirmacion, null);
+});
+
+test('confirmar/rechazar con token invalido responde 404 (GET y POST)', async () => {
+  const b = ocupado(diaNuevo(), '09:00', { token_confirmacion: 'tk4' });
+  assert.equal((await http('GET', `/confirmar/${b.id}/malo`)).status, 404);
+  assert.equal((await http('POST', `/confirmar/${b.id}/malo`)).status, 404);
+  assert.equal((await http('POST', `/rechazar/${b.id}/malo`)).status, 404);
+  assert.equal(leer(b.id).token_confirmacion, 'tk4');
+});
