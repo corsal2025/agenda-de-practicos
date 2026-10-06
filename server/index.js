@@ -1114,7 +1114,8 @@ app.post('/api/papelera/vaciar', wrap((req, res) => {
 // ---------- IMPORT / EXPORT / BACKUP ----------
 app.post('/api/import', auth.soloAdmin, subir.single('archivo'), wrap((req, res) => {
   const limpiar = String(req.body && req.body.limpiar) === 'true' || (req.body && req.body.limpiar === true) || (req.body && req.body.limpiar === '1');
-  if (!limpiar) backupMod.backup('pre-import');
+  // Siempre se respalda antes de importar; con limpiar=true es aun mas importante (borra todo).
+  backupMod.backup('pre-import');
 
   let r;
   try {
