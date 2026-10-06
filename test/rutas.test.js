@@ -76,6 +76,12 @@ const ocupado = (fecha, hora, extra = {}, examinador_id = 1) => slot(fecha, hora
   token_confirmacion: 'tokenviejo', correo_confirmacion_enviado: 1, correo_recordatorio_enviado: 1,
   ...extra,
 }, examinador_id);
+// Con correo, dar hora genera un token NUEVO para la confirmacion: lo que importa
+// es que el token viejo de la persona anterior no sobreviva.
+const tokenRenovado = (b, viejo) => {
+  assert.notEqual(b.token_confirmacion, viejo, 'el token viejo no debe sobrevivir');
+  assert.equal(b.correo_recordatorio_enviado, 0, 'correo_recordatorio_enviado debe quedar 0');
+};
 const sinTokens = (b) => {
   assert.equal(b.token_confirmacion, null, 'token_confirmacion debe quedar NULL');
   assert.equal(b.correo_confirmacion_enviado, 0, 'correo_confirmacion_enviado debe quedar 0');
@@ -137,18 +143,18 @@ test('PUT con bloqueado=true limpia token y banderas', async () => {
 
 test('PUT que cambia a otra persona resetea token y banderas', async () => {
   const b = ocupado(diaNuevo(), '09:00');
-  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Otra Persona', clase: 'B' });
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Otra Persona', clase: 'B', correo: 'otra@x.cl' });
   assert.equal(r.status, 200, r.texto);
   const x = leer(b.id);
   assert.equal(x.nombre, 'OTRA PERSONA');
-  sinTokens(x);
+  tokenRenovado(x, 'tokenviejo');
 });
 
 test('PUT sobre un bloque libre con token residual lo resetea', async () => {
   const b = slot(diaNuevo(), '09:00', { token_confirmacion: 'residual', correo_confirmacion_enviado: 1 });
-  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B' });
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B', correo: 'maria@x.cl' });
   assert.equal(r.status, 200, r.texto);
-  sinTokens(leer(b.id));
+  tokenRenovado(leer(b.id), 'residual');
 });
 
 test('PUT de la misma persona en el mismo bloque NO resetea token ni banderas', async () => {
@@ -201,7 +207,7 @@ test('el desbloqueo explicito (liberar) sigue funcionando y luego se puede agend
   const b = slot(diaNuevo(), '09:00', { bloqueado: 1, bloqueo_motivo: 'TERRENO' });
   assert.equal((await api('POST', `/agenda/${b.id}/liberar`, { motivo: 'Desbloqueo manual' })).status, 200);
   assert.equal(leer(b.id).bloqueado, 0);
-  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B' });
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B', correo: 'maria@x.cl' });
   assert.equal(r.status, 200, r.texto);
 });
 
@@ -385,7 +391,7 @@ test('restaurar desde papelera sobre un bloque ocupado responde 409 con mensaje 
   const b = ocupado(diaNuevo(), '09:00');
   await api('POST', `/agenda/${b.id}/liberar`, {});
   const entrada = db.prepare('SELECT id FROM papelera WHERE agenda_id = ? ORDER BY id DESC').get(b.id);
-  await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B' });
+  await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B', correo: 'maria@x.cl' });
   const r = await api('POST', `/papelera/${entrada.id}/restaurar`, {});
   assert.equal(r.status, 409);
   assert.match(r.datos.error, /ya esta ocupado/);
@@ -486,8 +492,8 @@ test('sin RUT, el mismo nombre normalizado es la misma persona; otro RUT es otra
   await api('PUT', `/agenda/${a.id}`, { nombre: 'Juan  Perez', clase: 'B' });
   assert.equal(leer(a.id).token_confirmacion, 'tokenviejo');
   const b = ocupado(diaNuevo(), '09:00');
-  await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'JUAN PEREZ', clase: 'B' });
-  sinTokens(leer(b.id));
+  await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'JUAN PEREZ', clase: 'B', correo: 'juan2@x.cl' });
+  tokenRenovado(leer(b.id), 'tokenviejo');
 });
 
 test('el flag de correo enviado no se marca si el bloque fue reasignado durante el envio', async () => {
@@ -515,4 +521,23 @@ test('ocupadosDependientes trata rut/nombre vacios como libres', () => {
   slot(dia, '12:30');
   db.prepare("UPDATE agenda SET nombre='X' WHERE fecha=? AND hora='13:30'").run(dia);
   assert.equal(pesada.ocupadosDependientes(dia, 1).length, 1);
+});
+
+// ---------- correo obligatorio para dar hora ----------
+test('no se da hora sin correo o con correo invalido', async () => {
+  const b = slot(diaNuevo(), '09:00');
+  let r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B' });
+  assert.equal(r.status, 400);
+  assert.match(r.datos.error, /Falta el correo/);
+  r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B', correo: 'xx' });
+  assert.equal(r.status, 400);
+  assert.match(r.datos.error, /formato inválido/);
+  r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B', correo: 'm@x.cl' });
+  assert.equal(r.status, 200, r.texto);
+});
+
+test('una cita antigua sin correo se puede seguir editando', async () => {
+  const b = ocupado(diaNuevo(), '09:00', { correo: null });
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '11.111.111-1', nombre: 'JUAN PEREZ', clase: 'B', comentarios: 'nota' });
+  assert.equal(r.status, 200, r.texto);
 });
