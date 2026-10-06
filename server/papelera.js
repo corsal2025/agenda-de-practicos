@@ -1,6 +1,9 @@
 'use strict';
 const { db } = require('./db');
 
+// Error con estado HTTP: el manejador de errores del servidor lo muestra tal cual.
+function error(msg, status) { const e = new Error(msg); e.status = status; return e; }
+
 const CAMPOS = [
   'rut', 'nombre', 'clase', 'contacto', 'correo', 'tipo_cita', 'motivo_reagendamiento',
   'lista_espera', 'intento', 'funcionario_id', 'fecha_inicio_tramite', 'confirmo_asistencia',
@@ -38,12 +41,12 @@ function listar(limite = 50) {
 // Restaura una entrada al bloque original SOLO si sigue libre.
 function restaurar(id) {
   const row = db.prepare('SELECT * FROM papelera WHERE id = ?').get(id);
-  if (!row) throw new Error('Entrada de papelera no encontrada');
+  if (!row) throw error('Entrada de papelera no encontrada', 404);
   const d = JSON.parse(row.datos);
   const destino = db.prepare('SELECT * FROM agenda WHERE id = ?').get(row.agenda_id);
-  if (!destino) throw new Error('El bloque original ya no existe');
+  if (!destino) throw error('El bloque original ya no existe', 404);
   if (destino.rut || destino.nombre || destino.bloqueado) {
-    throw new Error('El bloque original ya esta ocupado; no se puede restaurar automaticamente');
+    throw error('El bloque original ya esta ocupado; no se puede restaurar automaticamente', 409);
   }
   const sets = CAMPOS.map((c) => `${c} = @${c}`).join(', ');
   const params = { id: row.agenda_id };
@@ -56,7 +59,7 @@ function restaurar(id) {
 // Borra una entrada puntual (no se puede deshacer).
 function eliminar(id) {
   const r = db.prepare('DELETE FROM papelera WHERE id = ?').run(id);
-  if (!r.changes) throw new Error('Entrada de papelera no encontrada');
+  if (!r.changes) throw error('Entrada de papelera no encontrada', 404);
 }
 
 // Vacia toda la papelera (no se puede deshacer).

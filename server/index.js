@@ -1117,16 +1117,23 @@ app.post('/api/import', auth.soloAdmin, subir.single('archivo'), wrap((req, res)
   if (!limpiar) backupMod.backup('pre-import');
 
   let r;
-  if (req.body && req.body.hojas && typeof req.body.hojas === 'object') {
-    r = importar(req.body.hojas, { limpiar });
-  } else if (req.file) {
-    try {
-      r = importar(req.file.path, { limpiar });
-    } finally {
-      fs.unlink(req.file.path, () => {});
+  try {
+    if (req.body && req.body.hojas && typeof req.body.hojas === 'object') {
+      r = importar(req.body.hojas, { limpiar });
+    } else if (req.file) {
+      try {
+        r = importar(req.file.path, { limpiar });
+      } finally {
+        fs.unlink(req.file.path, () => {});
+      }
+    } else {
+      throw bad('Sube un archivo .xlsx o .xls');
     }
-  } else {
-    throw bad('Sube un archivo .xlsx o .xls');
+  } catch (err) {
+    // Un archivo ilegible/invalido es un error del usuario: se informa el motivo (admin).
+    if (err.status) throw err;
+    console.error('[IMPORT]', err);
+    throw bad(`No se pudo importar el archivo: ${err.message}`);
   }
   logReq(req, null, 'importar', JSON.stringify(r));
   res.json({ ok: true, resumen: r });
@@ -1148,11 +1155,18 @@ app.get('/api/movimientos', wrap((req, res) => {
 
 // ---------- errores ----------
 app.use((err, req, res, next) => {
-  console.error(`[HTTP ERROR] ${req.method} ${req.url}:`, err.message || err);
-  const cuerpo = { error: err.message || 'Error interno' };
+  if (res.headersSent) return next(err);
+  // Con status: error previsto (bad(), validaciones): su mensaje llega a la UI.
+  // Sin status: error inesperado (SQL, bug): se registra y al cliente solo le llega un texto generico.
+  if (err.status) {
+    console.error(`[HTTP ERROR] ${req.method} ${req.url}:`, err.message || err);
+  } else {
+    console.error(`[HTTP ERROR] ${req.method} ${req.url}:`, err);
+  }
+  const cuerpo = { error: err.status ? (err.message || 'Error') : 'Error interno del servidor' };
   if (err.bloque) cuerpo.bloque = err.bloque;
   if (err.login) cuerpo.login = true;
-  res.status(err.status || 400).json(cuerpo);
+  res.status(err.status || 500).json(cuerpo);
 });
 
 function ipsLan() {

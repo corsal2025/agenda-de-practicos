@@ -361,3 +361,35 @@ test('la plantilla de correo escapa los datos del postulante', () => {
   assert.ok(html.includes('href="http://x/c?a=1&amp;b=2"'));
   assert.ok(text.includes(mal), 'la version texto plano no se escapa');
 });
+
+// ---------- 12) manejador de errores ----------
+test('un error inesperado responde 500 generico sin filtrar el detalle interno', async () => {
+  // Renombrar un examinador a un nombre ya existente viola UNIQUE (error de SQLite, sin status).
+  const r = await api('PUT', '/examinadores/1', { nombre: 'DOMINGO NAVARRO' });
+  assert.equal(r.status, 500);
+  assert.equal(r.datos.error, 'Error interno del servidor');
+});
+
+test('los errores previstos (bad) conservan su estado y mensaje', async () => {
+  const r = await api('GET', '/agenda/99999999');
+  assert.equal(r.status, 404);
+  assert.equal(r.datos.error, 'Bloque no encontrado');
+  const r2 = await api('POST', '/papelera/99999999/restaurar', {});
+  assert.equal(r2.status, 404);
+  assert.match(r2.datos.error, /papelera no encontrada/i);
+});
+
+test('restaurar desde papelera sobre un bloque ocupado responde 409 con mensaje util', async () => {
+  const b = ocupado(diaNuevo(), '09:00');
+  await api('POST', `/agenda/${b.id}/liberar`, {});
+  const entrada = db.prepare('SELECT id FROM papelera WHERE agenda_id = ? ORDER BY id DESC').get(b.id);
+  await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B' });
+  const r = await api('POST', `/papelera/${entrada.id}/restaurar`, {});
+  assert.equal(r.status, 409);
+  assert.match(r.datos.error, /ya esta ocupado/);
+});
+
+test('importar con un archivo/fuente invalido responde 400 con el motivo', async () => {
+  const r = await api('POST', '/import', { hojas: 'no-es-un-objeto' });
+  assert.equal(r.status, 400);
+});
