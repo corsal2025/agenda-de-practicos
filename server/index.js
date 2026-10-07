@@ -24,7 +24,6 @@ const correo = require('./correo');
 const { esc } = require('./html');
 const recordatorios = require('./recordatorios');
 const auth = require('./auth');
-const usuarios = require('./usuarios');
 const rut = require('./rut');
 const telefono = require('./telefono');
 
@@ -40,7 +39,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(auth.middleware);
 app.use(express.static(path.join(RAIZ, 'public'), {
   etag: false, lastModified: false,
   setHeaders: (res, ruta) => {
@@ -50,19 +48,6 @@ app.use(express.static(path.join(RAIZ, 'public'), {
   },
 }));
 const subir = multer({ dest: path.join(os.tmpdir(), 'agenda-uploads'), limits: { fileSize: 25 * 1024 * 1024 } });
-
-// ---------- login (antes del guard) ----------
-app.post('/api/login', (req, res) => auth.login(req, res));
-app.get('/api/sesion', (req, res) => {
-  res.json({
-    funcionario: (req.session && req.session.funcionario) || null,
-    sin_login: auth.SIN_LOGIN,
-    logo: logoDisponible(),
-    organismo: process.env.AGENDA_ORGANISMO || 'Municipalidad de Valparaíso',
-    unidad: process.env.AGENDA_UNIDAD || 'Departamento de Licencias de Conducir',
-  });
-});
-app.post('/api/logout', (req, res) => auth.logout(req, res));
 
 // ---------- confirmar / rechazar por correo (publico, sin login) ----------
 // `mensaje` y `extra` son HTML: quien llama debe escapar los datos que interpole.
@@ -309,8 +294,6 @@ app.post('/reagendar/:id/:token/elegir', express.urlencoded({ extended: true }),
 } });
 
 
-app.use(auth.guard);
-
 // Marca la confirmacion como enviada solo si el bloque sigue con el mismo ocupante/token al
 // que se le envio (el SMTP puede tardar y el bloque pudo reasignarse mientras tanto).
 function marcarConfirmacionEnviada(b) {
@@ -348,25 +331,13 @@ function enCatalogo(tipo, valor) {
 
 // ---------- META ----------
 app.get('/api/meta', wrap((req, res) => {
-  const actor = actorDe(req);
-  let funcionario_id = (req.session && req.session.funcionario_id) || null;
-  if (!funcionario_id && actor) {
-    const f = db.prepare('SELECT id FROM funcionarios WHERE LOWER(nombre) = LOWER(?) OR LOWER(usuario) = LOWER(?)').get(actor, actor);
-    if (f) {
-      funcionario_id = f.id;
-      if (req.session) req.session.funcionario_id = f.id;
-    }
-  }
   res.json({
     horas: HORAS,
     hora_d_a5: HORA_D_A5,
     clases_pesadas: CLASES_PESADAS,
     hoy: hoyISO(),
-    usuario: actor,
-    funcionario_id,
-    rol: (req.session && req.session.rol) || null,
     examinadores: db.prepare('SELECT id, nombre, activo FROM examinadores ORDER BY nombre').all(),
-    funcionarios: db.prepare('SELECT id, nombre, activo, usuario, rol FROM funcionarios ORDER BY nombre').all(),
+    funcionarios: db.prepare('SELECT id, nombre, activo FROM funcionarios ORDER BY nombre').all(),
     catalogos: {
       clase: catalogo('clase'),
       tipo_cita: catalogo('tipo_cita'),
@@ -424,7 +395,7 @@ app.get('/api/agenda/:id', wrap((req, res) => {
   res.json(row);
 }));
 
-app.post('/api/agenda/generar', auth.soloAdmin, wrap((req, res) => {
+app.post('/api/agenda/generar', wrap((req, res) => {
   const { desde, hasta } = req.body || {};
   if (!desde || !hasta) throw bad('Indica desde y hasta (YYYY-MM-DD)');
   const r = generar(desde, hasta);
@@ -522,14 +493,6 @@ app.put('/api/agenda/:id', wrap((req, res) => {
 
   let funcionario_id = body.funcionario_id ? Number(body.funcionario_id) : null;
   if (!funcionario_id && body.funcionario_nombre) funcionario_id = upsertFuncionario(String(body.funcionario_nombre).trim().toUpperCase());
-  if (!funcionario_id) {
-    funcionario_id = (req.session && req.session.funcionario_id) || null;
-    if (!funcionario_id && actorDe(req)) {
-      const f = db.prepare('SELECT id FROM funcionarios WHERE LOWER(nombre) = LOWER(?) OR LOWER(usuario) = LOWER(?)').get(actorDe(req), actorDe(req));
-      if (f) funcionario_id = f.id;
-    }
-  }
-  // Auto session funcionario fallback
 
   const nombre = body.nombre ? String(body.nombre).trim().replace(/\s+/g, ' ').toUpperCase() : null;
   // Dar hora (bloque libre -> ocupado, o cambiar la persona) exige correo valido.
@@ -1080,7 +1043,7 @@ app.get('/api/errores', wrap((req, res) => res.json(reporte())));
 app.get('/api/analitica', wrap((req, res) => res.json(resumen(req.query.desde, req.query.hasta))));
 
 // ---------- CATALOGOS ----------
-app.post('/api/catalogos', auth.soloAdmin, wrap((req, res) => {
+app.post('/api/catalogos', wrap((req, res) => {
   const { tipo, valor } = req.body || {};
   if (!tipo || !valor) throw bad('Indica tipo y valor');
   const orden = (db.prepare('SELECT COALESCE(MAX(orden),0)+1 n FROM catalogos WHERE tipo=?').get(tipo)).n;
@@ -1088,72 +1051,44 @@ app.post('/api/catalogos', auth.soloAdmin, wrap((req, res) => {
     .run(tipo, String(valor).trim().toUpperCase(), orden);
   res.json({ ok: true });
 }));
-app.delete('/api/catalogos', auth.soloAdmin, wrap((req, res) => {
+app.delete('/api/catalogos', wrap((req, res) => {
   db.prepare('UPDATE catalogos SET activo = 0 WHERE tipo = ? AND valor = ?').run(req.query.tipo, req.query.valor);
   res.json({ ok: true });
 }));
 
 // ---------- FERIADOS ----------
 app.get('/api/feriados', wrap((req, res) => res.json(feriados.listar())));
-app.post('/api/feriados', auth.soloAdmin, wrap((req, res) => {
+app.post('/api/feriados', wrap((req, res) => {
   const { fecha, nombre } = req.body || {};
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha || '')) throw bad('Fecha invalida (YYYY-MM-DD)');
   feriados.agregar(fecha, nombre);
   logReq(req, null, 'editar', `feriado + ${fecha}`);
   res.json({ ok: true });
 }));
-app.delete('/api/feriados', auth.soloAdmin, wrap((req, res) => {
+app.delete('/api/feriados', wrap((req, res) => {
   feriados.quitar(req.query.fecha);
   logReq(req, null, 'editar', `feriado - ${req.query.fecha}`);
   res.json({ ok: true });
 }));
 
 // ---------- EXAMINADORES / FUNCIONARIOS ----------
-app.post('/api/examinadores', auth.soloAdmin, wrap((req, res) => {
+app.post('/api/examinadores', wrap((req, res) => {
   res.json({ ok: true, id: upsertExaminador(String((req.body || {}).nombre || '').trim().toUpperCase()) });
 }));
-app.put('/api/examinadores/:id', auth.soloAdmin, wrap((req, res) => {
+app.put('/api/examinadores/:id', wrap((req, res) => {
   const { nombre, activo } = req.body || {};
   db.prepare('UPDATE examinadores SET nombre = COALESCE(?, nombre), activo = COALESCE(?, activo) WHERE id = ?')
     .run(nombre ? nombre.toUpperCase() : null, activo == null ? null : (activo ? 1 : 0), Number(req.params.id));
   res.json({ ok: true });
 }));
-app.post('/api/funcionarios', auth.soloAdmin, wrap((req, res) => {
+app.post('/api/funcionarios', wrap((req, res) => {
   res.json({ ok: true, id: upsertFuncionario(String((req.body || {}).nombre || '').trim().toUpperCase()) });
 }));
-app.put('/api/funcionarios/:id', auth.soloAdmin, wrap((req, res) => {
+app.put('/api/funcionarios/:id', wrap((req, res) => {
   const id = Number(req.params.id);
-  const { nombre, activo, usuario, clave, rol } = req.body || {};
+  const { nombre, activo } = req.body || {};
   db.prepare('UPDATE funcionarios SET nombre = COALESCE(?, nombre), activo = COALESCE(?, activo) WHERE id = ?')
     .run(nombre ? nombre.toUpperCase() : null, activo == null ? null : (activo ? 1 : 0), id);
-  if (usuario != null) {
-    const limpio = String(usuario).trim();
-    if (limpio && !usuarios.usuarioDisponible(limpio, id)) throw bad('Ese usuario ya esta en uso por otra persona.');
-    db.prepare('UPDATE funcionarios SET usuario = ? WHERE id = ?').run(limpio || null, id);
-  }
-  if (clave) {
-    if (String(clave).length < 4) throw bad('La contraseña debe tener al menos 4 caracteres.');
-    db.prepare('UPDATE funcionarios SET clave_hash = ? WHERE id = ?').run(usuarios.hashClave(clave), id);
-  }
-  if (rol) {
-    if (!['admin', 'staff'].includes(rol)) throw bad('Rol no valido');
-    db.prepare('UPDATE funcionarios SET rol = ? WHERE id = ?').run(rol, id);
-  }
-  res.json({ ok: true });
-}));
-
-// Self-service: cualquier persona logueada con cuenta individual puede
-// cambiar su propia contraseña (sin necesitar rol admin).
-app.put('/api/mi-clave', wrap((req, res) => {
-  const id = req.session && req.session.funcionario_id;
-  if (!id) throw bad('Tu sesión no tiene una cuenta individual asociada. Pide a un administrador que te cree un usuario en Datos → Funcionarios.');
-  const { clave_actual, clave_nueva } = req.body || {};
-  if (!clave_nueva || String(clave_nueva).length < 4) throw bad('La contraseña nueva debe tener al menos 4 caracteres.');
-  const u = db.prepare('SELECT * FROM funcionarios WHERE id = ?').get(id);
-  if (!u) throw bad('Cuenta no encontrada', 404);
-  if (u.clave_hash && !usuarios.verificarClave(clave_actual, u.clave_hash)) throw bad('La contraseña actual no es correcta.');
-  db.prepare('UPDATE funcionarios SET clave_hash = ? WHERE id = ?').run(usuarios.hashClave(clave_nueva), id);
-  logReq(req, null, 'editar', 'cambió su propia contraseña');
   res.json({ ok: true });
 }));
 
@@ -1176,7 +1111,7 @@ app.post('/api/papelera/vaciar', wrap((req, res) => {
 }));
 
 // ---------- IMPORT / EXPORT / BACKUP ----------
-app.post('/api/import', auth.soloAdmin, subir.single('archivo'), wrap((req, res) => {
+app.post('/api/import', subir.single('archivo'), wrap((req, res) => {
   const limpiar = String(req.body && req.body.limpiar) === 'true' || (req.body && req.body.limpiar === true) || (req.body && req.body.limpiar === '1');
   // Siempre se respalda antes de importar; con limpiar=true es aun mas importante (borra todo).
   backupMod.backup('pre-import');
@@ -1253,7 +1188,6 @@ function iniciar() {
     console.log(`\n  Agenda de Practicos`);
     console.log(`  Este PC:        http://localhost:${PUERTO}`);
     for (const ip of ipsLan()) console.log(`  Otros PC (LAN): http://${ip}:${PUERTO}`);
-    console.log(auth.SIN_LOGIN ? '  Modo sin login\n' : '  Login con PIN\n');
     const n = db.prepare('SELECT COUNT(*) n FROM agenda').get().n;
     if (!n) console.log('  Base vacia. Importa el Excel desde "Datos" o corre: npm run migrar\n');
     backupMod.programar();

@@ -14,7 +14,6 @@
     "node": ">=22.5"
   },
   "dependencies": {
-    "cookie-session": "^2.1.1",
     "express": "^5.2.1",
     "multer": "^2.3.0",
     "nodemailer": "^10.0.9",

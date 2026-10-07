@@ -11,7 +11,6 @@ const tmpDb = path.join(os.tmpdir(), `agenda-rutas-${Date.now()}.db`);
 const tmpBackups = fs.mkdtempSync(path.join(os.tmpdir(), 'agenda-rutas-bk-'));
 process.env.AGENDA_DB = tmpDb;
 process.env.AGENDA_BACKUP_DIR = tmpBackups;
-process.env.AGENDA_SIN_LOGIN = '1';
 
 // Correo falso: nunca se envia nada real (el .env local podria traer SMTP).
 const correo = require('../server/correo');
@@ -540,4 +539,21 @@ test('una cita antigua sin correo se puede seguir editando', async () => {
   const b = ocupado(diaNuevo(), '09:00', { correo: null });
   const r = await api('PUT', `/agenda/${b.id}`, { rut: '11.111.111-1', nombre: 'JUAN PEREZ', clase: 'B', comentarios: 'nota' });
   assert.equal(r.status, 200, r.texto);
+});
+
+// ---------- sin login ----------
+test('no existe login: /api/login, /api/logout, /api/sesion y /api/mi-clave responden 404', async () => {
+  assert.equal((await api('POST', '/login', { usuario: 'x', clave: 'y' })).status, 404);
+  assert.equal((await api('POST', '/logout')).status, 404);
+  assert.equal((await api('GET', '/sesion')).status, 404);
+  assert.equal((await api('PUT', '/mi-clave', { clave_nueva: 'abcd' })).status, 404);
+});
+
+test('las rutas que eran de administrador funcionan sin ninguna sesion', async () => {
+  const meta = await api('GET', '/meta');
+  assert.equal(meta.status, 200);
+  assert.ok(meta.datos.logo !== undefined && meta.datos.organismo && meta.datos.unidad);
+  const fecha = diaNuevo();
+  assert.equal((await api('POST', '/feriados', { fecha, nombre: 'PRUEBA SIN LOGIN' })).status, 200);
+  assert.equal((await api('DELETE', `/feriados?fecha=${fecha}`)).status, 200);
 });

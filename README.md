@@ -51,13 +51,15 @@ npm start
 
 Abre el navegador en **http://localhost:4900**. Para detener: cerrar la ventana / `Ctrl + C`.
 
-Instalación en el PC de la agenda, login, arranque automático y acceso por red:
+Instalación en el PC de la agenda, arranque automático y acceso por red:
 ver **[INSTALACION.md](INSTALACION.md)**.
 
-## Login
+## Acceso
 
-Por defecto pide un PIN compartido (`1234`, cambiable con `AGENDA_PIN`). Cada acción
-queda registrada con el nombre de quien la hizo. Para desactivarlo: `AGENDA_SIN_LOGIN=1`.
+La aplicación **no tiene login**: abre directo, sin pedir usuario ni contraseña. El control
+de acceso lo resuelve la aplicación padre que la incorpora, por lo que el servidor **no debe
+exponerse directamente en la red** (solo accesible desde la aplicación padre o desde el propio PC).
+Las acciones quedan registradas en la bitácora con el actor fijo `MODO SIN LOGIN`.
 
 ---
 
@@ -120,7 +122,7 @@ correos y teléfonos. Los archivos `.xlsx` / `.csv` en la raíz también están 
 ```
 server/
   index.js       servidor Express y rutas de la API
-  auth.js        login por PIN (cookie de sesión)
+  auth.js        actor de la bitácora (sin login)
   db.js          conexión SQLite, semillas y migración de columnas
   schema.sql     esquema de la base
   config.js      horarios, clases, semillas

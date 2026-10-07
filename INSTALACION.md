@@ -73,17 +73,11 @@ set AGENDA_ORGANISMO=Municipalidad de Valparaíso
 set AGENDA_UNIDAD=Departamento de Licencias de Conducir
 ```
 
-### 6. PIN de acceso
+### 6. Control de acceso
 
-Por defecto el PIN es `1234`. Para cambiarlo, editar `iniciar.bat` y agregar
-antes de `node server\index.js`:
-
-```bat
-set AGENDA_PIN=elpin-que-quieras
-```
-
-Cada acción queda registrada con el nombre que la persona escribe al entrar
-(pestaña **Datos → Últimos movimientos**).
+La aplicación no tiene login ni PIN: cualquiera que llegue al puerto entra directo. La
+autenticación la hace la aplicación padre, así que no expongas el servidor directamente
+en la red (limita el puerto por firewall o déjalo solo en `localhost`).
 
 ### 7. Que arranque solo con Windows (recomendado para el servidor)
 
@@ -96,7 +90,6 @@ Cada acción queda registrada con el nombre que la persona escribe al entrar
 ```bat
 nssm install AgendaPracticos "C:\Program Files\nodejs\node.exe" "C:\agenda-practicos\server\index.js"
 nssm set AgendaPracticos AppDirectory "C:\agenda-practicos"
-nssm set AgendaPracticos AppEnvironmentExtra AGENDA_PIN=elpin
 nssm start AgendaPracticos
 ```
 
@@ -136,7 +129,7 @@ netsh advfirewall firewall add rule name="Agenda de Practicos" dir=in action=all
 ### 3. En cada PC cliente
 
 Solo abrir el navegador en `http://IP-DEL-SERVIDOR:4900` y crear un acceso
-directo / marcador. **Nada que instalar.** Dejar el **login con PIN activo**.
+directo / marcador. **Nada que instalar.** Recuerda que la app no tiene login: limita el acceso por red.
 
 ---
 

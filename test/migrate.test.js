@@ -8,7 +8,6 @@ const path = require('node:path');
 // Base de datos temporal ANTES de requerir los modulos del servidor.
 const tmpDb = path.join(os.tmpdir(), `agenda-test-${Date.now()}.db`);
 process.env.AGENDA_DB = tmpDb;
-process.env.AGENDA_SIN_LOGIN = '1';
 
 const XLSX = require('xlsx');
 const { importar } = require('../server/migrate');

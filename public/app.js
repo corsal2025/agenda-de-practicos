@@ -24,7 +24,6 @@ async function pedir(path, opts) {
   });
   const txt = await res.text();
   const data = txt ? JSON.parse(txt) : null;
-  if (res.status === 401 && data && data.login) { vaciarCache(); pantallaLogin(); throw new Error('Sesion requerida'); }
   if (!res.ok) {
     const e = new Error(data && data.error ? data.error : `Error ${res.status}`);
     e.data = data; e.status = res.status;
@@ -235,63 +234,6 @@ function logoHtml(cls) {
     : ESCUDO_FALLBACK.replace('class="escudo"', `class="${cls}"`);
 }
 
-/* ================= login ================= */
-const ICO = {
-  cal: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="14" height="13" rx="1.5"/><path d="M3 8h14M7 2v4M13 2v4"/></svg>',
-  check: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 10l4 4 8-9"/></svg>',
-  reloj: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3v7l4 2M17 10A7 7 0 113 10a7 7 0 0114 0z"/></svg>',
-};
-async function pantallaLogin() {
-  try {
-    const s = await (await fetch('/api/sesion')).json();
-    MARCA = { logo: s.logo, organismo: s.organismo || MARCA.organismo, unidad: s.unidad || MARCA.unidad };
-  } catch (_) { /* usa los valores por defecto */ }
-  const root = $('#modal-root');
-  root.innerHTML = '';
-  const ov = h(`<div class="login-split">
-    <div class="login-marca">
-      <div class="lm-cab">
-        ${MARCA.logo
-          ? `<img src="${MARCA.logo}" alt="${esc(MARCA.organismo)}" class="lm-logo">`
-          : `<svg width="42" height="42" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-               <path d="M20 2l15 5v11c0 9.5-6.2 16.8-15 20-8.8-3.2-15-10.5-15-20V7l15-5z" fill="#fff" opacity=".14"></path>
-               <path d="M13 21l4.5 4.5L27 15" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-             <span class="lm-org">${esc(MARCA.organismo)} · ${esc(MARCA.unidad)}</span>`}
-      </div>
-      <h1>Agenda de Prácticos</h1>
-      <p>Gestión de la agenda de exámenes prácticos: reserva de citas, reagendamiento, control de asistencia y reportes.</p>
-      <div class="lm-lista">
-        <div>${ICO.cal} 33 bloques diarios por 3 examinadores</div>
-        <div>${ICO.check} Validación automática de RUT y reglas de clase</div>
-        <div>${ICO.reloj} Cada cambio queda registrado con responsable</div>
-      </div>
-    </div>
-    <div class="login-acceso">
-      <div class="caja">
-        <h2>Ingreso al sistema</h2>
-        <p class="intro">Identifícate para registrar tus cambios en la bitácora.</p>
-        <div class="campo"><label>Usuario</label><input id="lg-nombre" autocomplete="username"></div>
-        <div class="campo"><label>Contraseña</label><input id="lg-pin" type="password" autocomplete="current-password"></div>
-        <button class="btn" id="lg-ok">Entrar
-          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8h9M8 4l4 4-4 4"/></svg></button>
-        <div class="login-nota">Departamento de Licencias de Conducir · uso interno</div>
-      </div>
-    </div>
-  </div>`);
-  root.appendChild(ov);
-  const entrar = async () => {
-    try {
-      await api('/login', { method: 'POST', body: { usuario: $('#lg-nombre').value, clave: $('#lg-pin').value } });
-      cerrarModal();
-      init({ forzarAgenda: true });
-    } catch (e) { toast(e.message, 'err'); }
-  };
-  $('#lg-ok').onclick = entrar;
-  $('#lg-pin').addEventListener('keydown', (e) => { if (e.key === 'Enter') entrar(); });
-  $('#lg-nombre').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#lg-pin').focus(); });
-  $('#lg-nombre').focus();
-}
-
 /* ================= router ================= */
 const tabs = {
   agenda: renderAgenda, disponibles: renderDisponibles, reagendar: renderReagendar,
@@ -378,14 +320,6 @@ function funcionarioActual() {
     const f = (META.funcionarios || []).find((x) => x.id === META.funcionario_id);
     if (f) return f;
   }
-  if (META.usuario) {
-    const uNorm = String(META.usuario).trim().toLowerCase();
-    const f = (META.funcionarios || []).find((x) =>
-      (x.nombre && x.nombre.trim().toLowerCase() === uNorm) ||
-      (x.usuario && x.usuario.trim().toLowerCase() === uNorm)
-    );
-    if (f) return f;
-  }
   return (META.funcionarios || []).find((f) => f.activo) || null;
 }
 
@@ -396,8 +330,7 @@ function formularioCita(b, alGuardar) {
   const fAsignado = (b.funcionario_id && (META.funcionarios || []).find((f) => f.id === b.funcionario_id))
     || actual
     || (b.funcionario ? { id: b.funcionario_id || null, nombre: b.funcionario } : null)
-    || { id: null, nombre: META.usuario || 'Funcionario en sesión' };
-  const esAdmin = META.rol === 'admin';
+    || { id: null, nombre: 'Sin asignar' };
   const clasesIniciales = clasesDe(b.clase);
   const esPesada = clasesIniciales.some((cl) => META.clases_pesadas.includes(cl));
   const tieneCita = Boolean(b && (b.rut || b.nombre));
@@ -433,9 +366,9 @@ function formularioCita(b, alGuardar) {
         <span style="font-size:14px">👤</span>
         <span id="txt-f-func" style="font-weight:700;color:var(--tinta);font-size:13px">${esc(fAsignado.nombre)}</span>
         <span class="badge" style="margin-left:auto;font-size:10px;background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;padding:2px 7px;font-weight:600">
-          ${b.funcionario_id ? 'Asignado' : 'Automático por login'}
+          ${b.funcionario_id ? 'Asignado' : 'Por defecto'}
         </span>
-        ${esAdmin ? `<button type="button" class="btn chico sec" id="btn-cambiar-func" style="padding:1px 6px;font-size:11px;margin-left:6px" title="Cambiar funcionario (solo administradores)">Cambiar</button>` : ''}
+        <button type="button" class="btn chico sec" id="btn-cambiar-func" style="padding:1px 6px;font-size:11px;margin-left:6px" title="Cambiar funcionario">Cambiar</button>
       </div>
       <div id="sel-f-func-cont" hidden style="margin-top:4px">
         <select id="f-func-sel" style="width:100%">
@@ -1675,27 +1608,6 @@ async function dialogoDesbloquearDia() {
       $('#desb-ok').disabled = false;
       toast(e.message, 'err');
     }
-  };
-}
-
-function dialogoMiPerfil() {
-  modal('Mi perfil', `
-    <p class="muted" style="margin-top:-.2rem">Usuario: <b>${esc(META.usuario || '')}</b></p>
-    <div class="campo"><label>Contraseña actual</label><input id="mp-actual" type="password" autocomplete="current-password"></div>
-    <div class="campo"><label>Contraseña nueva</label><input id="mp-nueva" type="password" autocomplete="new-password"></div>
-    <div class="campo"><label>Repetir contraseña nueva</label><input id="mp-repetir" type="password" autocomplete="new-password"></div>
-  `, `<button class="btn sec" id="mp-cancel">Cancelar</button>
-      <button class="btn" id="mp-ok">Cambiar contraseña</button>`);
-  $('#mp-cancel').onclick = cerrarModal;
-  $('#mp-ok').onclick = async () => {
-    const nueva = $('#mp-nueva').value;
-    if (nueva.length < 4) return toast('La contraseña nueva debe tener al menos 4 caracteres.', 'err');
-    if (nueva !== $('#mp-repetir').value) return toast('Las contraseñas nuevas no coinciden.', 'err');
-    try {
-      await api('/mi-clave', { method: 'PUT', body: { clave_actual: $('#mp-actual').value, clave_nueva: nueva } });
-      toast('Contraseña actualizada');
-      cerrarModal();
-    } catch (e) { toast(e.message, 'err'); }
   };
 }
 
@@ -3023,9 +2935,7 @@ async function renderPapelera() {
 
 /* ================= tab: DATOS ================= */
 async function renderDatos() {
-  const esAdmin = META.rol === 'admin';
   view.innerHTML = `
-    ${esAdmin ? '' : '<div class="panel aviso">Esta sección es de solo lectura. Los cambios de configuración los hace un administrador.</div>'}
     <div class="panel"><h2>Importar / Exportar</h2>
       <div class="fila">
         <div class="campo"><label>Archivo Excel de origen (.xlsx, .xls)</label><input type="file" id="im-file" accept=".xlsx,.xls,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div>
@@ -3062,7 +2972,6 @@ async function renderDatos() {
       <div class="panel"><h2>Examinadores</h2><div id="ex-cont"></div>
         <div class="fila"><input id="ex-nuevo" placeholder="Nombre"><button class="btn chico" id="ex-add">Agregar</button></div></div>
       <div class="panel"><h2>Funcionarios/as</h2>
-        <p class="muted" style="margin-top:-.4rem">Cuenta individual para entrar al sistema (usuario + contraseña propia).</p>
         <div id="fu-cont"></div>
         <div class="fila"><input id="fu-nuevo" placeholder="Nombre"><button class="btn chico" id="fu-add">Agregar</button></div></div>
     </div>
@@ -3193,42 +3102,11 @@ async function renderDatos() {
   const listarFuncionarios = (cont, arr) => {
     cont.innerHTML = arr.map((x) => `<div class="fila" style="margin-bottom:.4rem;align-items:center">
       <span style="flex:1">${esc(x.nombre)}</span>
-      <input class="fu-usuario" data-id="${x.id}" value="${esc(x.usuario)}" placeholder="usuario" style="max-width:140px">
-      <button class="btn chico sec" data-clave="${x.id}">Contraseña</button>
-      <label><input type="checkbox" class="fu-admin" ${x.rol === 'admin' ? 'checked' : ''} data-id="${x.id}"> admin</label>
       <label><input type="checkbox" class="fu-activo" ${x.activo ? 'checked' : ''} data-id="${x.id}"> activo</label></div>`).join('');
     cont.querySelectorAll('.fu-activo').forEach((el) => {
       el.onchange = async () => {
         await api(`/funcionarios/${el.dataset.id}`, { method: 'PUT', body: { activo: el.checked } });
         META = await api('/meta');
-      };
-    });
-    cont.querySelectorAll('.fu-admin').forEach((el) => {
-      el.onchange = async () => {
-        try {
-          await api(`/funcionarios/${el.dataset.id}`, { method: 'PUT', body: { rol: el.checked ? 'admin' : 'staff' } });
-          toast(el.checked ? 'Ahora es administrador' : 'Ya no es administrador');
-          META = await api('/meta');
-        } catch (e) { toast(e.message, 'err'); el.checked = !el.checked; }
-      };
-    });
-    cont.querySelectorAll('.fu-usuario').forEach((el) => {
-      el.addEventListener('blur', async () => {
-        try {
-          await api(`/funcionarios/${el.dataset.id}`, { method: 'PUT', body: { usuario: el.value.trim() } });
-          toast('Usuario guardado');
-          META = await api('/meta');
-        } catch (e) { toast(e.message, 'err'); }
-      });
-    });
-    cont.querySelectorAll('button[data-clave]').forEach((el) => {
-      el.onclick = async () => {
-        const clave = prompt('Nueva contraseña (mínimo 4 caracteres):');
-        if (!clave) return;
-        try {
-          await api(`/funcionarios/${el.dataset.clave}`, { method: 'PUT', body: { clave } });
-          toast('Contraseña actualizada');
-        } catch (e) { toast(e.message, 'err'); }
       };
     });
   };
@@ -3247,20 +3125,6 @@ async function renderDatos() {
   const mov = await api('/movimientos');
   $('#mov-body').innerHTML = mov.map((m) => `<tr><td class="num c">${esc(fFechaHora(m.ts))}</td><td>${esc(m.accion)}</td><td>${esc(m.actor)}</td><td>${esc(m.detalle)}</td></tr>`).join('');
 
-  // Solo lectura para quien no sea administrador: se deja ver todo, pero no
-  // se puede tocar nada de configuracion (el servidor igual lo rechazaria).
-  if (!esAdmin) {
-    const soloLectura = [
-      '#im-file', '#im-limpiar', '#im-btn',
-      '#gb-desde', '#gb-hasta', '#gb-btn',
-      '#fe-fecha', '#fe-nombre', '#fe-add',
-      '#cat-cont input', '#cat-cont button',
-      '#ex-nuevo', '#ex-add', '#ex-cont input', '#ex-cont button',
-      '#fu-nuevo', '#fu-add', '#fu-cont input', '#fu-cont button',
-      '#fe-cont button',
-    ];
-    soloLectura.forEach((sel) => document.querySelectorAll(sel).forEach((el) => { el.disabled = true; }));
-  }
 }
 
 /* ================= arranque ================= */
@@ -3274,15 +3138,8 @@ async function init({ forzarAgenda = false } = {}) {
           <span class="marca-org">${esc(MARCA.organismo)} · ${esc(MARCA.unidad)}</span>
           <span class="marca-titulo">Agenda de Prácticos</span></span>`;
     const r = META.rango_agenda || {};
-    $('#estado').innerHTML = `${r.desde ? `Agenda ${fFecha(r.desde)} – ${fFecha(r.hasta)} · ` : ''}hoy ${fFecha(META.hoy)}
-      ${META.usuario ? `· <b>${esc(META.usuario)}</b>
-        <button id="mi-perfil" class="btn chico sec" style="padding:.1rem .4rem">mi perfil</button>
-        ` : ''}`;
-    const salir = $('#salir');
-    if (salir) salir.onclick = async () => { await api('/logout', { method: 'POST' }); pantallaLogin(); };
-    const miPerfil = $('#mi-perfil');
-    if (miPerfil) miPerfil.onclick = dialogoMiPerfil;
-    // Al abrir el sistema (o al iniciar sesion) siempre parte en Agenda, aunque la
+    $('#estado').innerHTML = `${r.desde ? `Agenda ${fFecha(r.desde)} – ${fFecha(r.hasta)} · ` : ''}hoy ${fFecha(META.hoy)}`;
+    // Al abrir el sistema siempre parte en Agenda, aunque la
     // URL guardada traiga otra pestaña (#datos, etc.). Solo un F5 conserva la actual.
     // replaceState no dispara hashchange, asi la vista no se dibuja dos veces.
     const esRecarga = performance.getEntriesByType('navigation')[0]?.type === 'reload';
@@ -3293,7 +3150,6 @@ async function init({ forzarAgenda = false } = {}) {
     actualizarBadgeErrores();
     actualizarBadgePorConfirmar();
   } catch (e) {
-    if (e.message === 'Sesion requerida') return;
     view.innerHTML = `<div class="panel"><h2>No se pudo conectar</h2><p>${esc(e.message)}</p></div>`;
   }
 }

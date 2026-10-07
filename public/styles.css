@@ -491,40 +491,6 @@ tbody tr:first-child td { border-top: 0; }
 .toast.ok  { border-left-color: var(--ok); }
 @keyframes entra { from { transform: translateX(14px); opacity: 0; } to { transform: none; opacity: 1; } }
 
-/* ---------- login ---------- */
-.login-split {
-  position: fixed; inset: 0; z-index: 55; display: grid; grid-template-columns: 1.05fr 1fr;
-  background: var(--papel);
-}
-.login-marca {
-  background: var(--azul-900); color: #fff; padding: 3.5rem 4rem;
-  display: flex; flex-direction: column; gap: 1.6rem; position: relative; overflow: hidden;
-}
-.login-marca::after, .login-marca::before {
-  content: ""; position: absolute; border: 1px solid rgba(255, 255, 255, .09); border-radius: 50%;
-}
-.login-marca::after { right: -120px; bottom: -150px; width: 420px; height: 420px; }
-.login-marca::before { right: -50px; bottom: -80px; width: 280px; height: 280px; }
-.login-marca .lm-cab { display: flex; align-items: center; gap: 12px; }
-.login-marca .lm-org { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: rgba(255, 255, 255, .7); }
-.login-marca .lm-logo { height: 58px; width: auto; max-width: 260px; background: #fff; padding: 8px 12px; border-radius: 8px; }
-.login-marca h1 { font-family: var(--serif); font-size: 2rem; font-weight: 700; color: #fff; margin: 0; line-height: 1.15; max-width: 12ch; }
-.login-marca p { font-size: 14.5px; line-height: 1.6; color: rgba(255, 255, 255, .78); max-width: 40ch; margin: 0; }
-.login-marca .lm-lista { display: flex; flex-direction: column; gap: .8rem; font-size: 13.5px; color: rgba(255, 255, 255, .85); }
-.login-marca .lm-lista div { display: flex; align-items: center; gap: .6rem; }
-.login-acceso { display: flex; flex-direction: column; justify-content: center; padding: 3rem 4.5rem; }
-.login-acceso .caja { width: 100%; max-width: 360px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.1rem; }
-.login-acceso h2 { font-family: var(--serif); font-size: 1.35rem; color: var(--azul-900); margin: 0; }
-.login-acceso .intro { font-size: 13px; color: var(--tinta-2); margin: -.6rem 0 .2rem; }
-.login-acceso input { height: 42px; font-size: 14.5px; }
-.login-acceso .btn { height: 44px; font-size: 14px; justify-content: center; }
-.login-nota { font-size: 11.5px; color: var(--tinta-3); text-align: center; border-top: 1px solid var(--linea); padding-top: .9rem; }
-
-@media (max-width: 900px) {
-  .login-split { grid-template-columns: 1fr; }
-  .login-marca { display: none; }
-}
-
 /* ---------- utilidades ---------- */
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .grafico { position: relative; height: 260px; }
@@ -610,7 +576,7 @@ tbody tr:first-child td { border-top: 0; }
 
 /* ---------- impresion ---------- */
 @media print {
-  .barra-nacion, header.top, .no-print, #toast-root, #modal-root, .login-split { display: none !important; }
+  .barra-nacion, header.top, .no-print, #toast-root, #modal-root { display: none !important; }
   html, body { background: #fff !important; color: #000; }
   main { max-width: none; padding: 0; margin: 0; }
   .panel { box-shadow: none; border: 0; padding: 0; margin: 0 0 6mm; }

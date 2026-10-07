@@ -11,7 +11,6 @@ const dirBackups = fs.mkdtempSync(path.join(os.tmpdir(), 'agenda-bk-'));
 process.env.AGENDA_DB = tmpDb;
 process.env.AGENDA_BACKUP_DIR = dirBackups;
 process.env.AGENDA_BACKUPS = '3';
-process.env.AGENDA_SIN_LOGIN = '1';
 
 const { DatabaseSync } = require('node:sqlite');
 const { db } = require('../server/db');
