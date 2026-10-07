@@ -30,3 +30,5 @@ public/screenshot.png
 
 # Credenciales locales (SMTP). NO subir.
 .env
+.dev.vars
+.wrangler/
