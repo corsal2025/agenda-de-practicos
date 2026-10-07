@@ -1597,7 +1597,10 @@ tbody tr:first-child td { border-top: 0; }
 }
 
 /* Guia con muchos pasos: tarjeta acotada al viewport e indicador compacto de seccion */
-.tour-card { max-height: calc(100vh - 32px); overflow-y: auto; }
+/* El scroll va en el cuerpo, no en la tarjeta: asi la flecha (hija de la tarjeta) no se recorta */
+.tour-card { max-height: calc(100vh - 32px); }
+.tour-card-body { max-height: calc(100vh - 200px); overflow-y: auto; }
+.lico-quieto .lico-svg, .lico-quieto .lico-svg * { animation: none !important; }
 .tour-dots { min-width: 0; justify-content: center; }
 .tour-seccion { font-size: 12px; font-weight: 700; color: var(--azul); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .tour-seccion small { font-weight: 600; color: var(--tinta-3); margin-left: .25rem; }

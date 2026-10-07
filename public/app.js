@@ -3310,7 +3310,7 @@ const tourTabActual = () => (location.hash.slice(1) || 'disponibles').split('?')
 const tourQuery = (sel) => { if (!sel) return null; try { return document.querySelector(sel); } catch (_) { return null; } };
 const tourSinCargando = (sel) => () => { const el = tourQuery(sel); return !!el && !/Cargando/i.test(el.textContent || ''); };
 const tourPausa = (ms) => new Promise((r) => setTimeout(r, ms));
-const TOUR_GRILLA_LISTA = '#a-grid .g-head, #a-grid .gh-exam-col, #a-grid p.muted';
+const TOUR_GRILLA_LISTA = '#a-grid .g-head, #a-grid .gh-exam-col, #a-grid .lico-vacio';
 
 const PASOS_TOUR = [
   /* ---------- Entorno general ---------- */

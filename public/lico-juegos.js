@@ -86,7 +86,12 @@
     document.body.appendChild(el);
   }
 
+  var ultimaProg = 0;
   function programar(ms) {
+    // mousemove/scroll disparan decenas de veces por segundo: reprogramar como mucho 1 vez por segundo
+    var ahora = Date.now();
+    if (!ms && timerIdle && ahora - ultimaProg < 1000) return;
+    ultimaProg = ahora;
     clearTimeout(timerIdle);
     if (!encendido) return;
     timerIdle = setTimeout(jugarAleatorio, ms || IDLE_MS);
@@ -224,13 +229,14 @@
     if (!b) return;
     b.setAttribute('aria-pressed', encendido ? 'true' : 'false');
     b.classList.toggle('lico-off', !encendido);
+    document.documentElement.classList.toggle('lico-quieto', !encendido);
     b.title = encendido ? 'Lico animado: activado (clic para desactivar)' : 'Lico animado: desactivado (clic para activar)';
     b.setAttribute('aria-label', b.title);
   }
   function activar(v) {
     encendido = !!v;
     try { window.localStorage.setItem(CLAVE, encendido ? 'on' : 'off'); } catch (e) { /* sin almacenamiento */ }
-    if (!encendido) { if (jugando) terminar(true); clearTimeout(timerIdle); } else { programar(); }
+    if (!encendido) { if (jugando) terminar(true); clearTimeout(timerIdle); timerIdle = null; } else { programar(IDLE_MS); }
     pintarInterruptor();
   }
   document.addEventListener('click', function (e) {
