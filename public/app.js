@@ -852,7 +852,7 @@ async function renderPorConfirmar() {
         if (res.enviados > 0) {
           toast(`¡Éxito! Se enviaron ${res.enviados} correos de confirmación.`, 'ok');
         } else if (!res.smtp_habilitado) {
-          toast(`Tokens de confirmación generados (${res.tokens_generados}). El servicio de correo (Resend/SMTP) no está activo en este entorno.`, 'alerta');
+          toast(`Tokens de confirmación generados (${res.tokens_generados}). El servicio de correo (SMTP) no está activo en este entorno.`, 'alerta');
         } else {
           toast(`No se enviaron correos nuevos. Total pendientes: ${res.total_pendientes}.`, 'info');
         }
@@ -872,7 +872,7 @@ async function renderPorConfirmar() {
         if (res.enviados > 0) {
           toast(`¡Éxito! Se enviaron ${res.enviados} correos de prueba a ${email}.`, 'ok');
         } else if (!res.smtp_habilitado) {
-          toast(`Tokens generados. Nota: Para envío real hacia ${email}, Resend API Key debe estar configurada en Cloudflare.`, 'alerta');
+          toast(`Tokens generados. Nota: para envío real hacia ${email} hay que configurar el correo SMTP (SMTP_HOST en el archivo .env).`, 'alerta');
         } else {
           toast('No se encontraron citas pendientes para enviar.', 'info');
         }
@@ -3070,11 +3070,8 @@ async function renderDatos() {
     <div class="panel"><h2>Ultimos movimientos</h2><div class="tabla-scroll"><table>
       <thead><tr><th class="c">Fecha</th><th>Acción</th><th>Por</th><th>Detalle</th></tr></thead><tbody id="mov-body"></tbody></table></div></div>`;
 
-  // El .xlsx se lee ACA en el navegador (via vendor/xlsx.full.min.js), no en el
-  // servidor: un archivo real (cientos de KB) tarda mas CPU parseandolo de lo
-  // que el plan gratis de Cloudflare permite por request, y el servidor
-  // terminaba devolviendo su propia pagina de error en vez de JSON. El
-  // navegador no tiene ese limite, asi que se manda ya leido.
+  // El .xlsx se lee ACA en el navegador (via vendor/xlsx.full.min.js) y se manda
+  // ya leido al servidor, que tambien acepta el archivo crudo (campo 'archivo').
   //
   // OJO con las celdas de fecha/hora: sheet_to_json({cellDates:true}) devuelve
   // objetos Date. JSON.stringify() los convierte solo con .toISOString() (UTC),

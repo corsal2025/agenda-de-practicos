@@ -1,6 +1,7 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { MOTIVOS_BLOQUEO, leerRangoBloqueo, filtroBloqueo } from '../worker/lib/bloqueo.js';
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { MOTIVOS_BLOQUEO, leerRangoBloqueo, filtroBloqueo } = require('../server/bloqueo');
 
 test('motivos de bloqueo incluyen los administrativos pedidos', () => {
   for (const m of ['PERMISO ADMINISTRATIVO', 'LICENCIA MEDICA', 'FERIADO LEGAL', 'COMPENSATORIO']) {
@@ -36,7 +37,7 @@ test('filtroBloqueo arma condiciones por rango, examinador y ocupados', () => {
   assert.deepEqual(
     filtroBloqueo({ desde: '2026-09-01', hasta: '2026-09-05', examinador_id: 2 }, { bloqueado: 0, incluirOcupados: false }),
     {
-      where: 'fecha BETWEEN ? AND ? AND bloqueado = ? AND examinador_id = ? AND rut IS NULL AND nombre IS NULL',
+      where: "fecha BETWEEN ? AND ? AND bloqueado = ? AND examinador_id = ? AND (rut IS NULL OR rut = '') AND (nombre IS NULL OR nombre = '')",
       params: ['2026-09-01', '2026-09-05', 0, 2],
     },
   );

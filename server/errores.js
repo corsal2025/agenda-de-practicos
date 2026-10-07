@@ -5,6 +5,12 @@ const { hoyISO, esHabil, sumarDias } = require('./fechas');
 const feriados = require('./feriados');
 const rut = require('./rut');
 const telefono = require('./telefono');
+const pesada = require('./pesada');
+const { HORAS } = require('./config');
+
+const CORREO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Bloques que ocupa una clase pesada agendada a las 12:30 (13:00 y 13:30).
+const HORAS_TRAS_PESADA = HORAS.slice(HORAS.indexOf(HORA_D_A5) + 1);
 
 // Recalcula el reporte de errores sobre el estado actual de la agenda.
 // Devuelve una lista de hallazgos { tipo, severidad, fecha, hora, examinador, rut, nombre, mensaje }.
@@ -30,6 +36,10 @@ function reporte() {
     && /ADMINISTRATIVO|FIESTAS PATRIAS|FERIADO|LICENCIA|VACACIONES|CAPACITACI|PERMISO|COMET[IÍ]DO/i.test(f.bloqueo_motivo || '');
 
   const hallazgos = [];
+  // Conflicto D/A5: cita a las 13:00/13:30 con el mismo examinador que tiene
+  // clase pesada a las 12:30 (sale a terreno). Puede venir de una importacion.
+  const pesadasPorDia = new Set();
+  const posiblesConflictoPesada = [];
   const base = (f) => ({
     agenda_id: f.id, fecha: f.fecha, hora: f.hora, examinador: f.examinador,
     rut: f.rut, nombre: f.nombre,
@@ -92,6 +102,26 @@ function reporte() {
         mensaje: 'Cita en fin de semana o feriado' });
     }
 
+    // 6b) Auditoria del Apps Script de la planilla, solo citas desde hoy.
+    //     SIN_CONTACTO ya cubre "sin telefono ni correo".
+    if (ocupada && f.fecha >= hoy) {
+      if (!f.contacto && f.correo) {
+        hallazgos.push({ ...base(f), tipo: 'FALTA_TELEFONO', severidad: 'warning', mensaje: 'Falta numero de contacto' });
+      }
+      if (!f.correo && f.contacto) {
+        hallazgos.push({ ...base(f), tipo: 'FALTA_CORREO', severidad: 'info',
+          mensaje: 'Falta correo: no recibira confirmacion ni recordatorio' });
+      }
+      if (f.correo && !CORREO_RE.test(String(f.correo).trim())) {
+        hallazgos.push({ ...base(f), tipo: 'CORREO_INVALIDO', severidad: 'warning', mensaje: `Correo con formato invalido: ${f.correo}` });
+      }
+      if (!f.clase) {
+        hallazgos.push({ ...base(f), tipo: 'FALTA_CLASE', severidad: 'warning', mensaje: 'Falta clase de licencia' });
+      }
+      if (HORAS_TRAS_PESADA.includes(f.hora)) posiblesConflictoPesada.push(f);
+      if (pesada.esPesadaEnHoraValida(f)) pesadasPorDia.add(`${f.examinador_id}|${f.fecha}`);
+    }
+
     // 7) Cita marcada como pendiente de reagendar
     if (ocupada && f.pendiente_reagendar) {
       hallazgos.push({ ...base(f), tipo: 'PENDIENTE_REAGENDAR', severidad: 'info',
@@ -150,6 +180,12 @@ function reporte() {
       hallazgos.push({ ...base(ancla), tipo: 'CONFLICTO_TERRENO', severidad: 'warning',
         mensaje: `${examinador} el ${fecha}: ${slot.terreno} bloques en terreno (mas que el traslado habitual) y ${slot.normales} cita(s) en oficina` });
     }
+  }
+
+  for (const f of posiblesConflictoPesada) {
+    if (!pesadasPorDia.has(`${f.examinador_id}|${f.fecha}`)) continue;
+    hallazgos.push({ ...base(f), tipo: 'CONFLICTO_PESADA', severidad: 'error',
+      mensaje: `${f.examinador} tiene clase D/A5 a las ${HORA_D_A5} ese dia: no puede tomar esta cita de las ${f.hora}` });
   }
 
   const orden = { error: 0, warning: 1, info: 2 };

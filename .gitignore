@@ -23,8 +23,6 @@ public/logo.svg
 public/logo.jpg
 public/logo.jpeg
 public/logo.webp
-.dev.vars
-.wrangler/
 
 .atl/
 .claude/

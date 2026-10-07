@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "agenda-local",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["wrangler", "pages", "dev", "--port", "8788"],
-      "port": 8788
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "port": 4900
     }
   ]
 }

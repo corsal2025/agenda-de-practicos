@@ -323,6 +323,16 @@ const wrap = (fn) => (req, res, next) => {
   Promise.resolve().then(() => fn(req, res, next)).catch(next);
 };
 function bad(msg, status = 400) { const e = new Error(msg); e.status = status; return e; }
+
+// Regla principal: no se da hora a una persona sin correo valido (lo exigen la
+// confirmacion y el recordatorio automatico).
+const CORREO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function correoValido(c) { return CORREO_RE.test(String(c || '').trim()); }
+function exigirCorreo(c) {
+  if (!String(c || '').trim()) throw bad('Falta el correo: no se puede dar hora a una persona sin correo electrónico.');
+  if (!correoValido(c)) throw bad(`Correo con formato inválido: ${String(c).trim()}`);
+  return String(c).trim().toLowerCase();
+}
 const actorDe = (req) => auth.actor(req);
 const logReq = (req, id, accion, detalle) => log(id, accion, detalle, actorDe(req));
 
@@ -522,6 +532,13 @@ app.put('/api/agenda/:id', wrap((req, res) => {
   // Auto session funcionario fallback
 
   const nombre = body.nombre ? String(body.nombre).trim().replace(/\s+/g, ' ').toUpperCase() : null;
+  // Dar hora (bloque libre -> ocupado, o cambiar la persona) exige correo valido.
+  // Citas antiguas sin correo se pueden seguir editando; un correo que cambia debe ser valido.
+  const personaNueva = Boolean(rutFmt || nombre)
+    && (bloque.rut !== rutFmt || (bloque.nombre || '') !== (nombre || ''));
+  if (personaNueva) exigirCorreo(body.correo);
+  else if (body.correo && String(body.correo).trim().toLowerCase() !== (bloque.correo || '').toLowerCase()
+    && !correoValido(body.correo)) throw bad(`Correo con formato inválido: ${String(body.correo).trim()}`);
   const estabaOcupada = Boolean(bloque.rut || bloque.nombre);
   const quedaOcupada = Boolean(rutFmt || nombre);
 
@@ -662,7 +679,7 @@ app.post('/api/cola-reagendar/:id/asignar', wrap((req, res) => {
   if (destino.rut || destino.nombre) throw bad('El bloque de destino ya está ocupado.');
   if (destino.bloqueado) throw bad('El bloque de destino está bloqueado.');
 
-  const correoFinal = (req.body && req.body.correo) || item.correo;
+  const correoFinal = exigirCorreo((req.body && req.body.correo) || item.correo);
 
   const tienePesada = String(item.clase || '').toUpperCase().split(',').map((s) => s.trim())
     .some((cl) => CLASES_PESADAS.includes(cl));
@@ -844,6 +861,8 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
   if (!destino) throw bad('Bloque de destino no encontrado', 404);
   if (destino.rut || destino.nombre) throw bad('El bloque de destino ya esta ocupado.');
   if (destino.bloqueado) throw bad('El bloque de destino esta bloqueado.');
+  // La nueva hora exige correo (el de la cita o uno nuevo enviado en el cuerpo).
+  origen.correo = exigirCorreo((req.body && req.body.correo) || origen.correo);
   const origenTienePesada = String(origen.clase || '').toUpperCase().split(',').map((s) => s.trim())
     .some((cl) => CLASES_PESADAS.includes(cl));
   if (origenTienePesada && destino.hora !== HORA_D_A5) {
