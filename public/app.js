@@ -1,6 +1,9 @@
 'use strict';
 
 /* ================= helpers ================= */
+// Clases D y A5: llevan escuela de conductores y vigencia de tramite (6 meses).
+const esClaseTramite = (clase) => String(clase || '').split(',').some((c) => ['D', 'A5'].includes(c.trim()));
+const alertasHtml = (b) => (b.alerts || []).map((t) => `<span class="badge reprob" title="${esc(t)}">⚠ ${esc(t)}</span>`).join(' ');
 const $ = (sel, root = document) => root.querySelector(sel);
 const view = $('#view');
 let META = null;
@@ -501,10 +504,30 @@ function formularioCita(b, alGuardar) {
     <div class="campo ancho" id="zona-forzar" ${esPesada ? '' : 'hidden'}>
       <label><input type="checkbox" id="f-forzar"> <span id="f-forzar-txt">${esc(textoForzar(b))}</span></label>
     </div>
+    ${(b.alerts || []).length ? `<div class="campo ancho">${alertasHtml(b)}</div>` : ''}
+    <div class="campo">
+      <label>Fecha de Inicio de Trámite</label>
+      <input type="date" id="f-fecha-inicio" value="${b.fecha_inicio_tramite || hoy()}" max="${hoy()}" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
+    </div>
+    <div class="campo" id="zona-escuela" ${esClaseTramite(b.clase) ? '' : 'hidden'}>
+      <label>Escuela de Conductores</label>
+      <select id="f-escuela" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
+        <option value="">-- Sin escuela --</option>
+        ${c.escuela_conductores ? c.escuela_conductores.map((e) => `<option value="${esc(e)}" ${b.escuela_conductores === e ? 'selected' : ''}>${esc(e)}</option>`).join('') : ''}
+      </select>
+    </div>
+    <div class="campo">
+      <label>Tipo de Reagendamiento</label>
+      <select id="f-tipo-reagendamiento" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
+        <option value="">-- Sin tipo --</option>
+        ${c.tipo_reagendamiento ? c.tipo_reagendamiento.map((tipo) => `<option value="${esc(tipo)}" ${b.tipo_reagendamiento === tipo ? 'selected' : ''}>${esc(tipo)}</option>`).join('') : ''}
+      </select>
+    </div>
     `,
     `
     ${(b.rut || b.nombre) ? '<button class="btn peligro sec" id="btn-liberar" title="Quita la cita del bloque">Liberar bloque</button>' : ''}
     ${(b.rut || b.nombre) ? '<button type="button" class="btn sec" id="btn-reagendar-slot" style="color:var(--azul);font-weight:600">Reagendar postulante</button>' : ''}
+    ${(b.rut || b.nombre) ? `<button type="button" class="btn sec" id="btn-historial" style="color:var(--azul);font-weight:600">📋 Historial del solicitante</button>` : ''}
     <button class="btn sec" id="btn-cancel">Cancelar</button>
     <button class="btn" id="btn-guardar" style="background:#1d4ed8;font-weight:700">${tieneCita ? "Guardar cambios" : "Confirmar y agendar cita"}</button>
     `
@@ -596,6 +619,7 @@ function formularioCita(b, alGuardar) {
     const tienePesada = clases.some((cl) => META.clases_pesadas.includes(cl));
     $('#zona-forzar').hidden = !tienePesada;
     if (tienePesada) $('#f-forzar-txt').textContent = textoForzar(b);
+    $('#zona-escuela').hidden = !esClaseTramite(clases.join(','));
   };
   document.querySelectorAll('#f-clase input').forEach((chk) => {
     chk.addEventListener('change', chequearPesada);
@@ -626,6 +650,61 @@ function formularioCita(b, alGuardar) {
           if (typeof detalleReagendar === 'function') detalleReagendar(b.id);
         }, 120);
       } catch (e) { toast(e.message, 'err'); }
+    };
+  }
+
+  if ($('#btn-historial')) {
+    $('#btn-historial').onclick = async () => {
+      const rut = $('#f-rut').value.trim();
+      const nombre = $('#f-nombre').value.trim();
+      if (!rut && !nombre) {
+        toast('Este postulante no tiene RUT ni nombre registrado', 'err');
+        return;
+      }
+      const params = new URLSearchParams();
+      if (rut) params.set('rut', rut);
+      if (nombre) params.set('nombre', nombre);
+      const url = `/buscar-historial?${params.toString()}`;
+      try {
+        const rows = await api(url);
+        if (!Array.isArray(rows) || rows.length === 0) {
+          toast('No se encontró historial para este postulante', 'info');
+          return;
+        }
+        // Abrir ventana desplegable con historial
+        modal(`Historial de ${nombre || rut}`, `
+          <div class="panel tabla-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th class="c">Fecha</th>
+                  <th class="c">Hora</th>
+                  <th>Examinador</th>
+                  <th class="c">Clase</th>
+                  <th>Resultado</th>
+                  <th>Escuela</th>
+                  <th>Tipo Reag.</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map(r => `
+                  <tr>
+                    <td class="c">${esc(fFecha(r.fecha))}</td>
+                    <td class="c">${esc(r.hora)}</td>
+                    <td>${esc(r.examinador)}</td>
+                    <td class="c">${esc(r.clase)}</td>
+                    <td>${esc(r.resultado || 'Sin resultado')}</td>
+                    <td>${esc(r.escuela_conductores || '-')}</td>
+                    <td>${esc(r.tipo_reagendamiento || '-')}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `);
+      } catch (e) {
+        toast(e.message, 'err');
+      }
     };
   }
 
@@ -662,7 +741,9 @@ function formularioCita(b, alGuardar) {
         lista_espera: 'NO',
         intento: b.intento || '1° VEZ',
         funcionario_id: $('#f-func').value && $('#f-func').value !== '__nuevo' ? Number($('#f-func').value) : null,
-        fecha_inicio_tramite: b.fecha_inicio_tramite || hoy(),
+        fecha_inicio_tramite: $('#f-fecha-inicio') ? $('#f-fecha-inicio').value : (b.fecha_inicio_tramite || hoy()),
+        escuela_conductores: esClaseTramite(clasesMarcadas().join(',')) ? ($('#f-escuela').value || null) : null,
+        tipo_reagendamiento: $('#f-tipo-reagendamiento') ? $('#f-tipo-reagendamiento').value || null : (b.tipo_reagendamiento || null),
         confirmo_asistencia: $('#f-conf') ? ($('#f-conf').value === '' ? null : Number($('#f-conf').value)) : (b.confirmo_asistencia ?? null),
         resultado: $('#f-res') ? ($('#f-res').value || null) : (b.resultado || null),
         pendiente_reagendar: Boolean(b.pendiente_reagendar),
@@ -695,7 +776,7 @@ async function fechaInicialAgenda() {
   }
   try {
     const rows = await apiReciente(`/agenda?fecha=${h}`, 30e3);
-    if (!rows || !rows.length) return await proximoDiaConAgenda(h, 1);
+    if (!Array.isArray(rows) || !rows.length) return await proximoDiaConAgenda(h, 1);
   } catch (_) {}
   return h;
 }
@@ -1791,6 +1872,7 @@ function slotCard(b) {
 
   return `<div class="${cls}" data-id="${b.id}">
     ${problema ? `<span class="alerta-dato" title="${esc(problema)}">⚠</span>` : ''}
+    ${(b.alerts || []).length ? `<div class="slot-alertas">${alertasHtml(b)}</div>` : ''}
     <span class="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <span class="sub" style="margin:0">

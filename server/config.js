@@ -31,6 +31,11 @@ const CATALOGOS = {
   resultado:    ['APROBADO', 'REPROBADO', 'REPROBADO INASISTENCIA', 'NO ASISTIO'],
   intento:      ['1° VEZ', '2° VEZ'],
   lista_espera: ['SI', 'NO'],
+  escuela_conductores: [
+    'ESCUELA A','ESCUELA B','ESCUELA C','ESCUELA D','ESCUELA E',
+    'INSTITUTO MANQUEHUE','AUTOESCUELA LOS ANDES','CENTRO DE CONDUCCION VIÑA'
+  ],
+  tipo_reagendamiento: ['PRESENCIAL','SMS','LLAMADO','CORREO'],
 };
 
 const RAIZ = path.join(__dirname, '..');

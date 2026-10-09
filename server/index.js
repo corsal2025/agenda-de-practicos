@@ -344,6 +344,8 @@ app.get('/api/meta', wrap((req, res) => {
       resultado: catalogo('resultado'),
       intento: catalogo('intento'),
       lista_espera: catalogo('lista_espera'),
+      escuela_conductores: catalogo('escuela_conductores'),
+      tipo_reagendamiento: catalogo('tipo_reagendamiento'),
     },
     feriados: feriados.listar(),
     rango_agenda: db.prepare('SELECT MIN(fecha) desde, MAX(fecha) hasta FROM agenda').get(),
@@ -371,6 +373,26 @@ const SELECT_BLOQUE = `
 `;
 const traer = (id) => db.prepare(`${SELECT_BLOQUE} WHERE a.id = ?`).get(Number(id));
 
+// Clases que exigen escuela de conductores y vigencia del tramite (6 meses).
+const CLASES_TRAMITE = ['D', 'A5'];
+const tieneClaseTramite = (clase) => String(clase || '').split(',').some((c) => CLASES_TRAMITE.includes(c.trim()));
+const DIAS_AVISO_TRAMITE = 7;
+// Fecha ISO + n meses (si el dia no existe en el mes destino, se usa el ultimo dia).
+function sumarMeses(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const ult = new Date(Date.UTC(y, m - 1 + n + 1, 0)).getUTCDate();
+  const r = new Date(Date.UTC(y, m - 1 + n, Math.min(d, ult)));
+  return r.toISOString().slice(0, 10);
+}
+function alertasTramite(row, hoy = hoyISO()) {
+  if (!tieneClaseTramite(row.clase) || !/^\d{4}-\d{2}-\d{2}$/.test(row.fecha_inicio_tramite || '')) return [];
+  const vence = sumarMeses(row.fecha_inicio_tramite, 6);
+  if (hoy >= vence) return [`Trámite vencido (venció el ${vence})`];
+  if (hoy >= sumarDias(vence, -DIAS_AVISO_TRAMITE)) return [`Trámite próximo a vencer (${vence})`];
+  return [];
+}
+const conAlertas = (row) => ({ ...row, alerts: alertasTramite(row) });
+
 app.get('/api/agenda', wrap((req, res) => {
   const { fecha, desde, hasta, examinador_id, estado } = req.query;
   const cond = [];
@@ -386,13 +408,14 @@ app.get('/api/agenda', wrap((req, res) => {
   if (estado === 'porconfirmar') cond.push("(a.rut IS NOT NULL OR a.nombre IS NOT NULL) AND a.bloqueado = 0 AND (a.confirmo_asistencia IS NULL) AND a.fecha >= date('now','localtime')");
   const where = cond.length ? `WHERE ${cond.join(' AND ')}` : '';
   const rows = db.prepare(`${SELECT_BLOQUE} ${where} ORDER BY a.fecha, a.hora, e.nombre LIMIT 6000`).all(...p);
-  res.json(rows);
+  
+  res.json(rows.map(conAlertas));
 }));
 
 app.get('/api/agenda/:id', wrap((req, res) => {
   const row = traer(req.params.id);
   if (!row) throw bad('Bloque no encontrado', 404);
-  res.json(row);
+  res.json(conAlertas(row));
 }));
 
 app.post('/api/agenda/generar', wrap((req, res) => {
@@ -413,6 +436,8 @@ function validarBloque(body, bloque) {
   const tienePesada = clases.some((cl) => CLASES_PESADAS.includes(cl));
   if (!enCatalogo('tipo_cita', body.tipo_cita)) throw bad(`Tipo de cita no valido: ${body.tipo_cita}`);
   if (!enCatalogo('resultado', body.resultado)) throw bad(`Resultado no valido: ${body.resultado}`);
+  if (!enCatalogo('tipo_reagendamiento', body.tipo_reagendamiento)) throw bad(`Tipo de reagendamiento no valido: ${body.tipo_reagendamiento}`);
+  if (!enCatalogo('escuela_conductores', body.escuela_conductores)) throw bad(`Escuela no valida: ${body.escuela_conductores}`);
   if (!enCatalogo('intento', body.intento)) throw bad(`Intento no valido: ${body.intento}`);
   if (!enCatalogo('lista_espera', body.lista_espera)) throw bad(`Lista de espera no valida: ${body.lista_espera}`);
 
@@ -535,7 +560,8 @@ app.put('/api/agenda/:id', wrap((req, res) => {
       rut = @rut, nombre = @nombre, clase = @clase, contacto = @contacto, correo = @correo,
       tipo_cita = @tipo_cita, motivo_reagendamiento = @motivo_reagendamiento,
       lista_espera = @lista_espera, intento = @intento, funcionario_id = @funcionario_id,
-      fecha_inicio_tramite = @fecha_inicio_tramite, confirmo_asistencia = @confirmo_asistencia,
+      fecha_inicio_tramite = @fecha_inicio_tramite, escuela_conductores = @escuela_conductores, tipo_reagendamiento = @tipo_reagendamiento,
+      confirmo_asistencia = @confirmo_asistencia,
       resultado = @resultado, comentarios = @comentarios,
       pendiente_reagendar = @pendiente, pendiente_nota = @pnota,
       token_confirmacion = CASE WHEN @cambia = 1 THEN NULL ELSE token_confirmacion END,
@@ -557,6 +583,8 @@ app.put('/api/agenda/:id', wrap((req, res) => {
     intento: body.intento || null,
     funcionario_id,
     fecha_inicio_tramite: body.fecha_inicio_tramite || null,
+    escuela_conductores: tieneClaseTramite(clase) && body.escuela_conductores ? String(body.escuela_conductores) : null,
+    tipo_reagendamiento: body.tipo_reagendamiento || null,
     confirmo_asistencia: confirmo,
     resultado: body.resultado || null,
     comentarios: body.comentarios ? String(body.comentarios).trim() : null,
@@ -598,7 +626,7 @@ app.put('/api/agenda/:id', wrap((req, res) => {
 const LIMPIAR_SQL = `
   rut=NULL, nombre=NULL, clase=NULL, contacto=NULL, correo=NULL, tipo_cita=NULL,
   motivo_reagendamiento=NULL, lista_espera=NULL, intento=NULL, funcionario_id=NULL,
-  fecha_inicio_tramite=NULL, confirmo_asistencia=NULL, resultado=NULL, comentarios=NULL,
+  fecha_inicio_tramite=NULL, escuela_conductores=NULL, tipo_reagendamiento=NULL, confirmo_asistencia=NULL, resultado=NULL, comentarios=NULL,
   bloqueado=0, bloqueo_motivo=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
   token_confirmacion=NULL, correo_confirmacion_enviado=0, correo_recordatorio_enviado=0,
   agendado_en=NULL, actualizado_en=datetime('now','localtime')`;
@@ -1072,24 +1100,48 @@ app.delete('/api/feriados', wrap((req, res) => {
 }));
 
 // ---------- EXAMINADORES / FUNCIONARIOS ----------
+// SQLITE_CONSTRAINT_UNIQUE: nombre repetido. Cualquier otro error sigue a wrap() (500 generico).
+const esDuplicado = (e) => e && e.errcode === 2067;
 app.post('/api/examinadores', wrap((req, res) => {
-  res.json({ ok: true, id: upsertExaminador(String((req.body || {}).nombre || '').trim().toUpperCase()) });
+  try {
+    const id = upsertExaminador(String((req.body || {}).nombre || '').trim().toUpperCase());
+    res.json({ ok: true, id });
+  } catch (e) {
+    if (!esDuplicado(e)) throw e;
+    res.status(400).json({ error: 'El examinador ya existe' });
+  }
 }));
 app.put('/api/examinadores/:id', wrap((req, res) => {
-  const { nombre, activo } = req.body || {};
-  db.prepare('UPDATE examinadores SET nombre = COALESCE(?, nombre), activo = COALESCE(?, activo) WHERE id = ?')
-    .run(nombre ? nombre.toUpperCase() : null, activo == null ? null : (activo ? 1 : 0), Number(req.params.id));
-  res.json({ ok: true });
+  try {
+    const { nombre, activo } = req.body || {};
+    db.prepare('UPDATE examinadores SET nombre = COALESCE(?, nombre), activo = COALESCE(?, activo) WHERE id = ?')
+      .run(nombre ? nombre.toUpperCase() : null, activo == null ? null : (activo ? 1 : 0), Number(req.params.id));
+    res.json({ ok: true });
+  } catch (e) {
+    if (!esDuplicado(e)) throw e;
+    res.status(400).json({ error: 'El examinador ya existe' });
+  }
 }));
 app.post('/api/funcionarios', wrap((req, res) => {
-  res.json({ ok: true, id: upsertFuncionario(String((req.body || {}).nombre || '').trim().toUpperCase()) });
+  try {
+    const id = upsertFuncionario(String((req.body || {}).nombre || '').trim().toUpperCase());
+    res.json({ ok: true, id });
+  } catch (e) {
+    if (!esDuplicado(e)) throw e;
+    res.status(400).json({ error: 'El funcionario ya existe' });
+  }
 }));
 app.put('/api/funcionarios/:id', wrap((req, res) => {
-  const id = Number(req.params.id);
-  const { nombre, activo } = req.body || {};
-  db.prepare('UPDATE funcionarios SET nombre = COALESCE(?, nombre), activo = COALESCE(?, activo) WHERE id = ?')
-    .run(nombre ? nombre.toUpperCase() : null, activo == null ? null : (activo ? 1 : 0), id);
-  res.json({ ok: true });
+  try {
+    const id = Number(req.params.id);
+    const { nombre, activo } = req.body || {};
+    db.prepare('UPDATE funcionarios SET nombre = COALESCE(?, nombre), activo = COALESCE(?, activo) WHERE id = ?')
+      .run(nombre ? nombre.toUpperCase() : null, activo == null ? null : (activo ? 1 : 0), id);
+    res.json({ ok: true });
+  } catch (e) {
+    if (!esDuplicado(e)) throw e;
+    res.status(400).json({ error: 'El funcionario ya existe' });
+  }
 }));
 
 // ---------- PAPELERA ----------
@@ -1149,6 +1201,32 @@ app.get('/api/export', wrap((req, res) => {
 
 app.post('/api/backup', wrap((req, res) => res.json({ ok: true, archivo: backupMod.backup('manual') })));
 
+app.get('/api/estadisticas-escuelas', wrap((req, res) => {
+  const rows = db.prepare(`
+    SELECT escuela_conductores,
+           COUNT(*) as total,
+           SUM(CASE WHEN resultado = 'APROBADO' THEN 1 ELSE 0 END) as aprobados,
+           SUM(CASE WHEN resultado LIKE 'REPROBADO%' THEN 1 ELSE 0 END) as reprobados,
+           SUM(CASE WHEN resultado = 'NO ASISTIO' THEN 1 ELSE 0 END) as no_asistio
+    FROM agenda
+    WHERE clase IN ('D', 'A5') AND escuela_conductores IS NOT NULL
+    GROUP BY escuela_conductores
+    ORDER BY total DESC
+  `).all();
+  res.json(rows);
+}));
+
+// Historial del solicitante para el formulario: por RUT exacto; sin RUT, por nombre.
+app.get('/api/buscar-historial', wrap((req, res) => {
+  const r = rut.limpiar(req.query.rut || '');
+  const nombre = String(req.query.nombre || '').trim().toUpperCase().replace(/\s+/g, ' ');
+  if (r.length < 2 && nombre.length < 3) throw bad('RUT o nombre requerido');
+  const rows = r.length >= 2
+    ? db.prepare(`${SELECT_BLOQUE} WHERE REPLACE(REPLACE(a.rut,'.',''),'-','') = ? ORDER BY a.fecha DESC, a.hora DESC LIMIT 200`).all(r)
+    : db.prepare(`${SELECT_BLOQUE} WHERE UPPER(a.nombre) = ? ORDER BY a.fecha DESC, a.hora DESC LIMIT 200`).all(nombre);
+  res.json(rows.map(conAlertas));
+}));
+
 app.get('/api/movimientos', wrap((req, res) => {
   res.json(db.prepare('SELECT * FROM movimientos ORDER BY id DESC LIMIT 300').all());
 }));
@@ -1166,6 +1244,8 @@ app.use((err, req, res, next) => {
   const cuerpo = { error: err.status ? (err.message || 'Error') : 'Error interno del servidor' };
   if (err.bloque) cuerpo.bloque = err.bloque;
   if (err.login) cuerpo.login = true;
+  if (err.sugerencia) cuerpo.sugerencia = err.sugerencia;
+  if (err.accion_recomendada) cuerpo.accion_recomendada = err.accion_recomendada;
   res.status(err.status || 500).json(cuerpo);
 });
 

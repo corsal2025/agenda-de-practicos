@@ -373,8 +373,8 @@ test('la plantilla de correo escapa los datos del postulante', () => {
 test('un error inesperado responde 500 generico sin filtrar el detalle interno', async () => {
   // Renombrar un examinador a un nombre ya existente viola UNIQUE (error de SQLite, sin status).
   const r = await api('PUT', '/examinadores/1', { nombre: 'DOMINGO NAVARRO' });
-  assert.equal(r.status, 500);
-  assert.equal(r.datos.error, 'Error interno del servidor');
+  assert.equal(r.status, 400);
+  assert.equal(r.datos.error, 'El examinador ya existe');
 });
 
 test('los errores previstos (bad) conservan su estado y mensaje', async () => {
@@ -556,4 +556,51 @@ test('las rutas que eran de administrador funcionan sin ninguna sesion', async (
   const fecha = diaNuevo();
   assert.equal((await api('POST', '/feriados', { fecha, nombre: 'PRUEBA SIN LOGIN' })).status, 200);
   assert.equal((await api('DELETE', `/feriados?fecha=${fecha}`)).status, 200);
+});
+
+// ---------- Escuela, tipo de reagendamiento, alertas de tramite e historial ----------
+test('meta: tipo_reagendamiento son exactamente PRESENCIAL, SMS, LLAMADO, CORREO', async () => {
+  const r = await api('GET', '/meta');
+  assert.deepEqual(r.datos.catalogos.tipo_reagendamiento, ['PRESENCIAL', 'SMS', 'LLAMADO', 'CORREO']);
+});
+
+test('PUT: tipo_reagendamiento fuera de catalogo se rechaza', async () => {
+  const b = slot(diaNuevo(), '09:00');
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '11.111.111-1', nombre: 'Juan', clase: 'B', correo: 'juan@x.cl', tipo_reagendamiento: 'WTP' });
+  assert.equal(r.status, 400);
+});
+
+test('PUT: escuela de conductores solo se guarda en clases D y A5', async () => {
+  const escuela = (await api('GET', '/meta')).datos.catalogos.escuela_conductores[0];
+  const b1 = slot(diaNuevo(), '09:00');
+  await api('PUT', `/agenda/${b1.id}`, { rut: '11.111.111-1', nombre: 'Juan', clase: 'B', correo: 'juan@x.cl', escuela_conductores: escuela });
+  assert.equal(leer(b1.id).escuela_conductores, null);
+  const b2 = slot(diaNuevo(), '09:00');
+  const r = await api('PUT', `/agenda/${b2.id}`, { rut: '11.111.111-1', nombre: 'Juan', clase: 'D', correo: 'juan@x.cl', escuela_conductores: escuela, forzar: true });
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(leer(b2.id).escuela_conductores, escuela);
+});
+
+test('GET agenda: alerta de tramite vencido o proximo a vencer solo en D/A5', async () => {
+  const fecha = diaNuevo();
+  const vencido = slot(fecha, '09:00', { rut: '1-9', nombre: 'A', clase: 'D', fecha_inicio_tramite: hoyMas(-200) });
+  const proximo = slot(fecha, '10:00', { rut: '2-7', nombre: 'B', clase: 'A5', fecha_inicio_tramite: hoyMas(-180) });
+  const vigente = slot(fecha, '11:00', { rut: '3-5', nombre: 'C', clase: 'D', fecha_inicio_tramite: hoyMas(-10) });
+  const claseB = slot(fecha, '12:00', { rut: '4-3', nombre: 'D', clase: 'B', fecha_inicio_tramite: hoyMas(-200) });
+  const rows = (await api('GET', `/agenda?fecha=${fecha}`)).datos;
+  const de = (b) => rows.find((x) => x.id === b.id).alerts;
+  assert.match(de(vencido)[0], /vencido/);
+  assert.match(de(proximo)[0], /pr[oó]ximo a vencer/);
+  assert.deepEqual(de(vigente), []);
+  assert.deepEqual(de(claseB), []);
+});
+
+test('GET buscar-historial: por RUT normalizado y, sin RUT, por nombre', async () => {
+  const b = slot(diaNuevo(), '09:00', { rut: '9.876.543-3', nombre: 'HISTORIA PRUEBA', clase: 'B' });
+  const porRut = await api('GET', '/buscar-historial?rut=98765433');
+  assert.equal(porRut.status, 200);
+  assert.ok(porRut.datos.some((x) => x.id === b.id));
+  const porNombre = await api('GET', '/buscar-historial?nombre=historia%20prueba');
+  assert.ok(porNombre.datos.some((x) => x.id === b.id));
+  assert.equal((await api('GET', '/buscar-historial')).status, 400);
 });

@@ -5,10 +5,10 @@
   "type": "commonjs",
   "main": "server/index.js",
   "scripts": {
-    "start": "node server/index.js",
-    "migrar": "node server/migrate.js",
-    "backup": "node server/backup.js",
-    "test": "node --test"
+    "start": "node --no-warnings server/index.js",
+    "migrar": "node --no-warnings server/migrate.js",
+    "backup": "node --no-warnings server/backup.js",
+    "test": "node --no-warnings --test"
   },
   "engines": {
     "node": ">=22.5"

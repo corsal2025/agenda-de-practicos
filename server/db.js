@@ -48,6 +48,12 @@ asegurarColumna('agenda', 'pendiente_nota', 'pendiente_nota TEXT');
 asegurarColumna('agenda', 'correo_confirmacion_enviado', 'correo_confirmacion_enviado INTEGER NOT NULL DEFAULT 0');
 asegurarColumna('agenda', 'correo_recordatorio_enviado', 'correo_recordatorio_enviado INTEGER NOT NULL DEFAULT 0');
 asegurarColumna('agenda', 'token_confirmacion', 'token_confirmacion TEXT');
+asegurarColumna('agenda', 'escuela_conductores', 'escuela_conductores TEXT');
+// Columna creada con un typo en una version anterior: copiar sus datos una sola vez.
+if (db.prepare('PRAGMA table_info(agenda)').all().some((c) => c.name === 'escuela_condutores')) {
+  db.exec('UPDATE agenda SET escuela_conductores = escuela_condutores WHERE escuela_conductores IS NULL AND escuela_condutores IS NOT NULL');
+}
+asegurarColumna('agenda', 'tipo_reagendamiento', 'tipo_reagendamiento TEXT');
 asegurarColumna('movimientos', 'actor', 'actor TEXT');
 asegurarColumna('funcionarios', 'usuario', 'usuario TEXT');
 asegurarColumna('funcionarios', 'clave_hash', 'clave_hash TEXT');
