@@ -1768,6 +1768,40 @@ function problemaDatos(b) {
   if (b.contacto && b.contacto.replace(/\D/g, '').length !== 9) return 'Teléfono incompleto';
   return null;
 }
+// Panel lateral derecho con el historial. Se cierra con la X, la tecla Esc o al hacer clic fuera.
+function abrirPanelHistorial(titulo, rows) {
+  cerrarPanelHistorial();
+  const fondo = document.createElement('div');
+  fondo.className = 'hist-fondo';
+  fondo.innerHTML = `
+    <aside class="hist-panel" role="dialog" aria-label="${esc(titulo)}">
+      <header class="hist-cab">
+        <div><b>${esc(titulo)}</b><span class="hist-total">${rows.length} cita${rows.length === 1 ? '' : 's'}</span></div>
+        <button type="button" class="hist-x" title="Cerrar">&times;</button>
+      </header>
+      <div class="hist-lista">
+        ${rows.map((r) => `
+          <div class="hist-item">
+            <div class="hist-fila"><b>${esc(fFecha(r.fecha))}</b> · ${esc(r.hora)} hrs<span class="hist-clase">${esc(r.clase || '-')}</span></div>
+            <div class="hist-sub">Examinador: ${esc(r.examinador || '-')}</div>
+            <div class="hist-sub">Resultado: <b>${esc(r.resultado || 'Sin resultado')}</b></div>
+            ${r.escuela_conductores ? `<div class="hist-sub">Escuela: ${esc(r.escuela_conductores)}</div>` : ''}
+            ${r.tipo_reagendamiento ? `<div class="hist-sub">Reagendamiento: ${esc(r.tipo_reagendamiento)}</div>` : ''}
+            ${(r.alerts || []).length ? `<div class="hist-sub">${alertasHtml(r)}</div>` : ''}
+          </div>`).join('')}
+      </div>
+    </aside>`;
+  fondo.addEventListener('click', (e) => {
+    if (e.target === fondo || e.target.closest('.hist-x')) cerrarPanelHistorial();
+  });
+  document.body.appendChild(fondo);
+  requestAnimationFrame(() => fondo.classList.add('abierto'));
+}
+function cerrarPanelHistorial() {
+  document.querySelectorAll('.hist-fondo').forEach((el) => el.remove());
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarPanelHistorial(); });
+
 // Ventana desplegable con todas las citas anteriores del postulante (por RUT o nombre).
 async function verHistorial(rut, nombre) {
   if (!rut && !nombre) {
@@ -1784,37 +1818,7 @@ async function verHistorial(rut, nombre) {
         toast('No se encontró historial para este postulante', 'info');
         return;
       }
-      // Abrir ventana desplegable con historial
-      modal(`Historial de ${nombre || rut}`, `
-        <div class="panel tabla-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th class="c">Fecha</th>
-                <th class="c">Hora</th>
-                <th>Examinador</th>
-                <th class="c">Clase</th>
-                <th>Resultado</th>
-                <th>Escuela</th>
-                <th>Tipo Reag.</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows.map(r => `
-                <tr>
-                  <td class="c">${esc(fFecha(r.fecha))}</td>
-                  <td class="c">${esc(r.hora)}</td>
-                  <td>${esc(r.examinador)}</td>
-                  <td class="c">${esc(r.clase)}</td>
-                  <td>${esc(r.resultado || 'Sin resultado')}</td>
-                  <td>${esc(r.escuela_conductores || '-')}</td>
-                  <td>${esc(r.tipo_reagendamiento || '-')}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-      `);
+      abrirPanelHistorial(`Historial de ${nombre || rut}`, rows);
   } catch (e) {
     toast(e.message, 'err');
   }
