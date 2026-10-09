@@ -1765,3 +1765,11 @@ tbody tr:first-child td { border-top: 0; }
 @media print {
   .tour-overlay, .lico-svg, .head-lico-wrap, .lico-confeti, .lico-travieso, #lico-onoff { display: none !important; }
 }
+
+/* Boton "Historial" junto al nombre en la cuadricula de agenda */
+.btn-hist {
+  display: block; margin: 2px auto 4px; padding: 1px 8px; font-size: 11px; font-weight: 600;
+  color: var(--azul); background: transparent; border: 1px solid currentColor;
+  border-radius: 10px; cursor: pointer; vertical-align: middle; white-space: nowrap;
+}
+.btn-hist:hover { background: var(--azul); color: #fff; }

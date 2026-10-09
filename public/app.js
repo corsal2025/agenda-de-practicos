@@ -654,59 +654,9 @@ function formularioCita(b, alGuardar) {
   }
 
   if ($('#btn-historial')) {
-    $('#btn-historial').onclick = async () => {
-      const rut = $('#f-rut').value.trim();
-      const nombre = $('#f-nombre').value.trim();
-      if (!rut && !nombre) {
-        toast('Este postulante no tiene RUT ni nombre registrado', 'err');
-        return;
-      }
-      const params = new URLSearchParams();
-      if (rut) params.set('rut', rut);
-      if (nombre) params.set('nombre', nombre);
-      const url = `/buscar-historial?${params.toString()}`;
-      try {
-        const rows = await api(url);
-        if (!Array.isArray(rows) || rows.length === 0) {
-          toast('No se encontró historial para este postulante', 'info');
-          return;
-        }
-        // Abrir ventana desplegable con historial
-        modal(`Historial de ${nombre || rut}`, `
-          <div class="panel tabla-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th class="c">Fecha</th>
-                  <th class="c">Hora</th>
-                  <th>Examinador</th>
-                  <th class="c">Clase</th>
-                  <th>Resultado</th>
-                  <th>Escuela</th>
-                  <th>Tipo Reag.</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rows.map(r => `
-                  <tr>
-                    <td class="c">${esc(fFecha(r.fecha))}</td>
-                    <td class="c">${esc(r.hora)}</td>
-                    <td>${esc(r.examinador)}</td>
-                    <td class="c">${esc(r.clase)}</td>
-                    <td>${esc(r.resultado || 'Sin resultado')}</td>
-                    <td>${esc(r.escuela_conductores || '-')}</td>
-                    <td>${esc(r.tipo_reagendamiento || '-')}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        `);
-      } catch (e) {
-        toast(e.message, 'err');
-      }
-    };
+    $('#btn-historial').onclick = () => verHistorial($('#f-rut').value.trim(), $('#f-nombre').value.trim());
   }
+
 
   $('#btn-guardar').onclick = async () => {
     const nombre = $('#f-nombre').value.trim();
@@ -1818,6 +1768,67 @@ function problemaDatos(b) {
   if (b.contacto && b.contacto.replace(/\D/g, '').length !== 9) return 'Teléfono incompleto';
   return null;
 }
+// Ventana desplegable con todas las citas anteriores del postulante (por RUT o nombre).
+async function verHistorial(rut, nombre) {
+  if (!rut && !nombre) {
+    toast('Este postulante no tiene RUT ni nombre registrado', 'err');
+    return;
+  }
+  try {
+    const params = new URLSearchParams();
+    if (rut) params.set('rut', rut);
+    if (nombre) params.set('nombre', nombre);
+    const url = `/buscar-historial?${params.toString()}`;
+      const rows = await api(url);
+      if (!Array.isArray(rows) || rows.length === 0) {
+        toast('No se encontró historial para este postulante', 'info');
+        return;
+      }
+      // Abrir ventana desplegable con historial
+      modal(`Historial de ${nombre || rut}`, `
+        <div class="panel tabla-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th class="c">Fecha</th>
+                <th class="c">Hora</th>
+                <th>Examinador</th>
+                <th class="c">Clase</th>
+                <th>Resultado</th>
+                <th>Escuela</th>
+                <th>Tipo Reag.</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(r => `
+                <tr>
+                  <td class="c">${esc(fFecha(r.fecha))}</td>
+                  <td class="c">${esc(r.hora)}</td>
+                  <td>${esc(r.examinador)}</td>
+                  <td class="c">${esc(r.clase)}</td>
+                  <td>${esc(r.resultado || 'Sin resultado')}</td>
+                  <td>${esc(r.escuela_conductores || '-')}</td>
+                  <td>${esc(r.tipo_reagendamiento || '-')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `);
+  } catch (e) {
+    toast(e.message, 'err');
+  }
+}
+
+// Boton "Historial" en las tarjetas de la cuadricula: se captura antes que el click de la tarjeta.
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-hist');
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  verHistorial(btn.dataset.rut || '', btn.dataset.nombre || '');
+}, true);
+
 function slotCard(b) {
   if (!b) return '<div class="slot libre">—</div>';
   if (b.bloqueado) {
@@ -1874,6 +1885,7 @@ function slotCard(b) {
     ${problema ? `<span class="alerta-dato" title="${esc(problema)}">⚠</span>` : ''}
     ${(b.alerts || []).length ? `<div class="slot-alertas">${alertasHtml(b)}</div>` : ''}
     <span class="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
+    <button type="button" class="btn-hist" data-rut="${esc(b.rut || '')}" data-nombre="${esc(b.nombre || '')}" title="Ver historial del postulante">📋 Historial</button>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <span class="sub" style="margin:0">
         ${clasesTagsHtml(b.clase)}
