@@ -1,7 +1,7 @@
 'use strict';
 
 /* ================= helpers ================= */
-// Clases D y A5: llevan escuela de conductores y vigencia de tramite (6 meses).
+// Clases D y A5: llevan escuela de conductores. La vigencia del tramite (6 meses) aplica a todas.
 const esClaseTramite = (clase) => String(clase || '').split(',').some((c) => ['D', 'A5'].includes(c.trim()));
 const alertasHtml = (b) => (b.alerts || []).map((t) => `<span class="badge reprob" title="${esc(t)}">⚠ ${esc(t)}</span>`).join(' ');
 
@@ -14,8 +14,8 @@ function sumarMesesISO(iso, n) {
   const ult = new Date(Date.UTC(y, m - 1 + n + 1, 0)).getUTCDate();
   return new Date(Date.UTC(y, m - 1 + n, Math.min(d, ult))).toISOString().slice(0, 10);
 }
-function vigenciaTramiteCli(clase, inicio, hoyIso = hoy()) {
-  if (!esClaseTramite(clase) || !/^\d{4}-\d{2}-\d{2}$/.test(inicio || '')) return null;
+function vigenciaTramiteCli(inicio, hoyIso = hoy()) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(inicio || '')) return null;
   const vence = sumarMesesISO(inicio, 6);
   return { vence, dias: Math.round((isoUTC(vence) - isoUTC(hoyIso)) / MS_DIA) };
 }
@@ -27,6 +27,8 @@ function cuentaRegresivaHtml(dias, vence) {
   const txt = dias <= 0 ? `⛔ Vencido hace ${diasTxt(-dias)}` : `⏳ Quedan ${diasTxt(dias)}`;
   return `<span class="badge ${cls} cuenta-tramite" title="El trámite vence el ${esc(fFecha(vence))}">${txt}</span>`;
 }
+// Badge neutro cuando la cita no tiene fecha de inicio de tramite (para que se complete).
+const SIN_INICIO_HTML = '<span class="badge noasiste cuenta-tramite" title="Falta registrar la fecha de inicio del trámite">⏳ Sin fecha de inicio</span>';
 const $ = (sel, root = document) => root.querySelector(sel);
 const view = $('#view');
 let META = null;
@@ -531,7 +533,7 @@ function formularioCita(b, alGuardar) {
     <div class="campo ancho" id="f-intento-aviso" hidden></div>
     <div class="campo">
       <label>Fecha de Inicio de Trámite</label>
-      <input type="date" id="f-fecha-inicio" value="${b.fecha_inicio_tramite || hoy()}" max="${hoy()}" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
+      <input type="date" id="f-fecha-inicio" value="${b.fecha_inicio_tramite || ''}" max="${hoy()}" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
       <div id="f-cuenta-tramite" class="cuenta-tramite-zona" aria-live="polite"></div>
     </div>
     <div class="campo" id="zona-escuela" ${esClaseTramite(b.clase) ? '' : 'hidden'}>
@@ -670,7 +672,7 @@ function formularioCita(b, alGuardar) {
     actualizarCuentaTramite();
   };
   const actualizarCuentaTramite = () => {
-    const v = vigenciaTramiteCli(clasesMarcadas().join(','), $('#f-fecha-inicio').value);
+    const v = vigenciaTramiteCli($('#f-fecha-inicio').value);
     $('#f-cuenta-tramite').innerHTML = v ? cuentaRegresivaHtml(v.dias, v.vence) : '';
   };
   document.querySelectorAll('#f-clase input').forEach((chk) => {
@@ -743,7 +745,7 @@ function formularioCita(b, alGuardar) {
         lista_espera: 'NO',
         intento: b.intento || '1° VEZ',
         funcionario_id: $('#f-func').value && $('#f-func').value !== '__nuevo' ? Number($('#f-func').value) : null,
-        fecha_inicio_tramite: $('#f-fecha-inicio') ? $('#f-fecha-inicio').value : (b.fecha_inicio_tramite || hoy()),
+        fecha_inicio_tramite: $('#f-fecha-inicio') ? ($('#f-fecha-inicio').value || null) : (b.fecha_inicio_tramite || null),
         escuela_conductores: esClaseTramite(clasesMarcadas().join(',')) ? ($('#f-escuela').value || null) : null,
         tipo_reagendamiento: $('#f-tipo-reagendamiento') ? $('#f-tipo-reagendamiento').value || null : (b.tipo_reagendamiento || null),
         confirmo_asistencia: $('#f-conf') ? ($('#f-conf').value === '' ? null : Number($('#f-conf').value)) : (b.confirmo_asistencia ?? null),
@@ -1872,32 +1874,76 @@ function pintarAvisoIntento(b, rows) {
   zona.hidden = false;
 }
 
-// Ficha imprimible: datos del postulante + historial completo, en una ventana aparte.
-const FICHA_CAMPOS = [
-  ['Nombre', (b) => nom(b.nombre)], ['RUT', (b) => b.rut], ['Clase', (b) => b.clase],
-  ['Teléfono', (b) => fTel(b.contacto)], ['Correo', (b) => b.correo],
-  ['Fecha de la cita', (b) => `${fFecha(b.fecha)} · ${b.hora || ''} hrs`], ['Examinador/a', (b) => b.examinador],
-  ['Funcionario/a', (b) => b.funcionario], ['Intento', (b) => b.intento], ['Tipo de cita', (b) => b.tipo_cita],
-  ['Inicio de trámite', (b) => (b.fecha_inicio_tramite ? fFecha(b.fecha_inicio_tramite) : '')],
-  ['Vencimiento de trámite', (b) => (b.fecha_vencimiento_tramite ? fFecha(b.fecha_vencimiento_tramite) : '')],
-  ['Escuela de conductores', (b) => b.escuela_conductores], ['Tipo de reagendamiento', (b) => b.tipo_reagendamiento],
-  ['Confirmó asistencia', (b) => (b.confirmo_asistencia === 1 ? 'SÍ' : b.confirmo_asistencia === 0 ? 'NO' : '')],
-  ['Resultado', (b) => b.resultado], ['Comentarios', (b) => b.comentarios],
+// Ficha imprimible: documento municipal con datos del postulante + historial, en una ventana aparte.
+const siNo = (v) => (v === 1 ? 'SÍ' : v === 0 ? 'NO' : '');
+function estadoTramiteTxt(b) {
+  const d = b.dias_restantes_tramite;
+  if (d == null) return b.fecha_inicio_tramite ? '' : 'Sin fecha de inicio registrada';
+  return d <= 0 ? `VENCIDO (hace ${diasTxt(-d)})` : `Vigente · quedan ${diasTxt(d)}`;
+}
+const FICHA_SECCIONES = [
+  ['Datos personales', [
+    ['Nombre', (b) => nom(b.nombre)], ['RUT', (b) => b.rut],
+    ['Teléfono', (b) => fTel(b.contacto)], ['Correo', (b) => b.correo],
+  ]],
+  ['Trámite', [
+    ['Clase(s)', (b) => b.clase], ['Escuela de conductores', (b) => b.escuela_conductores],
+    ['Fecha de inicio', (b) => (b.fecha_inicio_tramite ? fFecha(b.fecha_inicio_tramite) : '')],
+    ['Fecha de vencimiento', (b) => (b.fecha_vencimiento_tramite ? fFecha(b.fecha_vencimiento_tramite) : '')],
+    ['Estado / días restantes', estadoTramiteTxt], ['Intento', (b) => b.intento],
+    ['Tipo de cita', (b) => b.tipo_cita], ['Tipo de reagendamiento', (b) => b.tipo_reagendamiento],
+  ]],
+  ['Resultado', [
+    ['Confirmó asistencia', (b) => siNo(b.confirmo_asistencia)], ['Resultado', (b) => b.resultado],
+    ['Comentarios', (b) => b.comentarios, true],
+  ]],
 ];
-function fichaImprimibleHtml(b, rows) {
-  const datos = FICHA_CAMPOS.map(([t, f]) => `<tr><th>${esc(t)}</th><td>${esc(f(b) || '—')}</td></tr>`).join('');
+const FICHA_CSS = `@page{size:A4;margin:16mm 15mm 18mm}
+*{box-sizing:border-box}body{font:10.5pt/1.4 "Segoe UI",Arial,Helvetica,sans-serif;color:#000;background:#fff;margin:0}
+.doc-hd{display:flex;align-items:center;gap:14px;border-bottom:2px solid #000;padding-bottom:10px}
+.doc-hd img{height:64px;width:auto}.doc-hd .org{flex:1}.doc-hd .org b{display:block;font-size:11pt;letter-spacing:.02em}
+.doc-hd .org span{font-size:9pt;color:#333}.doc-hd .emi{font-size:8.5pt;text-align:right;color:#333;white-space:nowrap}
+h1{font:700 15pt/1.25 Georgia,"Times New Roman",serif;text-align:center;margin:16px 0 2px}
+.sub{text-align:center;font-size:9pt;color:#333;margin:0 0 14px}
+.cita{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #000;margin-bottom:12px}
+.cita div{padding:6px 8px;border-right:1px solid #999}.cita div:last-child{border-right:0}
+.lbl{display:block;font-size:7.5pt;text-transform:uppercase;letter-spacing:.05em;color:#444}
+.val{font-weight:600}h2{font:700 11pt Georgia,"Times New Roman",serif;border-bottom:1px solid #000;margin:14px 0 6px;padding-bottom:2px}
+.grid{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #bbb;border-left:1px solid #bbb}
+.grid div{padding:5px 8px;border-right:1px solid #bbb;border-bottom:1px solid #bbb;break-inside:avoid}.grid .ancho{grid-column:1/-1}
+table{border-collapse:collapse;width:100%;font-size:9pt}th,td{border:1px solid #999;padding:4px 6px;text-align:left;vertical-align:top}
+th{background:#e9e9e9;font-size:8pt;text-transform:uppercase;letter-spacing:.03em}tbody tr:nth-child(even) td{background:#f5f5f5}
+tr{break-inside:avoid;page-break-inside:avoid}thead{display:table-header-group}
+.firmas{display:flex;gap:60px;margin-top:60px;break-inside:avoid}.firmas div{flex:1;border-top:1px solid #000;text-align:center;padding-top:4px;font-size:9pt}
+.pie{margin-top:24px;border-top:1px solid #999;padding-top:4px;font-size:8pt;color:#444;display:flex;justify-content:space-between}
+@media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
+function fichaImprimibleHtml(b, rows, logoUrl) {
+  const ahora = new Date();
+  const emitido = `${fFecha(hoy())} ${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')} hrs`;
+  const celda = (t, v, ancho) => `<div${ancho ? ' class="ancho"' : ''}><span class="lbl">${esc(t)}</span><span class="val">${esc(v || '—')}</span></div>`;
+  const cita = [['Fecha', fFecha(b.fecha)], ['Hora', b.hora ? `${b.hora} hrs` : ''], ['Examinador/a', b.examinador], ['Funcionario/a', b.funcionario]]
+    .map(([t, v]) => celda(t, v)).join('');
+  const secciones = FICHA_SECCIONES.map(([titulo, campos]) => `<h2>${esc(titulo)}</h2>
+    <div class="grid">${campos.map(([t, f, ancho]) => celda(t, f(b), ancho)).join('')}</div>`).join('');
   const hist = rows.length ? rows.map((r) => `<tr>
-    <td>${esc(fFecha(r.fecha))} ${esc(r.hora)}</td><td>${esc(r.clase || '—')}</td><td>${esc(r.examinador || '—')}</td>
+    <td>${esc(fFecha(r.fecha))} ${esc(r.hora || '')}</td><td>${esc(r.clase || '—')}</td><td>${esc(r.examinador || '—')}</td>
     <td>${esc(r.resultado || 'Sin resultado')}</td><td>${esc(r.escuela_conductores || '—')}</td><td>${esc(r.comentarios || '')}</td></tr>`).join('')
     : '<tr><td colspan="6">Sin citas registradas</td></tr>';
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Ficha ${esc(nom(b.nombre))}</title>
-    <style>body{font:13px system-ui,sans-serif;color:#111;background:#fff;margin:24px}h1{font-size:18px;margin:0 0 4px}
-    h2{font-size:15px;margin:20px 0 6px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:4px 6px;text-align:left;vertical-align:top}
-    th{background:#f1f1f1;width:30%}.hist th{width:auto}.muted{color:#555;font-size:11px}</style></head><body>
-    <h1>Ficha del postulante</h1><div class="muted">${esc(MARCA.organismo)} · ${esc(MARCA.unidad)} · Impreso el ${esc(fFecha(hoy()))}</div>
-    <h2>Datos de la cita</h2><table>${datos}</table>
-    <h2>Historial</h2><table class="hist"><thead><tr><th>Fecha</th><th>Clase</th><th>Examinador</th><th>Resultado</th><th>Escuela</th><th>Comentarios</th></tr></thead>
-    <tbody>${hist}</tbody></table></body></html>`;
+    <style>${FICHA_CSS}</style></head><body>
+    <header class="doc-hd"><img id="ficha-logo" src="${esc(logoUrl)}" alt="${esc(MARCA.organismo)}">
+      <div class="org"><b>Ilustre ${esc(MARCA.organismo)}</b><span>Dirección de Tránsito y Transporte Público · ${esc(MARCA.unidad)}</span></div>
+      <div class="emi">Emitido el<br>${esc(emitido)}</div></header>
+    <h1>Ficha del Postulante — Examen Práctico de Conducir</h1>
+    <p class="sub">Dirección de Tránsito y Transporte Público — Ilustre ${esc(MARCA.organismo)}</p>
+    <div class="cita">${cita}</div>
+    ${secciones}
+    <h2>Historial de citas</h2>
+    <table><thead><tr><th>Fecha</th><th>Clase</th><th>Examinador/a</th><th>Resultado</th><th>Escuela</th><th>Comentarios</th></tr></thead>
+    <tbody>${hist}</tbody></table>
+    <div class="firmas"><div>Firma funcionario/a</div><div>Firma postulante</div></div>
+    <footer class="pie"><span>Documento generado por Agenda de Prácticos</span></footer>
+    </body></html>`;
 }
 async function imprimirFicha(b) {
   const params = new URLSearchParams();
@@ -1906,10 +1952,17 @@ async function imprimirFicha(b) {
   const rows = await api(`/buscar-historial?${params.toString()}`);
   const w = window.open('', '_blank');
   if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
-  w.document.write(fichaImprimibleHtml(b, Array.isArray(rows) ? rows : []));
+  w.document.write(fichaImprimibleHtml(b, Array.isArray(rows) ? rows : [], `${location.origin}/logo.png`));
   w.document.close();
   w.focus();
-  w.print();
+  // Espera a que cargue el logo (o falle) antes de imprimir, con tope de 3 s.
+  const img = w.document.getElementById('ficha-logo');
+  let impreso = false;
+  const imprimir = () => { if (!impreso) { impreso = true; w.print(); } };
+  if (!img || img.complete) { imprimir(); return; }
+  img.addEventListener('load', imprimir);
+  img.addEventListener('error', () => { img.remove(); imprimir(); });
+  setTimeout(imprimir, 3000);
 }
 
 // Esc cierra el panel lateral de la ficha.
@@ -1982,9 +2035,9 @@ function slotCard(b) {
   return `<div class="${cls}" data-id="${b.id}">
     ${problema ? `<span class="alerta-dato" title="${esc(problema)}">⚠</span>` : ''}
     ${(b.alerts || []).length ? `<div class="slot-alertas">${alertasHtml(b)}</div>` : ''}
-    ${b.dias_restantes_tramite != null ? `<div class="slot-alertas">${cuentaRegresivaHtml(b.dias_restantes_tramite, b.fecha_vencimiento_tramite)}</div>` : ''}
     <span class="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
     <button type="button" class="btn-hist" data-id="${b.id}" title="Ver ficha e historial del postulante">📋 Historial</button>
+    <div class="slot-alertas">${b.dias_restantes_tramite != null ? cuentaRegresivaHtml(b.dias_restantes_tramite, b.fecha_vencimiento_tramite) : SIN_INICIO_HTML}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <span class="sub" style="margin:0">
         ${clasesTagsHtml(b.clase)}
@@ -3159,7 +3212,7 @@ async function renderVencimientos() {
             <option value="todos" selected>Todos</option>
           </select></div>
       </div>
-      <p class="muted">Citas D y A5 desde hoy (y pasadas de los últimos 30 días sin resultado). El trámite vence 6 meses después de su inicio.</p>
+      <p class="muted">Citas de todas las clases desde hoy (y pasadas de los últimos 30 días sin resultado). El trámite vence 6 meses después de su inicio.</p>
       <div class="tabla-scroll"><table class="tabla-vencimientos"><thead><tr>
         <th class="c">Días restantes</th><th>Nombre</th><th>RUT</th><th class="c">Clase</th><th>Teléfono</th>
         <th class="c">Fecha cita</th><th>Examinador</th><th class="c">Vence</th>

@@ -373,7 +373,7 @@ const SELECT_BLOQUE = `
 `;
 const traer = (id) => db.prepare(`${SELECT_BLOQUE} WHERE a.id = ?`).get(Number(id));
 
-// Clases que exigen escuela de conductores y vigencia del tramite (6 meses).
+// Clases que exigen escuela de conductores (la vigencia de 6 meses aplica a todas las clases).
 const CLASES_TRAMITE = ['D', 'A5'];
 const tieneClaseTramite = (clase) => String(clase || '').split(',').some((c) => CLASES_TRAMITE.includes(c.trim()));
 const DIAS_AVISO_TRAMITE = 7;
@@ -392,7 +392,7 @@ function diasEntre(desde, hasta) {
 }
 // Vigencia del tramite: { vence, dias } (dias <= 0 = vencido) o null si no aplica.
 function vigenciaTramite(row, hoy = hoyISO()) {
-  if (!tieneClaseTramite(row.clase) || !/^\d{4}-\d{2}-\d{2}$/.test(row.fecha_inicio_tramite || '')) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(row.fecha_inicio_tramite || '')) return null;
   const vence = sumarMeses(row.fecha_inicio_tramite, 6);
   return { vence, dias: diasEntre(hoy, vence) };
 }

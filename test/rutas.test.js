@@ -582,7 +582,7 @@ test('PUT: escuela de conductores solo se guarda en clases D y A5', async () => 
   assert.equal(leer(b2.id).escuela_conductores, escuela);
 });
 
-test('GET agenda: alerta de tramite vencido o proximo a vencer solo en D/A5', async () => {
+test('GET agenda: alerta de tramite vencido o proximo a vencer en todas las clases', async () => {
   const fecha = diaNuevo();
   const vencido = slot(fecha, '09:00', { rut: '1-9', nombre: 'A', clase: 'D', fecha_inicio_tramite: hoyMas(-200) });
   const proximo = slot(fecha, '10:00', { rut: '2-7', nombre: 'B', clase: 'A5', fecha_inicio_tramite: hoyMas(-180) });
@@ -593,7 +593,7 @@ test('GET agenda: alerta de tramite vencido o proximo a vencer solo en D/A5', as
   assert.match(de(vencido)[0], /vencido/);
   assert.match(de(proximo)[0], /pr[oó]ximo a vencer/);
   assert.deepEqual(de(vigente), []);
-  assert.deepEqual(de(claseB), []);
+  assert.match(de(claseB)[0], /vencido/);
 });
 
 test('GET buscar-historial: por RUT normalizado y, sin RUT, por nombre', async () => {
@@ -610,16 +610,18 @@ test('GET buscar-historial: por RUT normalizado y, sin RUT, por nombre', async (
 const diasHasta = (iso) => Math.round((Date.UTC(...iso.split('-').map((n, i) => Number(n) - (i === 1 ? 1 : 0)))
   - Date.UTC(...hoyISO().split('-').map((n, i) => Number(n) - (i === 1 ? 1 : 0)))) / 86400000);
 
-test('dias_restantes_tramite: vencido negativo, proximo <= 7, lejano > 30 y null fuera de D/A5', async () => {
+test('dias_restantes_tramite: vencido negativo, proximo <= 7, lejano > 30, aplica a toda clase y null sin fecha de inicio', async () => {
   const fecha = diaNuevo();
   const vencido = slot(fecha, '09:00', { rut: '1-9', nombre: 'A', clase: 'D', fecha_inicio_tramite: hoyMas(-200) });
   const proximo = slot(fecha, '10:00', { rut: '2-7', nombre: 'B', clase: 'A5', fecha_inicio_tramite: hoyMas(-180) });
   const lejano = slot(fecha, '11:00', { rut: '3-5', nombre: 'C', clase: 'D', fecha_inicio_tramite: hoyMas(-10) });
   const otra = slot(fecha, '12:00', { rut: '4-3', nombre: 'D', clase: 'B', fecha_inicio_tramite: hoyMas(-200) });
-  const v = (await api('GET', `/agenda/${vencido.id}`)).datos;
+  const sinFecha = slot(fecha, '13:00', { rut: '5-1', nombre: 'E', clase: 'B' });
+  const v =(await api('GET', `/agenda/${vencido.id}`)).datos;
   const p = (await api('GET', `/agenda/${proximo.id}`)).datos;
   const l = (await api('GET', `/agenda/${lejano.id}`)).datos;
   const o = (await api('GET', `/agenda/${otra.id}`)).datos;
+  const sin = (await api('GET', `/agenda/${sinFecha.id}`)).datos;
   assert.ok(v.dias_restantes_tramite < 0);
   assert.equal(v.dias_restantes_tramite, diasHasta(v.fecha_vencimiento_tramite));
   assert.match(v.alerts[0], /vencido/);
@@ -628,8 +630,10 @@ test('dias_restantes_tramite: vencido negativo, proximo <= 7, lejano > 30 y null
   assert.ok(l.dias_restantes_tramite > 30);
   assert.equal(l.dias_restantes_tramite, diasHasta(l.fecha_vencimiento_tramite));
   assert.deepEqual(l.alerts, []);
-  assert.equal(o.dias_restantes_tramite, null);
-  assert.equal(o.fecha_vencimiento_tramite, null);
+  assert.ok(o.dias_restantes_tramite < 0);
+  assert.match(o.alerts[0], /vencido/);
+  assert.equal(sin.dias_restantes_tramite, null);
+  assert.equal(sin.fecha_vencimiento_tramite, null);
 });
 
 test('tramites-por-vencer: ordena por dias restantes y aplica filtros', async () => {
@@ -637,15 +641,15 @@ test('tramites-por-vencer: ordena por dias restantes y aplica filtros', async ()
   const lejano = slot(fecha, '09:00', { rut: '5-1', nombre: 'POR VENCER L', clase: 'D', fecha_inicio_tramite: hoyMas(-10) });
   const vencido = slot(fecha, '10:00', { rut: '6-K', nombre: 'POR VENCER V', clase: 'D', fecha_inicio_tramite: hoyMas(-200) });
   const proximo = slot(fecha, '11:00', { rut: '7-8', nombre: 'POR VENCER P', clase: 'A5', fecha_inicio_tramite: hoyMas(-180) });
-  slot(fecha, '12:00', { rut: '8-6', nombre: 'POR VENCER B', clase: 'B', fecha_inicio_tramite: hoyMas(-200) });
+  const claseB = slot(fecha, '12:00', { rut: '8-6', nombre: 'POR VENCER B', clase: 'B', fecha_inicio_tramite: hoyMas(-230) });
   const ids = (rows) => rows.filter((r) => r.fecha === fecha).map((r) => r.id);
   const todos = (await api('GET', '/tramites-por-vencer')).datos;
-  assert.deepEqual(ids(todos), [vencido.id, proximo.id, lejano.id]);
+  assert.deepEqual(ids(todos), [claseB.id, vencido.id, proximo.id, lejano.id]);
   const dias = todos.map((r) => r.dias_restantes_tramite);
   assert.deepEqual(dias, [...dias].sort((a, b) => a - b));
   assert.deepEqual(ids((await api('GET', '/tramites-por-vencer?filtro=7')).datos), [proximo.id]);
   assert.deepEqual(ids((await api('GET', '/tramites-por-vencer?filtro=30')).datos), [proximo.id]);
-  assert.deepEqual(ids((await api('GET', '/tramites-por-vencer?filtro=vencidos')).datos), [vencido.id]);
+  assert.deepEqual(ids((await api('GET', '/tramites-por-vencer?filtro=vencidos')).datos), [claseB.id, vencido.id]);
   assert.equal((await api('GET', '/tramites-por-vencer?filtro=x')).status, 400);
 });
 
