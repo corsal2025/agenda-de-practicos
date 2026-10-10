@@ -523,15 +523,36 @@ function formularioCita(b, alGuardar) {
         ${c.tipo_reagendamiento ? c.tipo_reagendamiento.map((tipo) => `<option value="${esc(tipo)}" ${b.tipo_reagendamiento === tipo ? 'selected' : ''}>${esc(tipo)}</option>`).join('') : ''}
       </select>
     </div>
+    ${tieneCita ? `<div class="campo">
+      <label>Confirmó asistencia</label>
+      <select id="f-conf">
+        <option value="" ${b.confirmo_asistencia == null ? 'selected' : ''}>-- Sin respuesta --</option>
+        <option value="1" ${b.confirmo_asistencia === 1 ? 'selected' : ''}>SÍ</option>
+        <option value="0" ${b.confirmo_asistencia === 0 ? 'selected' : ''}>NO</option>
+      </select>
+    </div>
+    <div class="campo">
+      <label>Resultado</label>
+      <select id="f-res">
+        <option value="">-- Sin resultado --</option>
+        ${(c.resultado || []).map((r) => `<option value="${esc(r)}" ${b.resultado === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="campo ancho">
+      <label>Comentarios</label>
+      <textarea id="f-coment" rows="3">${esc(b.comentarios || '')}</textarea>
+    </div>` : ''}
+    ${tieneCita ? '<div class="campo ancho hist-cita" id="zona-hist-cita"><h4>Historial del solicitante</h4><div class="hist-lista">Cargando...</div></div>' : ''}
     `,
     `
     ${(b.rut || b.nombre) ? '<button class="btn peligro sec" id="btn-liberar" title="Quita la cita del bloque">Liberar bloque</button>' : ''}
     ${(b.rut || b.nombre) ? '<button type="button" class="btn sec" id="btn-reagendar-slot" style="color:var(--azul);font-weight:600">Reagendar postulante</button>' : ''}
-    ${(b.rut || b.nombre) ? `<button type="button" class="btn sec" id="btn-historial" style="color:var(--azul);font-weight:600">📋 Historial del solicitante</button>` : ''}
     <button class="btn sec" id="btn-cancel">Cancelar</button>
     <button class="btn" id="btn-guardar" style="background:#1d4ed8;font-weight:700">${tieneCita ? "Guardar cambios" : "Confirmar y agendar cita"}</button>
-    `
+    `,
+    'lateral'
   );
+  if (tieneCita) cargarHistorialCita(b, alGuardar);
 
   // Autoformato de RUT en tiempo real
   $('#f-rut').addEventListener('input', () => {
@@ -653,10 +674,6 @@ function formularioCita(b, alGuardar) {
     };
   }
 
-  if ($('#btn-historial')) {
-    $('#btn-historial').onclick = () => verHistorial($('#f-rut').value.trim(), $('#f-nombre').value.trim());
-  }
-
 
   $('#btn-guardar').onclick = async () => {
     const nombre = $('#f-nombre').value.trim();
@@ -676,7 +693,7 @@ function formularioCita(b, alGuardar) {
     $('#btn-guardar').disabled = true;
     $('#btn-guardar').textContent = 'Guardando...';
 
-    const comun = { visto_en: b.actualizado_en, comentarios: b.comentarios || null };
+    const comun = { visto_en: b.actualizado_en, comentarios: $('#f-coment') ? ($('#f-coment').value.trim() || null) : (b.comentarios || null) };
     try {
       const body = {
         ...comun,
@@ -1768,69 +1785,51 @@ function problemaDatos(b) {
   if (b.contacto && b.contacto.replace(/\D/g, '').length !== 9) return 'Teléfono incompleto';
   return null;
 }
-// Panel lateral derecho con el historial. Se cierra con la X, la tecla Esc o al hacer clic fuera.
-function abrirPanelHistorial(titulo, rows) {
-  cerrarPanelHistorial();
-  const fondo = document.createElement('div');
-  fondo.className = 'hist-fondo';
-  fondo.innerHTML = `
-    <aside class="hist-panel" role="dialog" aria-label="${esc(titulo)}">
-      <header class="hist-cab">
-        <div><b>${esc(titulo)}</b><span class="hist-total">${rows.length} cita${rows.length === 1 ? '' : 's'}</span></div>
-        <button type="button" class="hist-x" title="Cerrar">&times;</button>
-      </header>
-      <div class="hist-lista">
-        ${rows.map((r) => `
-          <div class="hist-item">
-            <div class="hist-fila"><b>${esc(fFecha(r.fecha))}</b> · ${esc(r.hora)} hrs<span class="hist-clase">${esc(r.clase || '-')}</span></div>
-            <div class="hist-sub">Examinador: ${esc(r.examinador || '-')}</div>
-            <div class="hist-sub">Resultado: <b>${esc(r.resultado || 'Sin resultado')}</b></div>
-            ${r.escuela_conductores ? `<div class="hist-sub">Escuela: ${esc(r.escuela_conductores)}</div>` : ''}
-            ${r.tipo_reagendamiento ? `<div class="hist-sub">Reagendamiento: ${esc(r.tipo_reagendamiento)}</div>` : ''}
-            ${(r.alerts || []).length ? `<div class="hist-sub">${alertasHtml(r)}</div>` : ''}
-          </div>`).join('')}
-      </div>
-    </aside>`;
-  fondo.addEventListener('click', (e) => {
-    if (e.target === fondo || e.target.closest('.hist-x')) cerrarPanelHistorial();
-  });
-  document.body.appendChild(fondo);
-  requestAnimationFrame(() => fondo.classList.add('abierto'));
-}
-function cerrarPanelHistorial() {
-  document.querySelectorAll('.hist-fondo').forEach((el) => el.remove());
-}
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarPanelHistorial(); });
-
-// Ventana desplegable con todas las citas anteriores del postulante (por RUT o nombre).
-async function verHistorial(rut, nombre) {
-  if (!rut && !nombre) {
-    toast('Este postulante no tiene RUT ni nombre registrado', 'err');
-    return;
-  }
+// Historial del solicitante dentro del panel lateral de la ficha. Cada cita se puede abrir.
+async function cargarHistorialCita(b, alGuardar) {
+  const cont = $('#zona-hist-cita .hist-lista');
+  if (!cont) return;
+  const params = new URLSearchParams();
+  if (b.rut) params.set('rut', b.rut);
+  if (b.nombre) params.set('nombre', b.nombre);
   try {
-    const params = new URLSearchParams();
-    if (rut) params.set('rut', rut);
-    if (nombre) params.set('nombre', nombre);
-    const url = `/buscar-historial?${params.toString()}`;
-      const rows = await api(url);
-      if (!Array.isArray(rows) || rows.length === 0) {
-        toast('No se encontró historial para este postulante', 'info');
-        return;
-      }
-      abrirPanelHistorial(`Historial de ${nombre || rut}`, rows);
+    const rows = await api(`/buscar-historial?${params.toString()}`);
+    if (!document.body.contains(cont)) return;
+    if (!Array.isArray(rows) || !rows.length) { cont.textContent = 'Sin citas registradas'; return; }
+    cont.innerHTML = rows.map((r) => {
+      const actual = r.id === b.id;
+      return `<div class="hist-item ${actual ? 'actual' : ''}" ${actual ? '' : `role="button" tabindex="0" data-id="${r.id}"`}>
+        <div class="hist-fila"><b>${esc(fFecha(r.fecha))}</b> · ${esc(r.hora)} hrs${actual ? '<span class="badge reag">Cita actual</span>' : ''}<span class="hist-clase">${esc(r.clase || '-')}</span></div>
+        <div class="hist-sub">Examinador: ${esc(r.examinador || '-')}</div>
+        <div class="hist-sub">Resultado: <b>${esc(r.resultado || 'Sin resultado')}</b></div>
+        ${r.escuela_conductores ? `<div class="hist-sub">Escuela: ${esc(r.escuela_conductores)}</div>` : ''}
+        ${r.tipo_reagendamiento ? `<div class="hist-sub">Reagendamiento: ${esc(r.tipo_reagendamiento)}</div>` : ''}
+        ${(r.alerts || []).length ? `<div class="hist-sub">${alertasHtml(r)}</div>` : ''}
+      </div>`;
+    }).join('');
+    cont.querySelectorAll('.hist-item[data-id]').forEach((el) => {
+      const abrir = () => abrirSlotPorId(Number(el.dataset.id), alGuardar).catch((e) => toast(e.message, 'err'));
+      el.onclick = abrir;
+      el.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrir(); } };
+    });
   } catch (e) {
-    toast(e.message, 'err');
+    if (document.body.contains(cont)) cont.textContent = 'No se pudo cargar el historial';
   }
 }
 
-// Boton "Historial" en las tarjetas de la cuadricula: se captura antes que el click de la tarjeta.
+// Esc cierra el panel lateral de la ficha.
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.querySelector('#modal-root .modal.lateral')) cerrarModal();
+});
+
+// Boton "Historial" en las tarjetas de la cuadricula: abre la ficha editable en el panel lateral.
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('.btn-hist');
   if (!btn) return;
   e.preventDefault();
   e.stopPropagation();
-  verHistorial(btn.dataset.rut || '', btn.dataset.nombre || '');
+  abrirSlotPorId(Number(btn.dataset.id), () => { if ($('#a-grid')) renderAgenda(); })
+    .catch((err) => toast(err.message, 'err'));
 }, true);
 
 function slotCard(b) {
@@ -1889,7 +1888,7 @@ function slotCard(b) {
     ${problema ? `<span class="alerta-dato" title="${esc(problema)}">⚠</span>` : ''}
     ${(b.alerts || []).length ? `<div class="slot-alertas">${alertasHtml(b)}</div>` : ''}
     <span class="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
-    <button type="button" class="btn-hist" data-rut="${esc(b.rut || '')}" data-nombre="${esc(b.nombre || '')}" title="Ver historial del postulante">📋 Historial</button>
+    <button type="button" class="btn-hist" data-id="${b.id}" title="Ver ficha e historial del postulante">📋 Historial</button>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <span class="sub" style="margin:0">
         ${clasesTagsHtml(b.clase)}
