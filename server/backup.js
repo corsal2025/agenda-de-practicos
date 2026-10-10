@@ -10,6 +10,11 @@ const CONSERVAR = Math.max(1, Number(process.env.AGENDA_BACKUPS) || 30);
 // Los backups "pre-*" (pre-import, pre-fixes...) son puntos de retorno antes de una operacion
 // destructiva: no entran en la rotacion normal; se conservan hasta este maximo.
 const CONSERVAR_PRE = 10;
+// Segunda copia fuera del disco local. AGENDA_BACKUP_COPIA la fija a mano; si no, y no se
+// redirigio DIR (tests), usa el OneDrive del trabajo cuando hay sesion iniciada en este PC.
+const COPIA = process.env.AGENDA_BACKUP_COPIA
+  || (!process.env.AGENDA_BACKUP_DIR && process.env.OneDriveCommercial
+    ? path.join(process.env.OneDriveCommercial, 'Agenda de Practicos - Backups') : null);
 
 // Copia consistente de la base a data/backups/ con marca de tiempo (hora local).
 // Usa VACUUM INTO con la conexion de la app: copiar el archivo .db a mano ignora lo que
@@ -25,23 +30,39 @@ function backup(etiqueta) {
   for (let n = 2; fs.existsSync(destino); n++) destino = path.join(DIR, `${nombre}-${n}.db`);
   db.prepare('VACUUM INTO ?').run(destino);
   podar();
+  copiarFuera(destino);
   return destino;
 }
 
 // Solo se consideran archivos con nombre de backup (agenda-AAAA-MM-DDT...db): nunca agenda.db ni otros.
 const ES_BACKUP = /^agenda-\d{4}-\d{2}-\d{2}T.*\.db$/;
 
+// Copia el backup a COPIA (OneDrive). Un fallo aqui no invalida el backup local.
+function copiarFuera(archivo) {
+  if (!COPIA) return null;
+  try {
+    fs.mkdirSync(COPIA, { recursive: true });
+    const destino = path.join(COPIA, path.basename(archivo));
+    fs.copyFileSync(archivo, destino);
+    podar(COPIA);
+    return destino;
+  } catch (e) {
+    console.error('No se pudo copiar el backup a', COPIA, '-', e.message);
+    return null;
+  }
+}
+
 // Deja los CONSERVAR backups normales mas recientes y hasta CONSERVAR_PRE de los "pre-*".
-function podar() {
-  if (!fs.existsSync(DIR)) return;
-  const archivos = fs.readdirSync(DIR)
+function podar(dir = DIR) {
+  if (!fs.existsSync(dir)) return;
+  const archivos = fs.readdirSync(dir)
     .filter((f) => ES_BACKUP.test(f))
-    .map((f) => ({ f, t: fs.statSync(path.join(DIR, f)).mtimeMs }))
+    .map((f) => ({ f, t: fs.statSync(path.join(dir, f)).mtimeMs }))
     .sort((a, b) => b.t - a.t);
   const pre = archivos.filter(({ f }) => f.includes('pre-'));
   const normales = archivos.filter(({ f }) => !f.includes('pre-'));
   for (const { f } of [...normales.slice(CONSERVAR), ...pre.slice(CONSERVAR_PRE)]) {
-    try { fs.unlinkSync(path.join(DIR, f)); } catch (_) { /* ignore */ }
+    try { fs.unlinkSync(path.join(dir, f)); } catch (_) { /* ignore */ }
   }
 }
 
@@ -62,7 +83,7 @@ function programar() {
   }, 24 * 3600 * 1000).unref();
 }
 
-module.exports = { backup, programar, podar, DIR };
+module.exports = { backup, programar, podar, DIR, COPIA };
 
 if (require.main === module) {
   console.log('Backup creado en:', backup());

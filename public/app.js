@@ -532,8 +532,8 @@ function formularioCita(b, alGuardar) {
     ${(b.alerts || []).length ? `<div class="campo ancho">${alertasHtml(b)}</div>` : ''}
     <div class="campo ancho" id="f-intento-aviso" hidden></div>
     <div class="campo">
-      <label>Fecha de Inicio de Trámite</label>
-      <input type="date" id="f-fecha-inicio" value="${b.fecha_inicio_tramite || ''}" max="${hoy()}" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
+      <label>Fecha de Inicio de Trámite *</label>
+      <input type="date" id="f-fecha-inicio" required value="${b.fecha_inicio_tramite || ''}" max="${hoy()}" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
       <div id="f-cuenta-tramite" class="cuenta-tramite-zona" aria-live="polite"></div>
     </div>
     <div class="campo" id="zona-escuela" ${esClaseTramite(b.clase) ? '' : 'hidden'}>
@@ -726,6 +726,7 @@ function formularioCita(b, alGuardar) {
     if (!clases.length) { toast('Debes marcar al menos una clase de licencia', 'err'); return; }
     if (!contacto) { toast('El número de celular es obligatorio', 'err'); $('#f-contacto').focus(); return; }
     if (!correoVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoVal)) { toast('Ingresa un correo electrónico válido', 'err'); $('#f-correo').focus(); return; }
+    if ($('#f-fecha-inicio') && !$('#f-fecha-inicio').value) { toast('La fecha de inicio de trámite es obligatoria', 'err'); $('#f-fecha-inicio').focus(); return; }
 
     $('#btn-guardar').disabled = true;
     $('#btn-guardar').textContent = 'Guardando...';

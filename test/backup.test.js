@@ -11,6 +11,8 @@ const dirBackups = fs.mkdtempSync(path.join(os.tmpdir(), 'agenda-bk-'));
 process.env.AGENDA_DB = tmpDb;
 process.env.AGENDA_BACKUP_DIR = dirBackups;
 process.env.AGENDA_BACKUPS = '3';
+const dirCopia = fs.mkdtempSync(path.join(os.tmpdir(), 'agenda-bk-copia-'));
+process.env.AGENDA_BACKUP_COPIA = dirCopia;
 
 const { DatabaseSync } = require('node:sqlite');
 const { db } = require('../server/db');
@@ -22,6 +24,7 @@ assert.equal(path.resolve(backupMod.DIR), path.resolve(dirBackups), 'AGENDA_BACK
 test.after(() => {
   for (const s of ['', '-shm', '-wal']) { try { fs.unlinkSync(tmpDb + s); } catch (_) {} }
   fs.rmSync(dirBackups, { recursive: true, force: true });
+  fs.rmSync(dirCopia, { recursive: true, force: true });
 });
 
 const archivosBackup = () => fs.readdirSync(dirBackups).filter((f) => f.endsWith('.db'));
@@ -137,4 +140,10 @@ test('podar nunca toca archivos que no son backups (agenda.db, otros)', () => {
   const quedan = archivosBackup();
   for (const n of ['agenda.db', 'otro.db', 'agenda-notas.db']) assert.ok(quedan.includes(n), `${n} debe seguir ahi`);
   assert.equal(quedan.filter((f) => /^agenda-\d{4}-/.test(f)).length, 3);
+});
+
+test('cada backup se copia tambien a AGENDA_BACKUP_COPIA (OneDrive) con la misma retencion', () => {
+  for (let i = 0; i < 5; i++) backupMod.backup();
+  const copias = fs.readdirSync(dirCopia).filter((f) => f.endsWith('.db') && !f.includes('pre-'));
+  assert.ok(copias.length >= 1 && copias.length <= 3, `copias: ${copias.length}`);
 });
