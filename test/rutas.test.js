@@ -571,7 +571,8 @@ test('PUT: tipo_reagendamiento fuera de catalogo se rechaza', async () => {
 });
 
 test('PUT: escuela de conductores solo se guarda en clases D y A5', async () => {
-  const escuela = (await api('GET', '/meta')).datos.catalogos.escuela_conductores[0];
+  const escuela = 'ESCUELA DE PRUEBA';
+  await api('POST', '/catalogos', { tipo: 'escuela_conductores', valor: escuela });
   const b1 = slot(diaNuevo(), '09:00');
   await api('PUT', `/agenda/${b1.id}`, { rut: '11.111.111-1', nombre: 'Juan', clase: 'B', correo: 'juan@x.cl', escuela_conductores: escuela });
   assert.equal(leer(b1.id).escuela_conductores, null);

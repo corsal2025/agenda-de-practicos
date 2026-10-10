@@ -31,10 +31,8 @@ const CATALOGOS = {
   resultado:    ['APROBADO', 'REPROBADO', 'REPROBADO INASISTENCIA', 'NO ASISTIO'],
   intento:      ['1° VEZ', '2° VEZ'],
   lista_espera: ['SI', 'NO'],
-  escuela_conductores: [
-    'ESCUELA A','ESCUELA B','ESCUELA C','ESCUELA D','ESCUELA E',
-    'INSTITUTO MANQUEHUE','AUTOESCUELA LOS ANDES','CENTRO DE CONDUCCION VIÑA'
-  ],
+  // Se cargan desde la pestana Datos > Listas desplegables.
+  escuela_conductores: [],
   tipo_reagendamiento: ['PRESENCIAL','SMS','LLAMADO','CORREO'],
 };
 
