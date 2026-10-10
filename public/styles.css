@@ -1803,3 +1803,7 @@ tbody tr:first-child td { border-top: 0; }
 .tabla-vencimientos tbody tr[data-id]:hover, .tabla-vencimientos tbody tr[data-id]:focus-visible { background: var(--ok-bg); outline: none; }
 .barra-pct { display: inline-block; vertical-align: middle; width: 120px; height: 8px; margin-right: 8px; border-radius: 4px; background: var(--linea); overflow: hidden; }
 .barra-pct span { display: block; height: 100%; background: var(--ok); }
+
+/* Cuenta regresiva en la franja superior de la tarjeta, a la izquierda del aviso ⚠ */
+.slot-top { display: flex; justify-content: center; padding-right: 16px; margin: -2px 0 0; }
+.slot-top .badge { font-size: 10.5px; padding: 1px 7px; }

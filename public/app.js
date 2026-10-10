@@ -1840,6 +1840,8 @@ async function cargarHistorialCita(b, alGuardar) {
         <div class="hist-fila"><b>${esc(fFecha(r.fecha))}</b> · ${esc(r.hora)} hrs${actual ? '<span class="badge reag">Cita actual</span>' : ''}<span class="hist-clase">${esc(r.clase || '-')}</span></div>
         <div class="hist-sub">Examinador: ${esc(r.examinador || '-')}</div>
         <div class="hist-sub">Resultado: <b>${esc(r.resultado || 'Sin resultado')}</b></div>
+        <div class="hist-sub">Inicio trámite: <b>${r.fecha_inicio_tramite ? esc(fFecha(r.fecha_inicio_tramite)) : 'Sin registrar'}</b>${r.fecha_vencimiento_tramite ? ` · Vence: <b>${esc(fFecha(r.fecha_vencimiento_tramite))}</b>` : ''}</div>
+        ${r.dias_restantes_tramite != null ? `<div class="hist-sub">${cuentaRegresivaHtml(r.dias_restantes_tramite, r.fecha_vencimiento_tramite)}</div>` : ''}
         ${r.escuela_conductores ? `<div class="hist-sub">Escuela: ${esc(r.escuela_conductores)}</div>` : ''}
         ${r.tipo_reagendamiento ? `<div class="hist-sub">Reagendamiento: ${esc(r.tipo_reagendamiento)}</div>` : ''}
         ${(r.alerts || []).length ? `<div class="hist-sub">${alertasHtml(r)}</div>` : ''}
@@ -1926,9 +1928,9 @@ function fichaImprimibleHtml(b, rows, logoUrl) {
   const secciones = FICHA_SECCIONES.map(([titulo, campos]) => `<h2>${esc(titulo)}</h2>
     <div class="grid">${campos.map(([t, f, ancho]) => celda(t, f(b), ancho)).join('')}</div>`).join('');
   const hist = rows.length ? rows.map((r) => `<tr>
-    <td>${esc(fFecha(r.fecha))} ${esc(r.hora || '')}</td><td>${esc(r.clase || '—')}</td><td>${esc(r.examinador || '—')}</td>
+    <td>${esc(fFecha(r.fecha))} ${esc(r.hora || '')}</td><td>${esc(r.clase || '—')}</td><td>${r.fecha_inicio_tramite ? esc(fFecha(r.fecha_inicio_tramite)) : '—'}</td><td>${r.fecha_vencimiento_tramite ? esc(fFecha(r.fecha_vencimiento_tramite)) : '—'}</td><td>${esc(r.examinador || '—')}</td>
     <td>${esc(r.resultado || 'Sin resultado')}</td><td>${esc(r.escuela_conductores || '—')}</td><td>${esc(r.comentarios || '')}</td></tr>`).join('')
-    : '<tr><td colspan="6">Sin citas registradas</td></tr>';
+    : '<tr><td colspan="8">Sin citas registradas</td></tr>';
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Ficha ${esc(nom(b.nombre))}</title>
     <style>${FICHA_CSS}</style></head><body>
     <header class="doc-hd"><img id="ficha-logo" src="${esc(logoUrl)}" alt="${esc(MARCA.organismo)}">
@@ -1939,7 +1941,7 @@ function fichaImprimibleHtml(b, rows, logoUrl) {
     <div class="cita">${cita}</div>
     ${secciones}
     <h2>Historial de citas</h2>
-    <table><thead><tr><th>Fecha</th><th>Clase</th><th>Examinador/a</th><th>Resultado</th><th>Escuela</th><th>Comentarios</th></tr></thead>
+    <table><thead><tr><th>Fecha</th><th>Clase</th><th>Inicio trámite</th><th>Término trámite</th><th>Examinador/a</th><th>Resultado</th><th>Escuela</th><th>Comentarios</th></tr></thead>
     <tbody>${hist}</tbody></table>
     <div class="firmas"><div>Firma funcionario/a</div><div>Firma postulante</div></div>
     <footer class="pie"><span>Documento generado por Agenda de Prácticos</span></footer>
@@ -2034,10 +2036,10 @@ function slotCard(b) {
 
   return `<div class="${cls}" data-id="${b.id}">
     ${problema ? `<span class="alerta-dato" title="${esc(problema)}">⚠</span>` : ''}
+    <div class="slot-top">${b.dias_restantes_tramite != null ? cuentaRegresivaHtml(b.dias_restantes_tramite, b.fecha_vencimiento_tramite) : SIN_INICIO_HTML}</div>
     ${(b.alerts || []).length ? `<div class="slot-alertas">${alertasHtml(b)}</div>` : ''}
     <span class="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
     <button type="button" class="btn-hist" data-id="${b.id}" title="Ver ficha e historial del postulante">📋 Historial</button>
-    <div class="slot-alertas">${b.dias_restantes_tramite != null ? cuentaRegresivaHtml(b.dias_restantes_tramite, b.fecha_vencimiento_tramite) : SIN_INICIO_HTML}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <span class="sub" style="margin:0">
         ${clasesTagsHtml(b.clase)}
