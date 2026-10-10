@@ -2,3 +2,4 @@
 *.png binary
 *.xlsx binary
 public/vendor/** linguist-vendored
+*.bat text eol=crlf
