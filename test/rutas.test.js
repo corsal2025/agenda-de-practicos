@@ -605,3 +605,69 @@ test('GET buscar-historial: por RUT normalizado y, sin RUT, por nombre', async (
   assert.ok(porNombre.datos.some((x) => x.id === b.id));
   assert.equal((await api('GET', '/buscar-historial')).status, 400);
 });
+
+// ---------- vigencia del tramite D/A5: dias restantes ----------
+const diasHasta = (iso) => Math.round((Date.UTC(...iso.split('-').map((n, i) => Number(n) - (i === 1 ? 1 : 0)))
+  - Date.UTC(...hoyISO().split('-').map((n, i) => Number(n) - (i === 1 ? 1 : 0)))) / 86400000);
+
+test('dias_restantes_tramite: vencido negativo, proximo <= 7, lejano > 30 y null fuera de D/A5', async () => {
+  const fecha = diaNuevo();
+  const vencido = slot(fecha, '09:00', { rut: '1-9', nombre: 'A', clase: 'D', fecha_inicio_tramite: hoyMas(-200) });
+  const proximo = slot(fecha, '10:00', { rut: '2-7', nombre: 'B', clase: 'A5', fecha_inicio_tramite: hoyMas(-180) });
+  const lejano = slot(fecha, '11:00', { rut: '3-5', nombre: 'C', clase: 'D', fecha_inicio_tramite: hoyMas(-10) });
+  const otra = slot(fecha, '12:00', { rut: '4-3', nombre: 'D', clase: 'B', fecha_inicio_tramite: hoyMas(-200) });
+  const v = (await api('GET', `/agenda/${vencido.id}`)).datos;
+  const p = (await api('GET', `/agenda/${proximo.id}`)).datos;
+  const l = (await api('GET', `/agenda/${lejano.id}`)).datos;
+  const o = (await api('GET', `/agenda/${otra.id}`)).datos;
+  assert.ok(v.dias_restantes_tramite < 0);
+  assert.equal(v.dias_restantes_tramite, diasHasta(v.fecha_vencimiento_tramite));
+  assert.match(v.alerts[0], /vencido/);
+  assert.ok(p.dias_restantes_tramite > 0 && p.dias_restantes_tramite <= 7);
+  assert.match(p.alerts[0], /próximo/);
+  assert.ok(l.dias_restantes_tramite > 30);
+  assert.equal(l.dias_restantes_tramite, diasHasta(l.fecha_vencimiento_tramite));
+  assert.deepEqual(l.alerts, []);
+  assert.equal(o.dias_restantes_tramite, null);
+  assert.equal(o.fecha_vencimiento_tramite, null);
+});
+
+test('tramites-por-vencer: ordena por dias restantes y aplica filtros', async () => {
+  const fecha = diaNuevo();
+  const lejano = slot(fecha, '09:00', { rut: '5-1', nombre: 'POR VENCER L', clase: 'D', fecha_inicio_tramite: hoyMas(-10) });
+  const vencido = slot(fecha, '10:00', { rut: '6-K', nombre: 'POR VENCER V', clase: 'D', fecha_inicio_tramite: hoyMas(-200) });
+  const proximo = slot(fecha, '11:00', { rut: '7-8', nombre: 'POR VENCER P', clase: 'A5', fecha_inicio_tramite: hoyMas(-180) });
+  slot(fecha, '12:00', { rut: '8-6', nombre: 'POR VENCER B', clase: 'B', fecha_inicio_tramite: hoyMas(-200) });
+  const ids = (rows) => rows.filter((r) => r.fecha === fecha).map((r) => r.id);
+  const todos = (await api('GET', '/tramites-por-vencer')).datos;
+  assert.deepEqual(ids(todos), [vencido.id, proximo.id, lejano.id]);
+  const dias = todos.map((r) => r.dias_restantes_tramite);
+  assert.deepEqual(dias, [...dias].sort((a, b) => a - b));
+  assert.deepEqual(ids((await api('GET', '/tramites-por-vencer?filtro=7')).datos), [proximo.id]);
+  assert.deepEqual(ids((await api('GET', '/tramites-por-vencer?filtro=30')).datos), [proximo.id]);
+  assert.deepEqual(ids((await api('GET', '/tramites-por-vencer?filtro=vencidos')).datos), [vencido.id]);
+  assert.equal((await api('GET', '/tramites-por-vencer?filtro=x')).status, 400);
+});
+
+test('estadisticas-escuelas: cuenta aprobados/reprobados y respeta el rango de fechas', async () => {
+  const esc = 'ESCUELA ESTADISTICA TEST';
+  const d1 = diaNuevo();
+  const d2 = diaNuevo();
+  const base = { rut: '9-4', nombre: 'E', clase: 'D', escuela_conductores: esc };
+  slot(d1, '09:00', { ...base, resultado: 'APROBADO' });
+  slot(d1, '10:00', { ...base, resultado: 'REPROBADO' });
+  slot(d1, '11:00', { ...base, resultado: 'REPROBADO INASISTENCIA' });
+  slot(d2, '09:00', { ...base, resultado: 'APROBADO' });
+  const fila = (rows) => rows.find((r) => r.escuela_conductores === esc);
+  const todo = fila((await api('GET', '/estadisticas-escuelas')).datos);
+  assert.equal(todo.total, 4);
+  assert.equal(todo.aprobados, 2);
+  assert.equal(todo.reprobados, 2);
+  assert.equal(todo.pct_aprobacion, 50);
+  const rango = fila((await api('GET', `/estadisticas-escuelas?desde=${d1}&hasta=${d1}`)).datos);
+  assert.equal(rango.total, 3);
+  assert.equal(rango.aprobados, 1);
+  assert.equal(rango.pct_aprobacion, 33.3);
+  assert.equal(fila((await api('GET', `/estadisticas-escuelas?desde=${d2}`)).datos).total, 1);
+  assert.equal((await api('GET', '/estadisticas-escuelas?desde=mal')).status, 400);
+});

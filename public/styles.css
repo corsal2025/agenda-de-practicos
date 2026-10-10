@@ -1795,3 +1795,11 @@ tbody tr:first-child td { border-top: 0; }
 .hist-fila { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .hist-clase { margin-left: auto; font-weight: 700; color: var(--azul); }
 .hist-sub { font-size: 13px; margin-top: 2px; }
+
+/* Cuenta regresiva del tramite D/A5, vencimientos y escuelas */
+.cuenta-tramite { font-weight: 700; white-space: nowrap; }
+.cuenta-tramite-zona { margin-top: 6px; min-height: 1em; }
+.tabla-vencimientos tbody tr[data-id] { cursor: pointer; }
+.tabla-vencimientos tbody tr[data-id]:hover, .tabla-vencimientos tbody tr[data-id]:focus-visible { background: var(--ok-bg); outline: none; }
+.barra-pct { display: inline-block; vertical-align: middle; width: 120px; height: 8px; margin-right: 8px; border-radius: 4px; background: var(--linea); overflow: hidden; }
+.barra-pct span { display: block; height: 100%; background: var(--ok); }

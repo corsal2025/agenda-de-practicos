@@ -384,14 +384,34 @@ function sumarMeses(iso, n) {
   const r = new Date(Date.UTC(y, m - 1 + n, Math.min(d, ult)));
   return r.toISOString().slice(0, 10);
 }
-function alertasTramite(row, hoy = hoyISO()) {
-  if (!tieneClaseTramite(row.clase) || !/^\d{4}-\d{2}-\d{2}$/.test(row.fecha_inicio_tramite || '')) return [];
+const MS_DIA = 86400000;
+// Dias entre dos fechas ISO (solo fecha, en UTC puro: sin desfases por zona horaria).
+function diasEntre(desde, hasta) {
+  const utc = (iso) => { const [y, m, d] = iso.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+  return Math.round((utc(hasta) - utc(desde)) / MS_DIA);
+}
+// Vigencia del tramite: { vence, dias } (dias <= 0 = vencido) o null si no aplica.
+function vigenciaTramite(row, hoy = hoyISO()) {
+  if (!tieneClaseTramite(row.clase) || !/^\d{4}-\d{2}-\d{2}$/.test(row.fecha_inicio_tramite || '')) return null;
   const vence = sumarMeses(row.fecha_inicio_tramite, 6);
-  if (hoy >= vence) return [`Trámite vencido (venció el ${vence})`];
-  if (hoy >= sumarDias(vence, -DIAS_AVISO_TRAMITE)) return [`Trámite próximo a vencer (${vence})`];
+  return { vence, dias: diasEntre(hoy, vence) };
+}
+function alertasTramite(row, hoy = hoyISO()) {
+  const v = vigenciaTramite(row, hoy);
+  if (!v) return [];
+  if (v.dias <= 0) return [`Trámite vencido (venció el ${v.vence})`];
+  if (v.dias <= DIAS_AVISO_TRAMITE) return [`Trámite próximo a vencer (${v.vence})`];
   return [];
 }
-const conAlertas = (row) => ({ ...row, alerts: alertasTramite(row) });
+function conAlertas(row) {
+  const v = vigenciaTramite(row);
+  return {
+    ...row,
+    alerts: alertasTramite(row),
+    dias_restantes_tramite: v ? v.dias : null,
+    fecha_vencimiento_tramite: v ? v.vence : null,
+  };
+}
 
 app.get('/api/agenda', wrap((req, res) => {
   const { fecha, desde, hasta, examinador_id, estado } = req.query;
@@ -1201,7 +1221,37 @@ app.get('/api/export', wrap((req, res) => {
 
 app.post('/api/backup', wrap((req, res) => res.json({ ok: true, archivo: backupMod.backup('manual') })));
 
+// Tramites D/A5 de citas desde hoy (o pasadas recientes sin resultado), por dias restantes.
+const FILTROS_VENCIMIENTO = {
+  7: (d) => d > 0 && d <= DIAS_AVISO_TRAMITE,
+  30: (d) => d > 0 && d <= 30,
+  vencidos: (d) => d <= 0,
+  todos: () => true,
+};
+const DIAS_PASADOS_SIN_RESULTADO = 30;
+app.get('/api/tramites-por-vencer', wrap((req, res) => {
+  const filtro = FILTROS_VENCIMIENTO[req.query.filtro || 'todos'];
+  if (!filtro) throw bad('Filtro inválido');
+  const hoy = hoyISO();
+  const rows = db.prepare(`${SELECT_BLOQUE}
+    WHERE a.bloqueado = 0 AND a.fecha_inicio_tramite IS NOT NULL AND (a.rut IS NOT NULL OR a.nombre IS NOT NULL)
+      AND (a.fecha >= ? OR (a.fecha >= ? AND (a.resultado IS NULL OR a.resultado = '')))`)
+    .all(hoy, sumarDias(hoy, -DIAS_PASADOS_SIN_RESULTADO));
+  const lista = rows.map(conAlertas)
+    .filter((r) => r.dias_restantes_tramite !== null && filtro(r.dias_restantes_tramite))
+    .sort((a, b) => a.dias_restantes_tramite - b.dias_restantes_tramite || a.fecha.localeCompare(b.fecha));
+  res.json(lista);
+}));
+
+const esFechaISO = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+const pctAprobacion = (r) => {
+  const conResultado = r.aprobados + r.reprobados;
+  return conResultado ? Math.round((r.aprobados * 1000) / conResultado) / 10 : null;
+};
 app.get('/api/estadisticas-escuelas', wrap((req, res) => {
+  const desde = req.query.desde || null;
+  const hasta = req.query.hasta || null;
+  if ((desde && !esFechaISO(desde)) || (hasta && !esFechaISO(hasta))) throw bad('Fecha inválida');
   const rows = db.prepare(`
     SELECT escuela_conductores,
            COUNT(*) as total,
@@ -1209,11 +1259,12 @@ app.get('/api/estadisticas-escuelas', wrap((req, res) => {
            SUM(CASE WHEN resultado LIKE 'REPROBADO%' THEN 1 ELSE 0 END) as reprobados,
            SUM(CASE WHEN resultado = 'NO ASISTIO' THEN 1 ELSE 0 END) as no_asistio
     FROM agenda
-    WHERE clase IN ('D', 'A5') AND escuela_conductores IS NOT NULL
+    WHERE escuela_conductores IS NOT NULL AND escuela_conductores <> ''
+      AND (? IS NULL OR fecha >= ?) AND (? IS NULL OR fecha <= ?)
     GROUP BY escuela_conductores
     ORDER BY total DESC
-  `).all();
-  res.json(rows);
+  `).all(desde, desde, hasta, hasta);
+  res.json(rows.map((r) => ({ ...r, pct_aprobacion: pctAprobacion(r) })));
 }));
 
 // Historial del solicitante para el formulario: por RUT exacto; sin RUT, por nombre.

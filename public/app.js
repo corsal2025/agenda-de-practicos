@@ -4,6 +4,29 @@
 // Clases D y A5: llevan escuela de conductores y vigencia de tramite (6 meses).
 const esClaseTramite = (clase) => String(clase || '').split(',').some((c) => ['D', 'A5'].includes(c.trim()));
 const alertasHtml = (b) => (b.alerts || []).map((t) => `<span class="badge reprob" title="${esc(t)}">⚠ ${esc(t)}</span>`).join(' ');
+
+// Vigencia del tramite D/A5 en el cliente (misma regla que el servidor: vence a los 6 meses,
+// aritmetica solo de fechas en UTC para no correr un dia por la zona horaria).
+const MS_DIA = 86400000;
+const isoUTC = (iso) => { const [y, m, d] = iso.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+function sumarMesesISO(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const ult = new Date(Date.UTC(y, m - 1 + n + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m - 1 + n, Math.min(d, ult))).toISOString().slice(0, 10);
+}
+function vigenciaTramiteCli(clase, inicio, hoyIso = hoy()) {
+  if (!esClaseTramite(clase) || !/^\d{4}-\d{2}-\d{2}$/.test(inicio || '')) return null;
+  const vence = sumarMesesISO(inicio, 6);
+  return { vence, dias: Math.round((isoUTC(vence) - isoUTC(hoyIso)) / MS_DIA) };
+}
+const diasTxt = (n) => `${n} día${n === 1 ? '' : 's'}`;
+// Badge de cuenta regresiva: verde > 30, ambar 8-30, rojo <= 7, vencido si dias <= 0.
+function cuentaRegresivaHtml(dias, vence) {
+  if (dias == null) return '';
+  const cls = dias <= 7 ? 'reprob' : dias <= 30 ? 'reag' : 'aprob';
+  const txt = dias <= 0 ? `⛔ Vencido hace ${diasTxt(-dias)}` : `⏳ Quedan ${diasTxt(dias)}`;
+  return `<span class="badge ${cls} cuenta-tramite" title="El trámite vence el ${esc(fFecha(vence))}">${txt}</span>`;
+}
 const $ = (sel, root = document) => root.querySelector(sel);
 const view = $('#view');
 let META = null;
@@ -361,7 +384,7 @@ const tabs = {
   agenda: renderAgenda, disponibles: renderDisponibles, reagendar: renderReagendar,
   porconfirmar: renderPorConfirmar,
   buscar: renderBuscar, errores: renderErrores, dia: renderDia, analitica: renderAnalitica,
-  papelera: renderPapelera, datos: renderDatos,
+  papelera: renderPapelera, datos: renderDatos, vencimientos: renderVencimientos,
 };
 function irA(tab) {
   if (location.hash !== `#${tab}`) { location.hash = tab; return; }
@@ -505,9 +528,11 @@ function formularioCita(b, alGuardar) {
       <label><input type="checkbox" id="f-forzar"> <span id="f-forzar-txt">${esc(textoForzar(b))}</span></label>
     </div>
     ${(b.alerts || []).length ? `<div class="campo ancho">${alertasHtml(b)}</div>` : ''}
+    <div class="campo ancho" id="f-intento-aviso" hidden></div>
     <div class="campo">
       <label>Fecha de Inicio de Trámite</label>
       <input type="date" id="f-fecha-inicio" value="${b.fecha_inicio_tramite || hoy()}" max="${hoy()}" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
+      <div id="f-cuenta-tramite" class="cuenta-tramite-zona" aria-live="polite"></div>
     </div>
     <div class="campo" id="zona-escuela" ${esClaseTramite(b.clase) ? '' : 'hidden'}>
       <label>Escuela de Conductores</label>
@@ -547,6 +572,7 @@ function formularioCita(b, alGuardar) {
     `
     ${(b.rut || b.nombre) ? '<button class="btn peligro sec" id="btn-liberar" title="Quita la cita del bloque">Liberar bloque</button>' : ''}
     ${(b.rut || b.nombre) ? '<button type="button" class="btn sec" id="btn-reagendar-slot" style="color:var(--azul);font-weight:600">Reagendar postulante</button>' : ''}
+    ${tieneCita ? '<button type="button" class="btn sec" id="btn-imprimir-ficha">Imprimir ficha</button>' : ''}
     <button class="btn sec" id="btn-cancel">Cancelar</button>
     <button class="btn" id="btn-guardar" style="background:#1d4ed8;font-weight:700">${tieneCita ? "Guardar cambios" : "Confirmar y agendar cita"}</button>
     `,
@@ -641,12 +667,21 @@ function formularioCita(b, alGuardar) {
     $('#zona-forzar').hidden = !tienePesada;
     if (tienePesada) $('#f-forzar-txt').textContent = textoForzar(b);
     $('#zona-escuela').hidden = !esClaseTramite(clases.join(','));
+    actualizarCuentaTramite();
+  };
+  const actualizarCuentaTramite = () => {
+    const v = vigenciaTramiteCli(clasesMarcadas().join(','), $('#f-fecha-inicio').value);
+    $('#f-cuenta-tramite').innerHTML = v ? cuentaRegresivaHtml(v.dias, v.vence) : '';
   };
   document.querySelectorAll('#f-clase input').forEach((chk) => {
     chk.addEventListener('change', chequearPesada);
   });
+  $('#f-fecha-inicio').addEventListener('input', actualizarCuentaTramite);
+  $('#f-fecha-inicio').addEventListener('change', actualizarCuentaTramite);
+  actualizarCuentaTramite();
 
   $('#btn-cancel').onclick = cerrarModal;
+  if ($('#btn-imprimir-ficha')) $('#btn-imprimir-ficha').onclick = () => imprimirFicha(b).catch((e) => toast(e.message, 'err'));
 
   if ($('#btn-liberar')) {
     $('#btn-liberar').onclick = async () => {
@@ -1796,6 +1831,7 @@ async function cargarHistorialCita(b, alGuardar) {
     const rows = await api(`/buscar-historial?${params.toString()}`);
     if (!document.body.contains(cont)) return;
     if (!Array.isArray(rows) || !rows.length) { cont.textContent = 'Sin citas registradas'; return; }
+    pintarAvisoIntento(b, rows);
     cont.innerHTML = rows.map((r) => {
       const actual = r.id === b.id;
       return `<div class="hist-item ${actual ? 'actual' : ''}" ${actual ? '' : `role="button" tabindex="0" data-id="${r.id}"`}>
@@ -1815,6 +1851,65 @@ async function cargarHistorialCita(b, alGuardar) {
   } catch (e) {
     if (document.body.contains(cont)) cont.textContent = 'No se pudo cargar el historial';
   }
+}
+
+// Reprobaciones previas (mismo RUT, alguna clase en comun) antes de esta cita.
+const RESULTADOS_REPROBADO = ['REPROBADO', 'REPROBADO INASISTENCIA'];
+function reprobacionesPrevias(b, rows) {
+  if (!b.rut) return 0;
+  const clases = clasesDe(b.clase);
+  return rows.filter((r) => r.id !== b.id && r.fecha <= b.fecha
+    && RESULTADOS_REPROBADO.includes(r.resultado)
+    && clasesDe(r.clase).some((c) => clases.includes(c))).length;
+}
+const ordinalIntento = (n) => (n === 3 ? '3er' : `${n}°`);
+// Aviso (no bloquea): con 2+ reprobaciones previas en la misma clase, este es el 3er intento o mas.
+function pintarAvisoIntento(b, rows) {
+  const zona = $('#f-intento-aviso');
+  const previas = reprobacionesPrevias(b, rows);
+  if (!zona || previas < 2) return;
+  zona.innerHTML = `<span class="badge reprob" title="${previas} reprobaciones previas en la misma clase">⚠ ${ordinalIntento(previas + 1)} intento</span>`;
+  zona.hidden = false;
+}
+
+// Ficha imprimible: datos del postulante + historial completo, en una ventana aparte.
+const FICHA_CAMPOS = [
+  ['Nombre', (b) => nom(b.nombre)], ['RUT', (b) => b.rut], ['Clase', (b) => b.clase],
+  ['Teléfono', (b) => fTel(b.contacto)], ['Correo', (b) => b.correo],
+  ['Fecha de la cita', (b) => `${fFecha(b.fecha)} · ${b.hora || ''} hrs`], ['Examinador/a', (b) => b.examinador],
+  ['Funcionario/a', (b) => b.funcionario], ['Intento', (b) => b.intento], ['Tipo de cita', (b) => b.tipo_cita],
+  ['Inicio de trámite', (b) => (b.fecha_inicio_tramite ? fFecha(b.fecha_inicio_tramite) : '')],
+  ['Vencimiento de trámite', (b) => (b.fecha_vencimiento_tramite ? fFecha(b.fecha_vencimiento_tramite) : '')],
+  ['Escuela de conductores', (b) => b.escuela_conductores], ['Tipo de reagendamiento', (b) => b.tipo_reagendamiento],
+  ['Confirmó asistencia', (b) => (b.confirmo_asistencia === 1 ? 'SÍ' : b.confirmo_asistencia === 0 ? 'NO' : '')],
+  ['Resultado', (b) => b.resultado], ['Comentarios', (b) => b.comentarios],
+];
+function fichaImprimibleHtml(b, rows) {
+  const datos = FICHA_CAMPOS.map(([t, f]) => `<tr><th>${esc(t)}</th><td>${esc(f(b) || '—')}</td></tr>`).join('');
+  const hist = rows.length ? rows.map((r) => `<tr>
+    <td>${esc(fFecha(r.fecha))} ${esc(r.hora)}</td><td>${esc(r.clase || '—')}</td><td>${esc(r.examinador || '—')}</td>
+    <td>${esc(r.resultado || 'Sin resultado')}</td><td>${esc(r.escuela_conductores || '—')}</td><td>${esc(r.comentarios || '')}</td></tr>`).join('')
+    : '<tr><td colspan="6">Sin citas registradas</td></tr>';
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Ficha ${esc(nom(b.nombre))}</title>
+    <style>body{font:13px system-ui,sans-serif;color:#111;background:#fff;margin:24px}h1{font-size:18px;margin:0 0 4px}
+    h2{font-size:15px;margin:20px 0 6px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:4px 6px;text-align:left;vertical-align:top}
+    th{background:#f1f1f1;width:30%}.hist th{width:auto}.muted{color:#555;font-size:11px}</style></head><body>
+    <h1>Ficha del postulante</h1><div class="muted">${esc(MARCA.organismo)} · ${esc(MARCA.unidad)} · Impreso el ${esc(fFecha(hoy()))}</div>
+    <h2>Datos de la cita</h2><table>${datos}</table>
+    <h2>Historial</h2><table class="hist"><thead><tr><th>Fecha</th><th>Clase</th><th>Examinador</th><th>Resultado</th><th>Escuela</th><th>Comentarios</th></tr></thead>
+    <tbody>${hist}</tbody></table></body></html>`;
+}
+async function imprimirFicha(b) {
+  const params = new URLSearchParams();
+  if (b.rut) params.set('rut', b.rut);
+  if (b.nombre) params.set('nombre', b.nombre);
+  const rows = await api(`/buscar-historial?${params.toString()}`);
+  const w = window.open('', '_blank');
+  if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
+  w.document.write(fichaImprimibleHtml(b, Array.isArray(rows) ? rows : []));
+  w.document.close();
+  w.focus();
+  w.print();
 }
 
 // Esc cierra el panel lateral de la ficha.
@@ -1887,6 +1982,7 @@ function slotCard(b) {
   return `<div class="${cls}" data-id="${b.id}">
     ${problema ? `<span class="alerta-dato" title="${esc(problema)}">⚠</span>` : ''}
     ${(b.alerts || []).length ? `<div class="slot-alertas">${alertasHtml(b)}</div>` : ''}
+    ${b.dias_restantes_tramite != null ? `<div class="slot-alertas">${cuentaRegresivaHtml(b.dias_restantes_tramite, b.fecha_vencimiento_tramite)}</div>` : ''}
     <span class="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
     <button type="button" class="btn-hist" data-id="${b.id}" title="Ver ficha e historial del postulante">📋 Historial</button>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
@@ -2990,12 +3086,29 @@ async function renderAnalitica() {
       <div class="panel"><h3>Citas por dia (fecha de la cita)</h3><div class="grafico"><canvas id="g-tend"></canvas></div></div>
       <div class="panel"><h3>Agendados por dia (fecha de agendamiento)</h3><div class="grafico"><canvas id="g-agend"></canvas></div>
         <p class="muted" style="font-size:.8rem">Para citas migradas del Excel el dato es aproximado.</p></div>
+    </div>
+    <div class="panel"><h3>Resultados por escuela de conductores</h3>
+      <div class="tabla-scroll"><table class="tabla-escuelas"><thead><tr>
+        <th>Escuela</th><th class="c">Citas</th><th class="c">Aprobó</th><th class="c">Reprobó</th><th>% aprobación</th>
+      </tr></thead><tbody id="esc-tabla"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div>
+      <p class="muted" style="font-size:.8rem">El % se calcula sobre aprobados + reprobados (incluye reprobado por inasistencia).</p>
     </div>`;
   const cargar = () => {
     const q = new URLSearchParams();
     if ($('#an-desde').value) q.set('desde', $('#an-desde').value);
     if ($('#an-hasta').value) q.set('hasta', $('#an-hasta').value);
+    cargarVista('escuelas', `/estadisticas-escuelas?${q}`, pintarEscuelas).catch((e) => toast(e.message, 'err'));
     return cargarVista('analitica', `/analitica?${q}`, pintarAn);
+  };
+  const pintarEscuelas = (rows) => {
+    if (!$('#esc-tabla')) return;
+    $('#esc-tabla').innerHTML = (rows || []).length ? rows.map((x) => `<tr>
+      <td>${esc(x.escuela_conductores)}</td><td class="c">${x.total}</td>
+      <td class="c" style="color:var(--ok);font-weight:700">${x.aprobados}</td>
+      <td class="c" style="color:var(--error);font-weight:700">${x.reprobados}</td>
+      <td>${x.pct_aprobacion == null ? '<span class="muted">Sin resultados</span>'
+        : `<div class="barra-pct"><span style="width:${Number(x.pct_aprobacion)}%"></span></div><b>${x.pct_aprobacion}%</b>`}</td></tr>`).join('')
+      : licoVacioFila(5, 'explica', 'Sin datos', 'No hay citas con escuela de conductores en el período.');
   };
   const pintarAn = (a) => {
     limpiarCharts();
@@ -3029,6 +3142,47 @@ async function renderAnalitica() {
     grafico('g-agend', 'line', a.tendencia_agendamiento.map((x) => x.dia), a.tendencia_agendamiento.map((x) => x.n), 'Agendados');
   };
   $('#an-ok').onclick = cargar;
+  cargar();
+}
+
+/* ================= tab: POR VENCER (tramites D/A5) ================= */
+async function renderVencimientos() {
+  view.innerHTML = `
+    <div class="panel">
+      <div class="fila" style="align-items:center">
+        <h2 style="margin:0;flex:1">Trámites por vencer</h2>
+        <div class="campo"><label for="ven-filtro">Mostrar</label>
+          <select id="ven-filtro">
+            <option value="7">Vencen en 7 días o menos</option>
+            <option value="30">Vencen en 30 días o menos</option>
+            <option value="vencidos">Vencidos</option>
+            <option value="todos" selected>Todos</option>
+          </select></div>
+      </div>
+      <p class="muted">Citas D y A5 desde hoy (y pasadas de los últimos 30 días sin resultado). El trámite vence 6 meses después de su inicio.</p>
+      <div class="tabla-scroll"><table class="tabla-vencimientos"><thead><tr>
+        <th class="c">Días restantes</th><th>Nombre</th><th>RUT</th><th class="c">Clase</th><th>Teléfono</th>
+        <th class="c">Fecha cita</th><th>Examinador</th><th class="c">Vence</th>
+      </tr></thead><tbody id="ven-body"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
+    </div>`;
+  const cargar = () => cargarVista('vencimientos', `/tramites-por-vencer?filtro=${encodeURIComponent($('#ven-filtro').value)}`, pintar)
+    .catch((e) => toast(e.message, 'err'));
+  const pintar = (rows) => {
+    const body = $('#ven-body');
+    if (!body) return;
+    body.innerHTML = (rows || []).length ? rows.map((r) => `<tr role="button" tabindex="0" data-id="${r.id}">
+      <td class="c">${cuentaRegresivaHtml(r.dias_restantes_tramite, r.fecha_vencimiento_tramite)}</td>
+      <td>${esc(nom(r.nombre) || '—')}</td><td class="num">${esc(r.rut || '—')}</td><td class="c">${esc(r.clase || '—')}</td>
+      <td class="num">${esc(fTel(r.contacto) || '—')}</td><td class="num c">${esc(fFecha(r.fecha))} · ${esc(r.hora)}</td>
+      <td>${esc(r.examinador || '—')}</td><td class="num c">${esc(fFecha(r.fecha_vencimiento_tramite))}</td></tr>`).join('')
+      : licoVacioFila(8, 'explica', 'Nada por vencer', 'No hay trámites D/A5 en este filtro.');
+    body.querySelectorAll('tr[data-id]').forEach((tr) => {
+      const abrir = () => abrirSlotPorId(Number(tr.dataset.id), cargar).catch((e) => toast(e.message, 'err'));
+      tr.onclick = abrir;
+      tr.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrir(); } };
+    });
+  };
+  $('#ven-filtro').onchange = cargar;
   cargar();
 }
 
