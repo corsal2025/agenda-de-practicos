@@ -164,3 +164,25 @@ aplicación en un servidor propio. Es un paso aparte; avisar cuando haga falta.
   (una recibe "otra persona modificó este bloque"). Aguanta bien 3–5 usuarios
   simultáneos.
 - Tests: `npm test`
+
+## Version portatil (pendrive o disco externo)
+
+El sistema puede vivir completo en un pendrive: programa, base de datos y Node.js.
+
+1. En un PC que ya tenga el sistema funcionando, ejecuta `preparar-pendrive.bat` e indica la unidad (ej. `E:\`).
+   Se crea `E:\AgendaPracticos` con todo, incluido `runtime\node.exe` (no hace falta instalar Node en el PC de destino).
+2. En cualquier PC con Windows abre `E:\AgendaPracticos\iniciar.bat`. Se abre el navegador en http://localhost:4900.
+3. Los datos se guardan en `AgendaPracticos\data` dentro del pendrive.
+4. El archivo `.env` (correo y clave SMTP) **no se copia** por seguridad: crealo en el destino si se necesitan correos.
+
+### Inicio automatico
+
+- `instalar-inicio-automatico.bat`: el sistema arranca solo (oculto) al iniciar sesion en Windows, desde la carpeta donde esta el archivo. Log en `data\servidor.log`.
+- `quitar-inicio-automatico.bat`: lo desactiva.
+
+Si se usa desde pendrive con inicio automatico, el pendrive debe estar conectado al encender el PC.
+
+### Respaldo en OneDrive
+
+Si el PC tiene OneDrive del trabajo con sesion iniciada, cada respaldo diario se copia tambien a
+`OneDrive - <organizacion>\Agenda de Practicos - Backups`. Otra carpeta se puede fijar con `AGENDA_BACKUP_COPIA` en `.env`.

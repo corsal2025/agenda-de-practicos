@@ -32,3 +32,6 @@ public/screenshot.png
 .env
 .dev.vars
 .wrangler/
+
+# Node.js portatil copiado por preparar-pendrive.bat
+runtime/
