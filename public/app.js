@@ -224,7 +224,11 @@ function autoformatoRut(input) {
     if (f && f !== input.value) input.value = f;
   });
 }
-const hoy = () => (META ? META.hoy : new Date().toISOString().slice(0, 10));
+const hoy = () => {
+  if (META) return META.hoy;
+  const d = new Date(); // fecha LOCAL (toISOString usa UTC y adelanta el dia en la noche)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 // Fecha en formato dia/mes/año para MOSTRAR. Los <input type="date"> siguen usando ISO.
 function fFecha(v) {
@@ -498,7 +502,7 @@ function formularioCita(b, alGuardar) {
     <div class="campo ancho" id="f-intento-aviso" hidden></div>
     <div class="campo">
       <label>Fecha de Inicio de Trámite *</label>
-      <input type="date" id="f-fecha-inicio" required value="${b.fecha_inicio_tramite || ''}" max="${hoy()}" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
+      <input type="date" id="f-fecha-inicio" required value="${esc(b.fecha_inicio_tramite || '')}" max="${hoy()}" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
       <div id="f-cuenta-tramite" class="cuenta-tramite-zona" aria-live="polite"></div>
     </div>
     <div class="campo" id="zona-escuela" ${esClaseTramite(b.clase) ? '' : 'hidden'}>
@@ -3201,8 +3205,8 @@ async function renderAnalitica() {
   const r = META.rango_agenda || {};
   view.innerHTML = `
     <div class="panel no-print"><div class="fila" style="justify-content:center;align-items:flex-end;gap:14px">
-      <div class="campo"><label>Desde</label><input type="date" id="an-desde" value="${r.desde || ''}"></div>
-      <div class="campo"><label>Hasta</label><input type="date" id="an-hasta" value="${r.hasta || ''}"></div>
+      <div class="campo"><label>Desde</label><input type="date" id="an-desde" value="${esc(r.desde || '')}"></div>
+      <div class="campo"><label>Hasta</label><input type="date" id="an-hasta" value="${esc(r.hasta || '')}"></div>
       <button class="btn" id="an-ok">Aplicar filtro</button>
       <button class="btn sec" id="an-xlsx">Descargar informe (Excel)</button>
       <button class="btn sec" id="an-print">Imprimir informe</button>

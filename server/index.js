@@ -546,6 +546,13 @@ app.put('/api/agenda/:id', wrap((req, res) => {
 
   const pendiente = body.pendiente_reagendar ? 1 : 0;
 
+  // Fecha de inicio de tramite: vacia/null o AAAA-MM-DD real (se usa en atributos HTML).
+  if (body.fecha_inicio_tramite != null && body.fecha_inicio_tramite !== '') {
+    const fit = String(body.fecha_inicio_tramite);
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(fit) ? new Date(`${fit}T00:00:00Z`) : null;
+    if (!d || Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== fit) throw bad('Fecha de inicio de trámite inválida');
+  }
+
   // Cambia el ocupante (se ocupa, se libera o entra otra persona): el token y las
   // banderas de correo del ocupante anterior no deben pasar al nuevo.
   // Es otra persona solo si cambia el RUT (comparado normalizado); sin RUT en ninguno de los
@@ -839,6 +846,7 @@ app.post('/api/agenda/enviar-correos-pendientes', wrap(async (req, res) => {
 
 // Solicitud de confirmacion masiva para las citas elegidas en "Por confirmar".
 const MAX_IDS_MASIVO = 500;
+const ERRORES_SMTP_SISTEMICOS = new Set(['EAUTH', 'ECONNECTION', 'ETIMEDOUT', 'ESOCKET']);
 app.post('/api/correo/confirmacion-masiva', wrap(async (req, res) => {
   const ids = (req.body || {}).ids;
   if (!Array.isArray(ids) || !ids.length || ids.length > MAX_IDS_MASIVO || !ids.every((n) => Number.isInteger(n) && n > 0)) {
@@ -862,12 +870,20 @@ app.post('/api/correo/confirmacion-masiva', wrap(async (req, res) => {
       bloque.token_confirmacion = crypto.randomBytes(16).toString('hex');
       db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').run(bloque.token_confirmacion, bloque.id);
     }
-    let ok = false;
-    try { ok = Boolean(await enviarFn(bloque)); } catch (e) { console.error(`Error enviando a ${bloque.correo}:`, e.message); }
+    let ok = false; let err = null;
+    correo.ultimoError = null;
+    try { ok = Boolean(await enviarFn(bloque)); } catch (e) { err = e; console.error(`Error enviando a ${bloque.correo}:`, e.message); }
     if (ok) {
       enviados++;
       logReq(req, bloque.id, 'correo_solicitud_confirmacion', String(bloque.correo).trim());
-    } else fallidos++;
+      continue;
+    }
+    fallidos++;
+    // Error de autenticacion o conexion: fallaran todos los demas; se corta para no esperar timeouts.
+    err = err || correo.ultimoError;
+    if (err && ERRORES_SMTP_SISTEMICOS.has(err.code)) {
+      return res.json({ ok: false, habilitado: true, abortado: true, motivo: `${err.code}: ${err.message || 'error de servidor de correo'}`, enviados, sin_correo: sinCorreo, fallidos });
+    }
   }
   res.json({ ok: true, habilitado: true, enviados, sin_correo: sinCorreo, fallidos });
 }));

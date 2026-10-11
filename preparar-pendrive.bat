@@ -18,9 +18,19 @@ if errorlevel 1 (
 if not exist node_modules call npm install --omit=dev
 
 echo Copiando a %DESTINO% ...
-robocopy "%~dp0." "%DESTINO%" /E /XD .git .claude .atl diseno test /XF .env *.log /NFL /NDL /NJH /NP >nul
+REM La base no se copia en caliente (quedaria inconsistente con el -wal); se hace una copia aparte.
+REM Los backups (data\backups) no se copian para no llevar datos personales de mas en el pendrive.
+robocopy "%~dp0." "%DESTINO%" /E /XD .git .claude .atl diseno test "%~dp0data\backups" /XF .env .dev.vars *.log *.log.1 agenda.db *.db-wal *.db-shm /NFL /NDL /NJH /NP >nul
 if errorlevel 8 (
   echo Error copiando archivos.
+  pause
+  exit /b 1
+)
+
+echo Copiando la base de datos ^(copia consistente^)...
+node --no-warnings server\snapshot.js "%DESTINO%\data\agenda.db"
+if errorlevel 1 (
+  echo Error copiando la base de datos.
   pause
   exit /b 1
 )
@@ -37,4 +47,5 @@ echo.
 echo Listo. En el pendrive abre AgendaPracticos\iniciar.bat
 echo Los datos se guardan en AgendaPracticos\data (dentro del pendrive).
 echo NOTA: el archivo .env (correo y clave) NO se copia por seguridad; crealo de nuevo en el PC de destino.
+echo NOTA: los respaldos ^(data\backups^) NO se copian al pendrive para no llevar datos personales de mas.
 pause

@@ -17,6 +17,7 @@ const transporte = habilitado
   ? nodemailer.createTransport({
       host: SMTP.host, port: SMTP.port, secure: SMTP.secure,
       auth: { user: SMTP.user, pass: SMTP.pass },
+      connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 20000,
     })
   : null;
 
@@ -112,8 +113,11 @@ async function enviar(destinatario, asunto, cuerpo) {
   if (!habilitado || !destinatario) return false;
   try {
     await transporte.sendMail({ from: SMTP.from, to: destinatario, subject: asunto, text: cuerpo.text, html: cuerpo.html });
+    module.exports.ultimoError = null;
     return true;
   } catch (e) {
+    // Expuesto para que los envios masivos detecten errores sistemicos (EAUTH, ECONNECTION...).
+    module.exports.ultimoError = e;
     log(null, 'correo_error', `${destinatario}: ${e.message}`);
     return false;
   }
@@ -161,4 +165,4 @@ function solicitudConfirmacion(bloque) {
   return enviar(bloque.correo, `Confirma tu asistencia - Examen práctico ${fFecha(bloque.fecha)} ${bloque.hora}`, cuerpo);
 }
 
-module.exports = { habilitado, confirmacion, recordatorio, solicitudConfirmacion, plantilla };
+module.exports = { habilitado, confirmacion, recordatorio, solicitudConfirmacion, plantilla, ultimoError: null };

@@ -721,3 +721,31 @@ test('GET /api/analitica incluye comparacion y agregados nuevos', async () => {
   assert.equal(typeof datos.tiempo_espera.n, 'number');
   assert.equal(typeof datos.tramites_vencidos.vencido_en_cita, 'number');
 });
+
+test('PUT rechaza fecha_inicio_tramite que no es una fecha AAAA-MM-DD valida', async () => {
+  for (const f of ['"><img src=x>', '2026-02-30', '2026-1-01']) {
+    const b = slot(diaNuevo(), '09:00');
+    const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B', correo: 'maria@x.cl', fecha_inicio_tramite: f });
+    assert.equal(r.status, 400, f);
+    assert.match(r.datos.error, /Fecha de inicio de trámite inválida/);
+  }
+  const b = slot(diaNuevo(), '09:00');
+  const ok = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Maria', clase: 'B', correo: 'maria@x.cl', fecha_inicio_tramite: '' });
+  assert.equal(ok.status, 200, ok.texto);
+});
+
+test('correo/confirmacion-masiva: aborta tras el primer error sistemico (EAUTH)', async () => {
+  const d = diaNuevo();
+  const ids = ['09:00', '10:00', '11:00'].map((h, i) => slot(d, h, { rut: `8-${i}`, nombre: 'X', correo: `x${i}@test.cl` }).id);
+  const original = correo.solicitudConfirmacion;
+  let llamadasFallo = 0;
+  correo.solicitudConfirmacion = async () => { llamadasFallo++; correo.ultimoError = { code: 'EAUTH', message: 'Invalid login' }; return false; };
+  try {
+    const r = await api('POST', '/correo/confirmacion-masiva', { ids });
+    assert.equal(r.status, 200);
+    assert.equal(r.datos.abortado, true);
+    assert.match(r.datos.motivo, /EAUTH/);
+    assert.equal(llamadasFallo, 1);
+    assert.deepEqual([r.datos.enviados, r.datos.fallidos], [0, 1]);
+  } finally { correo.solicitudConfirmacion = original; correo.ultimoError = null; }
+});
