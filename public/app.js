@@ -3775,7 +3775,7 @@ const PASOS_TOUR = [
     target: '#bq',
     titulo: 'Buscador global',
     icono: '🔎',
-    descripcion: 'Escribe un <b>RUT, nombre o teléfono</b> (mínimo 3 caracteres). Navega los resultados con las flechas <b>↑ ↓</b> y elige con <b>Enter</b> o con clic: se abre el <b>historial completo</b> de esa persona, con un botón <b>Abrir</b> en cada cita para ver su ficha. <b>Esc</b> cierra la lista.'
+    descripcion: 'Escribe un <b>RUT, nombre o teléfono</b> (mínimo 3 caracteres). Navega los resultados con las flechas <b>↑ ↓</b> y elige con <b>Enter</b> o con clic: se abre el <b>historial completo</b> de esa persona, con un botón <b>Abrir</b> en cada cita para ver su ficha. <b>Esc</b> cierra la lista. Al escribir un RUT, este se <b>formatea solo</b> (puntos y guion). En el historial, el botón <b>Ir a la agenda</b> te lleva al día de la cita con su tarjeta <b>resaltada</b>.'
   },
   {
     seccion: 'Entorno general',
@@ -3866,6 +3866,36 @@ const PASOS_TOUR = [
     titulo: 'Tarjeta de cita',
     icono: '🪪',
     descripcion: 'Cada tarjeta muestra <b>postulante, clase, RUT, funcionario/a, teléfono y correo</b>. El símbolo <b>⚠</b> avisa de datos faltantes o inválidos (RUT, teléfono o correo). Las insignias indican <b>1° o 2° vez</b>, <b>Reagendada</b>, <b>Confirmó asistencia</b> y el <b>resultado</b>. Para ver o editar la ficha completa de una cita (incluida <b>Liberar bloque</b>), usa el buscador global o el Reporte de errores y pulsa <b>Abrir</b>.'
+  },
+  {
+    seccion: 'Agenda',
+    tab: 'agenda',
+    target: '#a-grid .slot-top',
+    fallback: '#a-grid',
+    listo: TOUR_GRILLA_LISTA,
+    titulo: 'Cuenta regresiva del trámite',
+    icono: '⏳',
+    descripcion: 'La franja superior de cada tarjeta muestra los <b>días que quedan</b> antes de que venza el trámite (6 meses desde su inicio): <b>verde</b> con más de 30 días, <b>amarillo</b> entre 15 y 30, y <b>rojo parpadeante</b> con 14 días o menos. Si aún no se registró la fecha de inicio, aparece <b>Sin fecha de inicio</b> en gris.'
+  },
+  {
+    seccion: 'Agenda',
+    tab: 'agenda',
+    target: '#a-grid .btn-hist',
+    fallback: '#a-grid',
+    listo: TOUR_GRILLA_LISTA,
+    titulo: 'Botón Historial: ficha lateral',
+    icono: '📋',
+    descripcion: 'Abre la <b>ficha lateral</b> del postulante, donde puedes editar sus datos, registrar la <b>Fecha de inicio de trámite</b> (obligatoria, con su cuenta regresiva), la <b>Escuela</b> de conductores (solo clases D y A5) y el <b>Tipo de reagendamiento</b>.'
+  },
+  {
+    seccion: 'Agenda',
+    tab: 'agenda',
+    target: '#a-grid .btn-hist',
+    fallback: '#a-grid',
+    listo: TOUR_GRILLA_LISTA,
+    titulo: 'Ficha lateral: seguimiento e historial',
+    icono: '🗃️',
+    descripcion: 'En la misma ficha registras <b>Confirmó asistencia</b>, el <b>Resultado</b> y los <b>Comentarios</b>. Más abajo verás el <b>historial del solicitante</b> con el <b>inicio y término del trámite</b>; si la persona va por su <b>3er intento</b>, el sistema lo advierte. Con <b>Imprimir ficha</b> obtienes una copia en papel.'
   },
   {
     seccion: 'Agenda',
@@ -4058,6 +4088,14 @@ const PASOS_TOUR = [
     icono: '🧪',
     descripcion: 'Envía los correos de confirmación de prueba a <b>la dirección que tú indiques</b>, para revisar cómo se ven antes de enviar los reales.'
   },
+  {
+    seccion: 'Por confirmar',
+    tab: 'porconfirmar',
+    target: '.pc-toolbar',
+    titulo: 'Selección múltiple y envíos por lote',
+    icono: '☑️',
+    descripcion: 'Marca las <b>casillas</b> de cada fila (o la del encabezado para todas). Luego usa <b>Enviar correo de confirmación</b> para mandar el correo solo a los seleccionados (requiere el servicio de correo SMTP configurado), o <b>WhatsApp a seleccionados</b> para abrir una <b>cola de WhatsApp</b>: cada clic abre wa.me con el mensaje listo, <b>una persona a la vez</b>.'
+  },
 
   /* ---------- Agenda del día ---------- */
   {
@@ -4102,6 +4140,26 @@ const PASOS_TOUR = [
     descripcion: 'Así saldrá el informe en papel: las citas del día por examinador. Si la fecha no tiene bloques (fin de semana o feriado), verás un aviso.'
   },
 
+  /* ---------- Por vencer ---------- */
+  {
+    seccion: 'Por vencer',
+    tab: 'vencimientos',
+    target: '#ven-filtro',
+    titulo: 'Trámites por vencer',
+    icono: '⌛',
+    descripcion: 'Lista las citas según el vencimiento de su trámite. Filtra por los que vencen en <b>7 días</b> o <b>30 días</b> o menos, los <b>vencidos</b> o <b>todos</b>.'
+  },
+  {
+    seccion: 'Por vencer',
+    tab: 'vencimientos',
+    target: '#ven-body tr[data-id]',
+    fallback: '#ven-body',
+    listo: tourSinCargando('#ven-body'),
+    titulo: 'Abrir la ficha desde la lista',
+    icono: '🖱️',
+    descripcion: 'Haz <b>clic en una fila</b> para abrir la ficha del postulante y actualizar sus datos o la fecha de inicio del trámite.'
+  },
+
   /* ---------- Estadísticas ---------- */
   {
     seccion: 'Estadísticas',
@@ -4139,6 +4197,15 @@ const PASOS_TOUR = [
     titulo: 'Resultados por examinador',
     icono: '🧮',
     descripcion: 'Tabla con <b>Aprobó, Reprobó, No asistió</b> y <b>% de aprobación</b> de cada examinador en el período filtrado.'
+  },
+  {
+    seccion: 'Estadísticas',
+    tab: 'analitica',
+    target: '.panel:has(#esc-tabla)',
+    listo: tourSinCargando('#esc-tabla'),
+    titulo: 'Resultados por escuela de conductores',
+    icono: '🏫',
+    descripcion: 'Muestra, por <b>escuela de conductores</b>, la cantidad de citas, <b>aprobados, reprobados</b> y el <b>% de aprobación</b> (calculado sobre aprobados + reprobados).'
   },
 
   /* ---------- Papelera ---------- */
@@ -4239,7 +4306,7 @@ const PASOS_TOUR = [
     listo: '#cat-cont',
     titulo: 'Listas desplegables',
     icono: '📚',
-    descripcion: 'Administra las opciones de los catálogos del sistema (clases, motivos, etc.): agrega un valor nuevo o quítalo con la <b>×</b>.'
+    descripcion: 'Administra las opciones de los catálogos del sistema (clases, motivos, etc.): agrega un valor nuevo o quítalo con la <b>×</b>. Aquí también agregas las <b>escuelas de conductores</b> y los <b>tipos de reagendamiento</b>: escribe el nombre en la lista correspondiente y pulsa <b>Agregar</b>; quedará disponible de inmediato en la ficha de la cita.'
   },
   {
     seccion: 'Datos',
