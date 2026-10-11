@@ -128,3 +128,37 @@ test('GET /lista-espera/:origen/:id/cupos: devuelve cupos compatibles; valida or
   assert.equal((await api('GET', `/lista-espera/otro/${cita.id}/cupos`)).status, 400);
   assert.equal((await api('GET', '/lista-espera/reagendar/999999/cupos')).status, 404);
 });
+
+test('cambio: citas pendiente_reagendar=1 entran como origen "cambio", entre cola y lista, sin duplicar', async () => {
+  limpiarTodo();
+  const ex = examinadorNuevo();
+  const libre = slot(hoyMas(2), '09:00', {}, ex);
+  encolar({ nombre: 'COLA X', clase: 'B' }, '2026-01-01 08:00:00');
+  const camb = slot(hoyMas(8), '10:00', { rut: '55.555.555-5', nombre: 'CAMBIA', clase: 'B', correo: 'c@c.cl',
+    pendiente_reagendar: 1, lista_espera: 'SI' }, ex);
+  slot(hoyMas(15), '10:00', { rut: '66.666.666-6', nombre: 'ADELANTA2', clase: 'B', correo: 'd@d.cl', lista_espera: 'SI' }, ex);
+
+  let r = await api('GET', '/lista-espera');
+  assert.equal(r.status, 200, r.texto);
+  const p = r.datos.personas;
+  assert.deepEqual(p.map((x) => x.nombre), ['COLA X', 'CAMBIA', 'ADELANTA2']);
+  assert.equal(p[1].origen, 'cambio');
+  assert.equal(p[1].fecha, camb.fecha);
+  assert.equal(p[1].hora, '10:00');
+  assert.ok(p[1].cupos_compatibles >= 1);
+
+  r = await api('GET', `/sugerencias-cupo/${libre.id}`);
+  assert.equal(r.status, 200, r.texto);
+  const c = r.datos.candidatos.map((x) => `${x.origen}:${x.nombre}`);
+  assert.deepEqual(c, ['cola:COLA X', 'cambio:CAMBIA', 'lista_espera:ADELANTA2']);
+
+  r = await api('GET', `/lista-espera/cambio/${camb.id}/cupos`);
+  assert.equal(r.status, 200, r.texto);
+  assert.ok(r.datos.cupos.some((x) => x.id === libre.id));
+
+  // Asignar: mueve la cita y limpia pendiente_reagendar; deja de figurar como cambio.
+  r = await api('POST', `/agenda/${camb.id}/reagendar`, { destino_id: libre.id });
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(db.prepare('SELECT pendiente_reagendar FROM agenda WHERE id=?').get(libre.id).pendiente_reagendar, 0);
+  assert.equal((await api('GET', `/lista-espera/cambio/${camb.id}/cupos`)).status, 404);
+});

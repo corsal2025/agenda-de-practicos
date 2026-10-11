@@ -185,13 +185,27 @@ async function renderPorConfirmar() {
         method: 'POST',
         body: { valor: val }
       });
+      const cita = citasCargadas.find((c) => c.id === id);
       citasCargadas = citasCargadas.filter((c) => c.id !== id);
       pintarLista();
       actualizarBadgePorConfirmar();
       toast(val ? 'Asistencia confirmada exitosamente' : 'Registrado: postulante no asiste', val ? 'ok' : 'alerta');
+      if (!val && cita) await ofrecerLiberarCupo(cita);
     } catch (e) {
       toast(e.message, 'err');
     }
+  };
+
+  // Tras "No asiste": ofrece liberar el cupo (misma ruta que "Liberar bloque" del formulario:
+  // la cita va a la Papelera) y abre las sugerencias de la lista de espera para ese cupo.
+  const ofrecerLiberarCupo = async (cita) => {
+    const quien = nom(cita.nombre) || cita.rut || 'el postulante';
+    if (!confirm(`¿Liberar el cupo de ${quien} (${fFecha(cita.fecha)} ${cita.hora}) para otra persona? La cita quedará en la papelera y podrás restaurarla.`)) return;
+    try {
+      await api(`/agenda/${cita.id}/liberar`, { method: 'POST', body: { motivo: 'No asiste (Por confirmar)' } });
+      toast('Cupo liberado');
+      if (window.SugerenciasCupo) window.SugerenciasCupo.abrir(cita.id, () => cargarDatos());
+    } catch (e) { toast(e.message, 'err'); }
   };
 
   const cargarDatos = async () => {

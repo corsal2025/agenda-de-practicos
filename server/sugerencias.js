@@ -20,16 +20,19 @@ function esCompatible(cupo, candidato) {
   return !tienePesada(candidato.clase) || cupo.hora === HORA_D_A5;
 }
 
-// Orden: cola (mas antigua primero) > lista de espera (cita mas lejana primero);
+// Orden: cola (mas antigua primero) > solicita cambio (cita mas cercana primero)
+// > lista de espera (cita mas lejana primero);
 // desempate final: tramite mas cerca de vencer.
+const PRIORIDAD = { cola: 0, cambio: 1, lista_espera: 2 };
 function rankear(candidatos) {
   const dias = (c) => (c.vigencia ? c.vigencia.dias : Infinity);
   return [...candidatos].sort((a, b) => {
-    const pa = a.origen === 'cola' ? 0 : 1;
-    const pb = b.origen === 'cola' ? 0 : 1;
+    const pa = PRIORIDAD[a.origen] ?? 2;
+    const pb = PRIORIDAD[b.origen] ?? 2;
     if (pa !== pb) return pa - pb;
     if (pa === 0 && a.creado_en !== b.creado_en) return String(a.creado_en).localeCompare(String(b.creado_en));
-    if (pa === 1 && a.fecha !== b.fecha) return String(b.fecha).localeCompare(String(a.fecha));
+    if (pa === 1 && a.fecha !== b.fecha) return String(a.fecha).localeCompare(String(b.fecha));
+    if (pa === 2 && a.fecha !== b.fecha) return String(b.fecha).localeCompare(String(a.fecha));
     return dias(a) - dias(b);
   });
 }
@@ -50,7 +53,7 @@ function sugerir(cupo) {
     }));
   const lista = db.prepare(`
     SELECT a.*, e.nombre AS examinador FROM agenda a LEFT JOIN examinadores e ON e.id = a.examinador_id
-    WHERE a.lista_espera = 'SI' AND a.fecha > ? AND a.bloqueado = 0
+    WHERE a.lista_espera = 'SI' AND a.fecha > ? AND a.bloqueado = 0 AND COALESCE(a.pendiente_reagendar, 0) = 0
       AND ((a.rut IS NOT NULL AND a.rut != '') OR (a.nombre IS NOT NULL AND a.nombre != ''))
   `).all(cupo.fecha).map((a) => ({
     origen: 'lista_espera', id: a.id, rut: a.rut, nombre: a.nombre, clase: a.clase, correo: a.correo,
@@ -58,8 +61,11 @@ function sugerir(cupo) {
     fecha_inicio_tramite: a.fecha_inicio_tramite,
   }));
 
+  const cambio = db.prepare(`${SQL_CAMBIO} AND a.id != ?`).all(hoyISO(), cupo.id)
+    .map((a) => ({ ...desdeCita(a, hoyISO()), origen: 'cambio' }));
+
   const vistos = new Set();
-  const candidatos = [...cola, ...lista]
+  const candidatos = [...cola, ...cambio, ...lista]
     .filter((c) => esCompatible(cupo, c))
     .filter((c) => {
       const k = clavePersona(c);
@@ -86,7 +92,7 @@ function sugerir(cupo) {
 // ---------- Pestaña "Lista de espera": todos los que esperan + cupos compatibles ----------
 const DIAS_VENTANA = 30;
 const MAX_CUPOS = 50;
-const ORIGENES = { reagendar: 'cola', lista_espera: 'lista_espera' };
+const ORIGENES = { reagendar: 'cola', cambio: 'cambio', lista_espera: 'lista_espera' };
 
 const desdeCola = (c, hoy) => ({
   origen: 'cola', id: c.id, rut: c.rut, nombre: c.nombre, clase: c.clase, correo: c.correo,
@@ -102,7 +108,12 @@ const desdeCita = (a, hoy) => ({
 });
 
 const SQL_LISTA = `SELECT a.*, e.nombre AS examinador FROM agenda a LEFT JOIN examinadores e ON e.id = a.examinador_id
-  WHERE a.lista_espera = 'SI' AND a.fecha > ? AND a.bloqueado = 0
+  WHERE a.lista_espera = 'SI' AND a.fecha > ? AND a.bloqueado = 0 AND COALESCE(a.pendiente_reagendar, 0) = 0
+    AND ((a.rut IS NOT NULL AND a.rut != '') OR (a.nombre IS NOT NULL AND a.nombre != ''))`;
+
+// Citas cuyo postulante pidio cambio ("Reagendar" sin destino): siguen con su cita actual.
+const SQL_CAMBIO = `SELECT a.*, e.nombre AS examinador FROM agenda a LEFT JOIN examinadores e ON e.id = a.examinador_id
+  WHERE a.pendiente_reagendar = 1 AND a.fecha >= ? AND a.bloqueado = 0
     AND ((a.rut IS NOT NULL AND a.rut != '') OR (a.nombre IS NOT NULL AND a.nombre != ''))`;
 
 // Cupos libres de la ventana + personas con cita por dia (regla: no dos veces el mismo dia).
@@ -133,12 +144,13 @@ function cuposPara(persona, ctx) {
 
 function listarEspera(hoy = hoyISO()) {
   const cola = db.prepare(`SELECT * FROM cola_reagendar WHERE estado = 'pendiente'`).all().map((c) => desdeCola(c, hoy));
+  const cambio = db.prepare(SQL_CAMBIO).all(hoy).map((a) => ({ ...desdeCita(a, hoy), origen: 'cambio' }));
   const lista = db.prepare(SQL_LISTA).all(hoy).map((a) => desdeCita(a, hoy));
   const ctx = contexto(hoy);
-  return rankear([...cola, ...lista].map((p) => ({ ...p, vigencia: vigenciaTramite(p, hoy) })))
+  return rankear([...cola, ...cambio, ...lista].map((p) => ({ ...p, vigencia: vigenciaTramite(p, hoy) })))
     .map((p) => ({
       ...p,
-      origen: p.origen === 'cola' ? 'reagendar' : 'lista_espera',
+      origen: p.origen === 'cola' ? 'reagendar' : p.origen,
       dias_restantes_tramite: p.vigencia ? p.vigencia.dias : null,
       tramite_vence: p.vigencia ? p.vigencia.vence : null,
       cupos_compatibles: cuposPara(p, ctx).length,
@@ -153,6 +165,9 @@ function cuposCompatibles(origen, id, hoy = hoyISO()) {
   if (interno === 'cola') {
     const c = db.prepare(`SELECT * FROM cola_reagendar WHERE id = ? AND estado = 'pendiente'`).get(Number(id));
     persona = c && desdeCola(c, hoy);
+  } else if (interno === 'cambio') {
+    const a = db.prepare(`${SQL_CAMBIO} AND a.id = ?`).get(hoy, Number(id));
+    persona = a && { ...desdeCita(a, hoy), origen: 'cambio' };
   } else {
     const a = db.prepare(`${SQL_LISTA} AND a.id = ?`).get(hoy, Number(id));
     persona = a && desdeCita(a, hoy);

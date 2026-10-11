@@ -12,14 +12,14 @@ const SugerenciasCupo = (() => {
   };
   const origenTxt = (c) => (c.origen === 'cola'
     ? `<span class="badge reag">Cola</span><div class="muted" style="font-size:.78rem">Desde ${esc(fFecha(c.origen_fecha))} ${esc(c.origen_hora || '')}</div>`
-    : `<span class="badge intento-1">Lista de espera</span><div class="muted" style="font-size:.78rem">Hoy: ${esc(fFecha(c.fecha))} ${esc(c.hora || '')}</div>`);
+    : `<span class="badge ${c.origen === 'cambio' ? 'reag' : 'intento-1'}">${c.origen === 'cambio' ? 'Solicita cambio' : 'Lista de espera'}</span><div class="muted" style="font-size:.78rem">Hoy: ${esc(fFecha(c.fecha))} ${esc(c.hora || '')}</div>`);
 
   async function asignar(cupo, c) {
     if (c.origen === 'cola') {
       return api(`/cola-reagendar/${c.id}/asignar`, { method: 'POST', body: { destino_id: cupo.id } });
     }
     return api(`/agenda/${c.id}/reagendar`, {
-      method: 'POST', body: { destino_id: cupo.id, motivo: 'Adelantada desde lista de espera' },
+      method: 'POST', body: { destino_id: cupo.id, motivo: c.origen === 'cambio' ? 'POSTULANTE SOLICITA CAMBIO' : 'Adelantada desde lista de espera' },
     });
   }
 
@@ -35,7 +35,7 @@ const SugerenciasCupo = (() => {
     const cuerpo = `
       <p style="margin-top:0">Cupo libre: <b>${esc(fFecha(cupo.fecha))} ${esc(cupo.hora)}</b>${cupo.examinador ? ` · ${esc(cupo.examinador)}` : ''}</p>
       ${(avisos || []).map((a) => `<p class="aviso-sug">${esc(a)}</p>`).join('')}
-      <p class="muted" style="font-size:.82rem">Prioridad: cola de reagendar (más antigua primero), luego lista de espera (cita más lejana primero); desempata el trámite más cerca de vencer. Ya se filtran la regla D/A5 y a quien tiene cita ese día.</p>
+      <p class="muted" style="font-size:.82rem">Prioridad: cola de reagendar (más antigua primero), luego quienes solicitan cambio (cita más cercana primero), luego lista de espera (cita más lejana primero); desempata el trámite más cerca de vencer. Ya se filtran la regla D/A5 y a quien tiene cita ese día.</p>
       <div class="tabla-scroll"><table><thead><tr><th class="c">#</th><th>Origen</th><th>Postulante</th><th class="c">Clase</th><th class="c">Trámite vence en</th><th></th></tr></thead>
       <tbody>${filas || '<tr><td colspan="6" class="muted">No hay candidatos compatibles para este cupo.</td></tr>'}</tbody></table></div>`;
     const ov = modal('Sugerencias para el cupo', cuerpo, '<button class="btn sec" id="sug-cerrar">Cerrar</button>');
@@ -45,7 +45,7 @@ const SugerenciasCupo = (() => {
         const c = candidatos[Number(btn.dataset.i)];
         const txt = c.origen === 'cola'
           ? `¿Asignar a ${nom(c.nombre)} en este cupo?`
-          : `¿Adelantar a ${nom(c.nombre)}? Su cita del ${fFecha(c.fecha)} ${c.hora} quedará libre.`;
+          : `¿${c.origen === 'cambio' ? 'Cambiar' : 'Adelantar'} a ${nom(c.nombre)}? Su cita del ${fFecha(c.fecha)} ${c.hora} quedará libre.`;
         if (!confirm(txt)) return;
         btn.disabled = true;
         try {
@@ -87,12 +87,14 @@ const ListaEspera = (() => {
     } catch (_) { pintarBadge('badge-espera', 0); return null; }
   }
 
-  const origenBadge = (p) => (p.origen === 'reagendar'
-    ? '<span class="badge reag">Reagendar</span>'
-    : '<span class="badge intento-1">Quiere adelantar</span>');
+  const origenBadge = (p) => {
+    if (p.origen === 'reagendar') return '<span class="badge reag">Reagendar</span>';
+    if (p.origen === 'cambio') return '<span class="badge reag">Solicita cambio</span>';
+    return '<span class="badge intento-1">Quiere adelantar</span>';
+  };
   const tramiteHtml = (p) => (p.dias_restantes_tramite == null
     ? SIN_INICIO_HTML : cuentaRegresivaHtml(p.dias_restantes_tramite, p.tramite_vence));
-  const citaActual = (p) => (p.origen === 'lista_espera'
+  const citaActual = (p) => (p.origen !== 'reagendar'
     ? `${esc(fFecha(p.fecha))} ${esc(p.hora || '')}${p.examinador ? `<div class="muted" style="font-size:.78rem">${esc(p.examinador)}</div>` : ''}`
     : `<span class="muted">Sin cita</span>${p.motivo ? `<div class="muted" style="font-size:.78rem">${esc(p.motivo)}</div>` : ''}`);
   const clasesDe = (p) => String(p.clase || '').toUpperCase().split(',').map((s) => s.trim()).filter(Boolean);
@@ -102,6 +104,7 @@ const ListaEspera = (() => {
     return personas.map((p, i) => ({ p, prio: i + 1 })).filter(({ p }) => {
       if (filtros.origen === 'reagendar' && p.origen !== 'reagendar') return false;
       if (filtros.origen === 'adelantar' && p.origen !== 'lista_espera') return false;
+      if (filtros.origen === 'cambio' && p.origen !== 'cambio') return false;
       if (filtros.clase && !clasesDe(p).includes(filtros.clase)) return false;
       if (q && !`${p.nombre || ''} ${p.rut || ''} ${p.correo || ''}`.toUpperCase().includes(q)) return false;
       return true;
@@ -127,7 +130,8 @@ const ListaEspera = (() => {
 
   function asignar(p, cupo) {
     if (p.origen === 'reagendar') return api(`/cola-reagendar/${p.id}/asignar`, { method: 'POST', body: { destino_id: cupo.id } });
-    return api(`/agenda/${p.id}/reagendar`, { method: 'POST', body: { destino_id: cupo.id, motivo: 'Adelantada desde lista de espera' } });
+    const motivo = p.origen === 'cambio' ? 'POSTULANTE SOLICITA CAMBIO' : 'Adelantada desde lista de espera';
+    return api(`/agenda/${p.id}/reagendar`, { method: 'POST', body: { destino_id: cupo.id, motivo } });
   }
 
   async function buscarCupo(p, recargar) {
@@ -148,7 +152,7 @@ const ListaEspera = (() => {
         const c = cupos[Number(btn.dataset.i)];
         const txt = p.origen === 'reagendar'
           ? `¿Asignar a ${nom(p.nombre)} el ${fFecha(c.fecha)} ${c.hora}?`
-          : `¿Adelantar a ${nom(p.nombre)} al ${fFecha(c.fecha)} ${c.hora}? Su cita del ${fFecha(p.fecha)} ${p.hora} quedará libre.`;
+          : `¿${p.origen === 'cambio' ? 'Cambiar' : 'Adelantar'} a ${nom(p.nombre)} al ${fFecha(c.fecha)} ${c.hora}? Su cita del ${fFecha(p.fecha)} ${p.hora} quedará libre.`;
         if (!confirm(txt)) return;
         btn.disabled = true;
         try {
@@ -170,11 +174,11 @@ const ListaEspera = (() => {
           <h2 style="margin:0;flex:1">Lista de espera</h2>
           <span class="pastilla" id="le-total">Cargando...</span>
         </div>
-        <p class="muted">Todas las personas que esperan un cupo: la <b>cola de reagendar</b> y quienes tienen cita pero
-          <b>quieren adelantarla</b>. El orden es la prioridad: cola (más antigua primero), luego lista de espera
+        <p class="muted">Todas las personas que esperan un cupo: la <b>cola de reagendar</b> quienes <b>solicitan cambio</b> de su cita y quienes tienen cita pero
+          <b>quieren adelantarla</b>. El orden es la prioridad: cola (más antigua primero), luego solicitudes de cambio (cita más cercana primero), luego lista de espera
           (cita más lejana primero); desempata el trámite más cerca de vencer.</p>
         <div class="fila" id="le-filtros" style="flex-wrap:wrap;gap:8px">
-          <select id="le-origen"><option value="todos">Todos</option><option value="reagendar">Reagendar</option><option value="adelantar">Quiere adelantar</option></select>
+          <select id="le-origen"><option value="todos">Todos</option><option value="reagendar">Reagendar</option><option value="cambio">Solicita cambio</option><option value="adelantar">Quiere adelantar</option></select>
           <select id="le-clase"><option value="">Todas las clases</option></select>
           <input id="le-q" type="search" placeholder="Buscar nombre, RUT o correo" style="flex:1;min-width:180px">
         </div>
