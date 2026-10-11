@@ -356,6 +356,7 @@ const tabs = {
   porconfirmar: renderPorConfirmar,
   buscar: renderBuscar, errores: renderErrores, dia: renderDia, analitica: renderAnalitica,
   papelera: renderPapelera, datos: renderDatos, vencimientos: renderVencimientos,
+  examinador: () => window.renderExaminador(),
 };
 function irA(tab) {
   if (location.hash !== `#${tab}`) { location.hash = tab; return; }
@@ -377,6 +378,7 @@ function ruta() {
   document.querySelectorAll('#nav button[data-tab]').forEach((b) => b.classList.toggle('activo', b.dataset.tab === tab));
   genVista++; // las cargas pendientes de la pestaña anterior ya no pintan
   (tabs[tab] || renderAgenda)();
+  if (window.Movil) window.Movil.trasRuta(tab);
   requestAnimationFrame(ajustarOffsetsFijos);
 }
 window.addEventListener('resize', () => requestAnimationFrame(ajustarOffsetsFijos));
