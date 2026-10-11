@@ -229,6 +229,12 @@ const hoy = () => {
   const d = new Date(); // fecha LOCAL (toISOString usa UTC y adelanta el dia en la noche)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
+// Cita con asistencia confirmada y examen hoy o futuro: no se reagenda hasta que pase el dia.
+// Devuelve el texto del tooltip si aplica la regla, o null.
+const bloqueoReagendarConfirmada = (b) => {
+  if (!b || Number(b.confirmo_asistencia) !== 1 || !b.fecha || b.fecha < hoy()) return null;
+  return `Confirmó asistencia: se podrá reagendar después del examen (${String(b.fecha).split('-').reverse().join('/')})`;
+};
 
 // Fecha en formato dia/mes/año para MOSTRAR. Los <input type="date"> siguen usando ISO.
 function fFecha(v) {

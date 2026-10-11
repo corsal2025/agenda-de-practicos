@@ -152,7 +152,7 @@ function formularioCita(b, alGuardar) {
     `,
     `
     ${(b.rut || b.nombre) ? '<button class="btn peligro sec" id="btn-liberar" title="Quita la cita del bloque">Liberar bloque</button>' : ''}
-    ${(b.rut || b.nombre) ? '<button type="button" class="btn sec" id="btn-reagendar-slot" style="color:var(--azul);font-weight:600">Reagendar postulante</button>' : ''}
+    ${(b.rut || b.nombre) ? '<button type="button" class="btn sec" id="btn-reagendar-slot" style="color:var(--azul);font-weight:600"' + (bloqueoReagendarConfirmada(b) ? ` disabled title="${esc(bloqueoReagendarConfirmada(b))}"` : '') + '>Reagendar postulante</button>' : ''}
     ${tieneCita ? '<button type="button" class="btn sec" id="btn-imprimir-ficha">Imprimir ficha</button>' : ''}
     <button class="btn sec" id="btn-cancel">Cancelar</button>
     <button class="btn" id="btn-guardar" style="background:#1d4ed8;font-weight:700">${tieneCita ? "Guardar cambios" : "Confirmar y agendar cita"}</button>

@@ -245,7 +245,7 @@ function slotCard(b) {
         <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
         <span>${esConfirmado ? 'Confirmado' : 'Confirmar'}</span>
       </button>
-      <button type="button" class="btn-slot-act btn-reagendar" data-act="reagendar" title="Derivar directamente a reagendamiento">
+      <button type="button" class="btn-slot-act btn-reagendar" data-act="reagendar" ${bloqueoReagendarConfirmada(b) ? `disabled title="${esc(bloqueoReagendarConfirmada(b))}"` : 'title="Derivar directamente a reagendamiento"'}>
         <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
         <span>Reagendar</span>
       </button>

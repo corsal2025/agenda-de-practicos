@@ -53,7 +53,7 @@ function sugerir(cupo) {
     }));
   const lista = db.prepare(`
     SELECT a.*, e.nombre AS examinador FROM agenda a LEFT JOIN examinadores e ON e.id = a.examinador_id
-    WHERE a.lista_espera = 'SI' AND a.fecha > ? AND a.bloqueado = 0 AND COALESCE(a.pendiente_reagendar, 0) = 0
+    WHERE a.lista_espera = 'SI' AND a.fecha > ? AND a.bloqueado = 0 AND COALESCE(a.pendiente_reagendar, 0) = 0 AND COALESCE(a.confirmo_asistencia, 0) != 1
       AND ((a.rut IS NOT NULL AND a.rut != '') OR (a.nombre IS NOT NULL AND a.nombre != ''))
   `).all(cupo.fecha).map((a) => ({
     origen: 'lista_espera', id: a.id, rut: a.rut, nombre: a.nombre, clase: a.clase, correo: a.correo,
@@ -108,12 +108,12 @@ const desdeCita = (a, hoy) => ({
 });
 
 const SQL_LISTA = `SELECT a.*, e.nombre AS examinador FROM agenda a LEFT JOIN examinadores e ON e.id = a.examinador_id
-  WHERE a.lista_espera = 'SI' AND a.fecha > ? AND a.bloqueado = 0 AND COALESCE(a.pendiente_reagendar, 0) = 0
+  WHERE a.lista_espera = 'SI' AND a.fecha > ? AND a.bloqueado = 0 AND COALESCE(a.pendiente_reagendar, 0) = 0 AND COALESCE(a.confirmo_asistencia, 0) != 1
     AND ((a.rut IS NOT NULL AND a.rut != '') OR (a.nombre IS NOT NULL AND a.nombre != ''))`;
 
 // Citas cuyo postulante pidio cambio ("Reagendar" sin destino): siguen con su cita actual.
 const SQL_CAMBIO = `SELECT a.*, e.nombre AS examinador FROM agenda a LEFT JOIN examinadores e ON e.id = a.examinador_id
-  WHERE a.pendiente_reagendar = 1 AND a.fecha >= ? AND a.bloqueado = 0
+  WHERE a.pendiente_reagendar = 1 AND a.fecha >= ? AND a.bloqueado = 0 AND COALESCE(a.confirmo_asistencia, 0) != 1
     AND ((a.rut IS NOT NULL AND a.rut != '') OR (a.nombre IS NOT NULL AND a.nombre != ''))`;
 
 // Cupos libres de la ventana + personas con cita por dia (regla: no dos veces el mismo dia).

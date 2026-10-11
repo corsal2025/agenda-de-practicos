@@ -942,6 +942,12 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
   const origen = db.prepare('SELECT * FROM agenda WHERE id = ?').get(origenId);
   if (!origen) throw bad('Cita de origen no encontrada', 404);
   if (!(origen.rut || origen.nombre)) throw bad('El bloque de origen no tiene una cita.');
+  // Regla: quien confirmo asistencia no se reagenda hasta que pase el dia del examen
+  // (si no se presenta se marca No asistio). forzar_confirmada es la salida excepcional.
+  if (Number(origen.confirmo_asistencia) === 1 && origen.fecha >= hoyISO() && !(req.body && req.body.forzar_confirmada === true)) {
+    const f = String(origen.fecha).split('-').reverse().join('/');
+    throw bad(`La persona confirmó asistencia para el ${f}: se puede reagendar después de esa fecha (o márcala como No asistió)`, 409);
+  }
 
   // Si no se indica destino_id, se deriva a la cola de pendientes de reagendar directamente
   if (!destino_id) {
