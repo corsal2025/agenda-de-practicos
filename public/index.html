@@ -8,7 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap">
   <link rel="stylesheet" href="styles.css?v=76">
-  <link rel="stylesheet" href="responsive.css?v=76">
+  <link rel="stylesheet" href="responsive.css?v=80">
+  <script src="tamano-letra.js?v=77"></script>
 </head>
 <body>
   <div class="barra-nacion"></div>
@@ -38,6 +39,11 @@
         </button>
         <button id="lico-onoff" class="icono-btn" type="button" aria-pressed="true" title="Lico animado: activado (clic para desactivar)" aria-label="Lico animado: activado (clic para desactivar)">&#9786;</button>
         <button id="lico-consejos" class="icono-btn" type="button" aria-pressed="true" title="Consejos automáticos de Lico: activados (clic para desactivar)" aria-label="Consejos automáticos de Lico: activados (clic para desactivar)">&#128172;</button>
+        <div class="letra-ctrl" role="group" aria-label="Tamaño de letra">
+          <button id="letra-menos" class="icono-btn" type="button" title="Achicar letra (Ctrl+Alt+-)" aria-label="Achicar letra">A&minus;</button>
+          <button id="letra-nivel" class="letra-nivel" type="button" title="Volver al tamaño normal (Ctrl+Alt+0)" aria-label="Tamaño actual; clic para volver al normal">100%</button>
+          <button id="letra-mas" class="icono-btn" type="button" title="Agrandar letra (Ctrl+Alt++)" aria-label="Agrandar letra">A+</button>
+        </div>
         <button id="tema" class="icono-btn" title="Cambiar tema" aria-label="Cambiar tema">☾</button>
         <span class="estado" id="estado"></span>
       </div>
@@ -92,7 +98,7 @@
   <script src="js/datos.js?v=73"></script>
   <script src="js/calendario.js?v=74"></script>
   <script src="js/guia-pasos.js?v=76"></script>
-  <script src="js/guia.js?v=70"></script>
+  <script src="js/guia.js?v=80"></script>
   <script src="js/jefatura.js?v=76"></script>
   <script src="js/main.js?v=76"></script>
   <script src="responsive.js?v=66"></script>

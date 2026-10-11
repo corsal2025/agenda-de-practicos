@@ -141,3 +141,37 @@
   .cal-dow { display: inline; }
   .cal-resumen { margin-left: 0; width: 100%; }
 }
+
+/* ===== Tamaño de letra (accesibilidad): escala proporcional de toda la interfaz ===== */
+html[data-escala="115"] body { zoom: 1.15; }
+html[data-escala="130"] body { zoom: 1.30; }
+html[data-escala="150"] body { zoom: 1.50; }
+/* Con letra grande el menu puede no caber: se desliza en vez de cortarse */
+html:not([data-escala="100"]) header.top nav { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; }
+.letra-ctrl { display: inline-flex; align-items: center; gap: 2px; }
+.letra-ctrl .icono-btn { width: auto; min-width: 32px; padding: 0 6px; font-weight: 700; font-size: 13px; }
+.letra-ctrl .icono-btn:disabled { opacity: .4; cursor: default; }
+.letra-nivel {
+  background: transparent; border: 0; color: var(--tinta-2); font: inherit; font-size: 11px; font-weight: 700;
+  min-width: 38px; cursor: pointer; border-radius: var(--r-sm);
+}
+.letra-nivel:hover { color: var(--tinta); background: var(--elev); }
+@media print { .letra-ctrl { display: none; } html[data-escala] body { zoom: 1; } }
+/* Con letra grande: las grillas de paneles no crecen por su contenido y las tablas anchas
+   se deslizan dentro de su panel en vez de empujar la pagina. */
+html:not([data-escala="100"]) .grid2,
+html:not([data-escala="100"]) .grid3 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+html:not([data-escala="100"]) .grid2 > *,
+html:not([data-escala="100"]) .grid3 > * { min-width: 0; }
+html:not([data-escala="100"]) .grafico,
+html:not([data-escala="100"]) .grafico canvas { max-width: 100%; }
+html:not([data-escala="100"]) #view .panel { overflow-x: auto; }
+/* Con letra 130-150 %: el encabezado se apila (como en tablet) para no salirse */
+html[data-escala="130"] .top-inner > *, html[data-escala="150"] .top-inner > * { min-width: 0; }
+html[data-escala="150"] .top-inner { grid-template-columns: 1fr auto; }
+html[data-escala="150"] .estado { white-space: normal; }
+/* Con letra agrandada el encabezado usa dos filas: marca + buscador arriba, botones abajo */
+html:not([data-escala="100"]) .top-inner { grid-template-columns: minmax(0, 1fr); }
+html:not([data-escala="100"]) .top-brand-group { flex-wrap: wrap; gap: 10px 24px; }
+html:not([data-escala="100"]) .top-right { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; justify-content: flex-start; }
+html:not([data-escala="100"]) .estado { white-space: normal; }

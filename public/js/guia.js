@@ -138,12 +138,15 @@ async function renderPasoTour(esPrimerRender = false) {
 
   const posicionar = () => {
     if (token !== tourToken) return;
-    const r = target.getBoundingClientRect();
+    // Con letra agrandada (zoom en body) las coordenadas del viewport se pasan a unidades locales.
+    const Z = parseFloat(getComputedStyle(document.body).zoom) || 1;
+    const r0 = target.getBoundingClientRect();
+    const r = { left: r0.left / Z, top: r0.top / Z, right: r0.right / Z, bottom: r0.bottom / Z, width: r0.width / Z, height: r0.height / Z };
     const flecha = $('#tour-flecha');
     if (!spot || !card) return;
 
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    const vw = window.innerWidth / Z;
+    const vh = window.innerHeight / Z;
     const cardW = card.offsetWidth || Math.min(520, vw - 32);
     const cardH = card.offsetHeight || 290;
     const pad = 6;
