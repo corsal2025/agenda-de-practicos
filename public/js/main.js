@@ -4,6 +4,7 @@ const tabs = {
   buscar: renderBuscar, errores: renderErrores, dia: renderDia, analitica: renderAnalitica,
   papelera: renderPapelera, datos: renderDatos, vencimientos: renderVencimientos,
   examinador: () => window.renderExaminador(),
+  calendario: renderCalendario,
 };
 /* ================= arranque ================= */
 async function init({ forzarAgenda = false } = {}) {

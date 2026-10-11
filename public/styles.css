@@ -1919,3 +1919,33 @@ body.vista-movil { overflow-x: hidden; }
   .buscador { width: 100%; }
   .top-inner > * { min-width: 0; max-width: 100%; }
 }
+
+/* ================= Calendario mensual ================= */
+.cal-barra { align-items: center; gap: 8px; }
+.cal-titulo { margin: 0 6px; font-size: 1.25rem; min-width: 10ch; text-align: center; }
+.cal-resumen { margin-left: auto; color: var(--tinta-2); font-weight: 600; }
+.cal-leyenda { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: .85rem; color: var(--tinta-2); align-items: center; }
+.cal-leyenda > span { display: inline-flex; align-items: center; gap: 6px; }
+.cal-sw { width: 14px; height: 14px; border-radius: 4px; display: inline-block; border: 1px solid var(--linea); }
+.cal-grilla { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.cal-cab { text-align: center; font-weight: 700; color: var(--tinta-3); font-size: .8rem; padding: 4px 0; }
+.cal-dia {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 84px; padding: 8px;
+  border: 1px solid var(--linea); border-radius: var(--r-sm); background: var(--papel); color: var(--tinta);
+  font: inherit; text-align: left; cursor: pointer; transition: transform .12s ease, box-shadow .12s ease;
+}
+.cal-dia:hover { transform: translateY(-1px); box-shadow: var(--sh); }
+.cal-dia:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.cal-num { font-size: 1.15rem; font-weight: 800; }
+.cal-dow { display: none; font-size: .8rem; color: var(--tinta-3); }
+.cal-det { font-size: .82rem; font-weight: 600; }
+.cal-pesada { font-size: .72rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--pesada-bg); color: var(--pesada); border: 1px solid var(--pesada-bd); }
+.cal-verde { background: var(--ok-bg); border-color: var(--ok-bd); }
+.cal-verde .cal-det { color: var(--ok); }
+.cal-amarillo { background: var(--alerta-bg); border-color: var(--alerta-bd); }
+.cal-amarillo .cal-det { color: var(--alerta); }
+.cal-rojo { background: var(--error-bg); border-color: var(--error-bd); }
+.cal-rojo .cal-det { color: var(--error); }
+.cal-gris { background: var(--elev); color: var(--tinta-3); }
+.cal-hoy { box-shadow: 0 0 0 2px var(--azul) inset; }
+@media (prefers-reduced-motion: reduce) { .cal-dia { transition: none; } .cal-dia:hover { transform: none; } }

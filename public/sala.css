@@ -1,0 +1,24 @@
+:root { --bg: #0b1026; --panel: #151c3d; --tinta: #f2f4fb; --tinta-2: #b4bcdd; --ahora: #2fb56a; --sig: #f6d23c; --linea: #2a3466; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--tinta); font-family: "Public Sans", "Segoe UI", system-ui, sans-serif; }
+body { display: flex; flex-direction: column; padding: 2vh 3vw; gap: 2vh; overflow: hidden; }
+.s-top { display: flex; align-items: center; gap: 2vw; }
+.s-logo { height: 9vh; width: auto; background: #fff; border-radius: 12px; padding: 6px; }
+.s-top h1 { flex: 1; margin: 0; font-size: clamp(1.4rem, 3.4vw, 3.4rem); font-weight: 800; }
+.s-reloj { font-size: clamp(2rem, 5vw, 5rem); font-weight: 800; font-variant-numeric: tabular-nums; }
+main { flex: 1; display: grid; grid-template-columns: 1.3fr 1fr; gap: 2vw; min-height: 0; }
+.s-destacadas { display: grid; grid-template-rows: 1fr 1fr; gap: 2vh; }
+.s-card { background: var(--panel); border-radius: 20px; padding: 2.5vh 2vw; border-left: 14px solid var(--linea); display: flex; flex-direction: column; justify-content: center; }
+.s-card h2 { margin: 0 0 1vh; font-size: clamp(1.2rem, 2.4vw, 2.4rem); letter-spacing: .12em; }
+.s-ahora { border-left-color: var(--ahora); } .s-ahora h2 { color: var(--ahora); }
+.s-sig { border-left-color: var(--sig); } .s-sig h2 { color: var(--sig); }
+.s-cuerpo { font-size: clamp(1.6rem, 3.6vw, 4rem); font-weight: 800; line-height: 1.2; }
+.s-cuerpo small { display: block; font-size: .55em; font-weight: 600; color: var(--tinta-2); }
+.s-lista { background: var(--panel); border-radius: 20px; padding: 2vh 1.5vw; overflow: hidden; }
+.s-lista ul { list-style: none; margin: 0; padding: 0; }
+.s-lista li { display: grid; grid-template-columns: 5.5ch 1fr auto; gap: 1vw; align-items: baseline; padding: 1.2vh 0; border-bottom: 1px solid var(--linea); font-size: clamp(1.1rem, 2vw, 2.1rem); }
+.s-lista li .hora { font-weight: 800; font-variant-numeric: tabular-nums; }
+.s-lista li .ex { color: var(--tinta-2); font-size: .8em; }
+.s-lista li.finalizado { opacity: .45; }
+.s-pie { color: var(--tinta-2); font-size: clamp(.9rem, 1.2vw, 1.3rem); text-align: center; }
+@media (max-width: 800px) { body { overflow: auto; } main { grid-template-columns: 1fr; } }

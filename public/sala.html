@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sala de espera</title>
+  <link rel="stylesheet" href="sala.css?v=74">
+</head>
+<body>
+  <header class="s-top">
+    <img src="logo.png" alt="" class="s-logo" onerror="this.remove()">
+    <h1>Exámenes prácticos — hoy <span id="s-fecha"></span></h1>
+    <div class="s-reloj" id="s-reloj" aria-live="off"></div>
+  </header>
+  <main>
+    <section class="s-destacadas">
+      <article class="s-card s-ahora" id="s-ahora"><h2>AHORA</h2><div class="s-cuerpo">—</div></article>
+      <article class="s-card s-sig" id="s-sig"><h2>SIGUIENTE</h2><div class="s-cuerpo">—</div></article>
+    </section>
+    <section class="s-lista" aria-label="Resto de las citas de hoy"><ul id="s-lista"></ul></section>
+  </main>
+  <footer class="s-pie" id="s-pie"></footer>
+  <script src="sala.js?v=75"></script>
+</body>
+</html>

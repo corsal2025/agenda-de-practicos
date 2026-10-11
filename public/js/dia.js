@@ -105,6 +105,7 @@ async function renderDia() {
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6V2h8v4M4 12H2V6h12v6h-2M4 10h8v4H4z"/></svg>
         Imprimir informe
       </button>
+      <button class="btn sec" id="dd-sala" type="button" title="Pantalla para TV de la sala de espera (solo iniciales, sin RUT)">Abrir pantalla sala de espera</button>
     </div></div>
     <div id="dd-cierre" class="no-print"></div>
     <div id="dd-cont" class="dd-cont">Cargando...</div>`;
@@ -113,6 +114,7 @@ async function renderDia() {
   $('#dd-formato').onchange = (e) => { aplicarFormatoImpresion(e.target.value); toast(`Formato: ${PAGINAS[e.target.value].etq}`); };
   $('#dd-orientacion').onchange = (e) => { aplicarFormatoImpresion(null, e.target.value); toast(`Orientación: ${e.target.value === 'vertical' ? 'Vertical' : 'Horizontal'}`); document.body.classList.toggle('orientacion-horizontal', e.target.value === 'horizontal'); };
   $('#dd-print').onclick = () => window.print();
+  $('#dd-sala').onclick = () => window.open('/sala.html', 'sala-espera');
   $('#dd-diseno').onchange = (e) => { try { localStorage.setItem('agenda-diseno-dia', e.target.value); } catch (_) { /* ignore */ } renderDia(); };
 
   await cargarVista('dia', `/dia?fecha=${fecha}`, (data) => {
