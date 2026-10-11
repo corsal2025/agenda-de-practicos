@@ -256,7 +256,9 @@ function formularioCita(b, alGuardar) {
   };
   document.querySelectorAll('#f-clase input').forEach((chk) => {
     chk.addEventListener('change', chequearPesada);
+    chk.addEventListener('change', () => avisoTercerIntentoEnVivo(b, $('#f-rut').value.trim(), clasesMarcadas()));
   });
+  $('#f-rut').addEventListener('blur', () => avisoTercerIntentoEnVivo(b, $('#f-rut').value.trim(), clasesMarcadas()));
   $('#f-fecha-inicio').addEventListener('input', actualizarCuentaTramite);
   $('#f-fecha-inicio').addEventListener('change', actualizarCuentaTramite);
   actualizarCuentaTramite();
@@ -336,7 +338,19 @@ function formularioCita(b, alGuardar) {
         forzar: $('#f-forzar') && $('#f-forzar').checked,
       };
 
-      const r = await api(`/agenda/${b.id}`, { method: 'PUT', body });
+      let r;
+      try {
+        r = await api(`/agenda/${b.id}`, { method: 'PUT', body });
+      } catch (err) {
+        if (!(err.status === 409 && err.data && err.data.codigo === 'TERCER_INTENTO')) throw err;
+        const motivo = await pedirAutorizacionTercerIntento(err.data);
+        if (!motivo) {
+          $('#btn-guardar').disabled = false;
+          $('#btn-guardar').textContent = 'Guardar cita';
+          return;
+        }
+        r = await api(`/agenda/${b.id}`, { method: 'PUT', body: { ...body, autorizar_tercer_intento: { motivo } } });
+      }
       (r.avisos || []).forEach((a) => toast(a, 'err'));
       toast('Cita agendada exitosamente · Comprobante e instrucciones enviadas por correo', 'ok');
       cerrarModal();
@@ -366,3 +380,60 @@ async function fechaInicialAgenda() {
   return h;
 }
 
+
+// ---------- Regla de 3er intento (el servidor bloquea; aqui se avisa y se pide autorizacion) ----------
+const MOTIVO_TERCER_INTENTO_MIN = 10;
+const RESULTADOS_TERCER_INTENTO = ['REPROBADO', 'REPROBADO INASISTENCIA'];
+
+// Aviso en rojo, antes de guardar, si el RUT ya reprobo 2 veces alguna de las clases marcadas.
+async function avisoTercerIntentoEnVivo(b, rutVal, clases) {
+  const zona = $('#f-intento-aviso');
+  if (!zona || !rutVal || !clases.length) return;
+  try {
+    const rows = await api(`/buscar-historial?rut=${encodeURIComponent(rutVal)}`);
+    if (!document.body.contains(zona) || !Array.isArray(rows)) return;
+    const cuenta = {};
+    rows.filter((r) => r.id !== b.id && RESULTADOS_TERCER_INTENTO.includes(r.resultado))
+      .forEach((r) => clasesDe(r.clase).forEach((c) => { cuenta[c] = (cuenta[c] || 0) + 1; }));
+    const bloqueada = clases.find((c) => (cuenta[c] || 0) >= 2);
+    if (!bloqueada) { zona.innerHTML = ''; zona.hidden = true; return; }
+    zona.innerHTML = `<div class="badge reprob" role="alert" style="display:block;padding:8px 10px;font-weight:700;white-space:normal">
+      ⚠ 3er intento: esta persona reprobó ${cuenta[bloqueada]} veces la clase ${esc(bloqueada)}. Para agendar se requiere autorización con motivo.</div>`;
+    zona.hidden = false;
+  } catch (_) { /* el aviso es informativo; el servidor aplica la regla */ }
+}
+
+// Modal sobre el editor: devuelve el motivo (>= 10 caracteres) o null si se cancela.
+function pedirAutorizacionTercerIntento(datos) {
+  return new Promise((resolver) => {
+    const ov = h(`<div class="overlay" style="z-index:1000">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ti-titulo" style="max-width:480px">
+        <header><h3 id="ti-titulo">Tercer intento bloqueado</h3></header>
+        <div class="cuerpo">
+          <p>${esc(datos.error || '')}</p>
+          <p>Solo se puede agendar con una autorización justificada. Quedará registrada en el historial de movimientos y en los comentarios de la cita.</p>
+          <label for="ti-motivo"><b>Motivo de la autorización</b></label>
+          <textarea id="ti-motivo" rows="3" style="width:100%" placeholder="Mínimo ${MOTIVO_TERCER_INTENTO_MIN} caracteres"></textarea>
+          <div id="ti-cuenta" class="hist-sub"></div>
+        </div>
+        <footer>
+          <button type="button" class="btn sec" id="ti-cancelar">Cancelar</button>
+          <button type="button" class="btn" id="ti-autorizar" disabled>Autorizar y guardar</button>
+        </footer>
+      </div></div>`);
+    const txt = ov.querySelector('#ti-motivo');
+    const btn = ov.querySelector('#ti-autorizar');
+    const cuenta = ov.querySelector('#ti-cuenta');
+    const terminar = (v) => { ov.remove(); resolver(v); };
+    txt.addEventListener('input', () => {
+      const n = txt.value.trim().length;
+      btn.disabled = n < MOTIVO_TERCER_INTENTO_MIN;
+      cuenta.textContent = n < MOTIVO_TERCER_INTENTO_MIN ? `Faltan ${MOTIVO_TERCER_INTENTO_MIN - n} caracteres` : '';
+    });
+    ov.querySelector('#ti-cancelar').onclick = () => terminar(null);
+    btn.onclick = () => terminar(txt.value.trim());
+    ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); terminar(null); } });
+    document.body.appendChild(ov);
+    txt.focus();
+  });
+}

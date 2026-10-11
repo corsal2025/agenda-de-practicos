@@ -30,6 +30,7 @@ const telefono = require('./telefono');
 const sugerencias = require('./sugerencias');
 const limpieza = require('./limpieza');
 const vistas = require('./vistas');
+const intentos = require('./intentos');
 
 const app = express();
 app.disable('x-powered-by');
@@ -470,6 +471,28 @@ function validarBloque(body, bloque) {
   return { avisos, rutFmt, clase };
 }
 
+// Devuelve null si no aplica la regla, o { clase, reprobados, motivo } si se autorizo.
+// Lanza 409 TERCER_INTENTO sin autorizacion y 400 si el motivo es muy corto.
+function verificarTercerIntento(body, bloque, rutFmt, clase) {
+  if (!rutFmt) return null;
+  const mismoRut = rut.limpiar(bloque.rut) === rut.limpiar(rutFmt);
+  const mismaClase = intentos.clasesDe(bloque.clase).join(',') === intentos.clasesDe(clase).join(',');
+  if (mismoRut && mismaClase) return null;
+  const b = intentos.bloqueoTercerIntento(db, { rut: rutFmt, clase, excluirId: bloque.id });
+  if (!b) return null;
+  const aut = body.autorizar_tercer_intento;
+  if (!aut) {
+    const e = bad(b.mensaje, 409);
+    Object.assign(e, { codigo: 'TERCER_INTENTO', clase: b.clase, reprobados: b.reprobados });
+    throw e;
+  }
+  const motivo = String(aut.motivo || '').trim().replace(/\s+/g, ' ');
+  if (motivo.length < intentos.MOTIVO_MINIMO) {
+    throw bad(`El motivo de la autorización debe tener al menos ${intentos.MOTIVO_MINIMO} caracteres.`);
+  }
+  return { clase: b.clase, reprobados: b.reprobados, motivo };
+}
+
 app.put('/api/agenda/:id', wrap((req, res) => {
   const id = Number(req.params.id);
   const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
@@ -515,6 +538,9 @@ app.put('/api/agenda/:id', wrap((req, res) => {
   if (bloque.bloqueado && (rutFmt || (body.nombre && String(body.nombre).trim()))) {
     throw bad(`El bloque esta bloqueado: ${bloque.bloqueo_motivo || 'BLOQUEADO'}. Desbloquealo primero.`, 409);
   }
+
+  // Regla de 3er intento: solo al ocupar el bloque o cambiar RUT/clase (editar otros campos no bloquea).
+  const autorizacion = verificarTercerIntento(body, bloque, rutFmt, clase);
 
   const tel = telefono.normalizar(body.contacto);
   if (!tel.vacio && !tel.valido) {
@@ -599,7 +625,8 @@ app.put('/api/agenda/:id', wrap((req, res) => {
     tipo_reagendamiento: body.tipo_reagendamiento || null,
     confirmo_asistencia: confirmo,
     resultado: body.resultado || null,
-    comentarios: body.comentarios ? String(body.comentarios).trim() : null,
+    comentarios: [body.comentarios ? String(body.comentarios).trim() : null,
+      autorizacion ? `Autorizado 3er intento: ${autorizacion.motivo}` : null].filter(Boolean).join(' | ') || null,
     pendiente,
     pnota: pendiente && body.pendiente_nota ? String(body.pendiente_nota).trim() : null,
     quedaOcupada: quedaOcupada ? 1 : 0,
@@ -610,6 +637,10 @@ app.put('/api/agenda/:id', wrap((req, res) => {
   const accion = !estabaOcupada && quedaOcupada ? 'agendar'
     : estabaOcupada && !quedaOcupada ? 'liberar' : 'editar';
   logReq(req, id, accion, `${bloque.fecha} ${bloque.hora} ${nombre || bloque.nombre || ''}`);
+  if (autorizacion) {
+    logReq(req, id, 'autorizar_tercer_intento',
+      `${rutFmt} clase ${autorizacion.clase} (${autorizacion.reprobados} reprobados): ${autorizacion.motivo}`);
+  }
 
   // Clase pesada (D/A5) a las 12:30: bloquea/libera automaticamente los
   // bloques siguientes del mismo examinador ese dia.
@@ -1454,6 +1485,11 @@ app.use((err, req, res, next) => {
   if (err.login) cuerpo.login = true;
   if (err.sugerencia) cuerpo.sugerencia = err.sugerencia;
   if (err.accion_recomendada) cuerpo.accion_recomendada = err.accion_recomendada;
+  if (err.codigo) {
+    cuerpo.codigo = err.codigo;
+    if (err.clase) cuerpo.clase = err.clase;
+    if (err.reprobados != null) cuerpo.reprobados = err.reprobados;
+  }
   res.status(err.status || 500).json(cuerpo);
 });
 
