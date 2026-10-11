@@ -173,7 +173,7 @@ function licoConfeti(origen) {
 }
 
 // ---- Lico en la cabecera: consejos, resumen del dia e hitos viven en lico-asistente.js ----
-if (window.LicoAsistente) window.LicoAsistente.iniciar({ apiReciente, irA: (t) => irA(t), hoy: () => hoy(), sumarDias: (f, n) => sumarDias(f, n), licoConfeti });
+if (window.LicoAsistente) window.LicoAsistente.iniciar({ apiReciente, irA: (t) => irA(t), hoy: () => hoy(), sumarDias: (f, n) => sumarDias(f, n), licoConfeti, feriados: () => ((META && META.feriados) || []).map((f) => f.fecha) });
 
 // Digito verificador de un RUT (formato limpio, solo digitos + K final).
 function rutDvEsperado(cuerpo) {

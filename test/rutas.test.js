@@ -749,3 +749,39 @@ test('correo/confirmacion-masiva: aborta tras el primer error sistemico (EAUTH)'
     assert.deepEqual([r.datos.enviados, r.datos.fallidos], [0, 1]);
   } finally { correo.solicitudConfirmacion = original; correo.ultimoError = null; }
 });
+
+// ---------- Cierre del dia ----------
+test('cierre-dia GET lista solo citas sin resultado agrupadas por examinador', async () => {
+  const dia = diaNuevo();
+  const a = ocupado(dia, '08:00');
+  ocupado(dia, '09:00', { resultado: 'APROBADO' });
+  slot(dia, '10:00');
+  ocupado(dia, '11:00', { bloqueado: 1 });
+  const r = await api('GET', `/cierre-dia?fecha=${dia}`);
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.datos.total, 1);
+  assert.equal(r.datos.grupos.length, 1);
+  assert.equal(r.datos.grupos[0].citas[0].id, a.id);
+  assert.equal((await api('GET', '/cierre-dia?fecha=malo')).status, 400);
+});
+
+test('cierre-dia POST valida resultado, ids y fecha; marca solo filas sin resultado', async () => {
+  const dia = diaNuevo();
+  const otro = diaNuevo();
+  const a = ocupado(dia, '08:00');
+  const b = ocupado(dia, '09:00', { resultado: 'APROBADO' });
+  const c = ocupado(otro, '08:00');
+  assert.equal((await api('POST', '/cierre-dia', { fecha: dia, ids: [a.id], resultado: 'INVENTADO' })).status, 400);
+  assert.equal((await api('POST', '/cierre-dia', { fecha: dia, ids: [], resultado: 'NO ASISTIO' })).status, 400);
+  assert.equal((await api('POST', '/cierre-dia', { fecha: 'x', ids: [a.id], resultado: 'NO ASISTIO' })).status, 400);
+  const muchos = Array.from({ length: 201 }, (_, i) => i + 1);
+  assert.equal((await api('POST', '/cierre-dia', { fecha: dia, ids: muchos, resultado: 'NO ASISTIO' })).status, 400);
+  const r = await api('POST', '/cierre-dia', { fecha: dia, ids: [a.id, b.id, c.id], resultado: 'NO ASISTIO' });
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.datos.actualizados, 1);
+  assert.equal(leer(a.id).resultado, 'NO ASISTIO');
+  assert.equal(leer(b.id).resultado, 'APROBADO');
+  assert.equal(leer(c.id).resultado, null);
+  const mov = db.prepare("SELECT COUNT(*) n FROM movimientos WHERE agenda_id = ? AND detalle LIKE '%cierre del dia%'").get(a.id).n;
+  assert.equal(mov, 1);
+});

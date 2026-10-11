@@ -73,6 +73,7 @@ async function renderAgenda() {
     $('#a-libres').textContent = `${libres} ${libres === 1 ? 'bloque libre' : 'bloques libres'}`;
     pintarGrilla($('#a-grid'), filas, fecha);
     restaurarScroll();
+    avisoCierreDia(fecha);
     requestAnimationFrame(ajustarOffsetsFijos);
   });
   actualizarBadgePapelera();

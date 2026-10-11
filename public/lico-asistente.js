@@ -52,6 +52,11 @@
     c = c || {};
     var lista = [];
     var add = function (id, k, texto, tab, boton) { if (k > 0) lista.push({ id: id, texto: texto, tab: tab, boton: boton }); };
+    var ma = num(c.sinConfirmarManana);
+    if (ma > 0) {
+      lista.push({ id: 'manana', texto: 'Mañana hay ' + plural(ma, 'persona', 'personas') + ' sin confirmar.',
+        tab: 'porconfirmar', boton: 'Enviar WhatsApp', accion: 'colaManana', fecha: c.fechaManana || null });
+    }
     var pc = num(c.porconfirmar), ve = num(c.porVencer), st = num(c.sinTramiteHoy), re = num(c.reagendar), er = num(c.errores);
     add('porconfirmar', pc, 'Tienes ' + plural(pc, 'cita', 'citas') + ' por confirmar en los próximos 7 días.', 'porconfirmar', 'Ir a Por confirmar');
     add('vencer', ve, (ve === 1 ? '1 trámite vence' : ve + ' trámites vencen') + ' en ' + DIAS_POR_VENCER + ' días o menos.', 'vencimientos', 'Ir a Por vencer');
@@ -67,6 +72,18 @@
     if (!lista.length) return null;
     for (var i = 0; i < lista.length; i++) if (lista[i].id !== ultimoId) return lista[i];
     return lista[0];
+  }
+
+  // Proximo dia habil (lunes a viernes, sin feriados) despues de `fecha` (YYYY-MM-DD).
+  function proximoHabil(fecha, feriados) {
+    var f = feriados || [];
+    var d = new Date(fecha + 'T12:00:00');
+    for (var i = 0; i < 15; i++) {
+      d.setDate(d.getDate() + 1);
+      var iso = fechaLocal(d), dow = d.getDay();
+      if (dow !== 0 && dow !== 6 && f.indexOf(iso) < 0) return iso;
+    }
+    return fechaLocal(d);
   }
 
   function saludoHora(hora) {
@@ -120,7 +137,7 @@
   var puro = {
     FRASES_LICO: FRASES_LICO, FRASES_TAB: FRASES_TAB,
     consejosDesde: consejosDesde, elegirConsejo: elegirConsejo, saludoHora: saludoHora,
-    resumenDiario: resumenDiario, fechaLocal: fechaLocal, unaVezAlDia: unaVezAlDia,
+    resumenDiario: resumenDiario, proximoHabil: proximoHabil, fechaLocal: fechaLocal, unaVezAlDia: unaVezAlDia,
     hitosAlcanzados: hitosAlcanzados, recortar: recortar, frasePara: frasePara
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = puro;
@@ -147,6 +164,7 @@
   async function contar() {
     if (cache && Date.now() - cache.t < CACHE_MS) return cache.c;
     var hoy = dep.hoy(), hasta7 = dep.sumarDias(hoy, 7);
+    var manana = proximoHabil(hoy, dep.feriados ? dep.feriados() : []);
     var pedir = function (p, ms) { return dep.apiReciente(p, ms || CACHE_MS).catch(function () { return null; }); };
     var r = await Promise.all([
       pedir('/agenda?estado=porconfirmar', 30e3), pedir('/cola-reagendar', 30e3), pedir('/agenda?estado=pendiente', 30e3),
@@ -154,6 +172,8 @@
     ]);
     var ocupadasHoy = Array.isArray(r[5]) ? r[5].filter(function (b) { return !b.bloqueado && (b.rut || b.nombre); }) : null;
     var c = {
+      sinConfirmarManana: Array.isArray(r[0]) ? r[0].filter(function (x) { return x.fecha === manana; }).length : null,
+      fechaManana: manana,
       porconfirmar: Array.isArray(r[0]) ? r[0].filter(function (x) { return x.fecha >= hoy && x.fecha <= hasta7; }).length : null,
       reagendar: Array.isArray(r[1]) || Array.isArray(r[2]) ? (r[1] || []).length + (r[2] || []).length : null,
       errores: r[3] && Array.isArray(r[3].hallazgos) ? r[3].hallazgos.filter(function (h) { return h.severidad !== 'info'; }).length : null,
@@ -193,7 +213,11 @@
       b.type = 'button';
       b.className = 'head-lico-ir';
       b.textContent = accion.boton + ' →';
-      b.addEventListener('click', function () { cerrar(true); dep.irA(accion.tab); });
+      b.addEventListener('click', function () {
+        cerrar(true);
+        if (accion.accion === 'colaManana' && window.PorConfirmar) window.PorConfirmar.abrirColaManana(accion.fecha);
+        else dep.irA(accion.tab);
+      });
       burbuja.appendChild(b);
     }
     burbuja.hidden = false;

@@ -27,7 +27,7 @@ async function renderDatos() {
 
     <div class="panel"><h2>Feriados / dias inhabiles</h2>
       <div class="chips" id="fe-cont" style="margin:.4rem 0"></div>
-      <div class="fila"><input type="date" id="fe-fecha"><input id="fe-nombre" placeholder="Nombre (opcional)"><button class="btn chico" id="fe-add">Agregar</button></div>
+      <div class="fila"><input type="date" id="fe-fecha"><input id="fe-nombre" placeholder="Nombre (opcional)"><button class="btn chico" id="fe-add">Agregar</button><button class="btn chico sec" id="fe-sync">Actualizar feriados de Chile</button></div>
       <p class="muted">Tras cambiar feriados, volve a generar los bloques del periodo afectado.</p>
     </div>
 
@@ -117,6 +117,20 @@ async function renderDatos() {
   fe.querySelectorAll('button[data-f]').forEach((b) => {
     b.onclick = async () => { await api(`/feriados?fecha=${b.dataset.f}`, { method: 'DELETE' }); META = await api('/meta'); renderDatos(); };
   });
+  $('#fe-sync').onclick = async (e) => {
+    const b = e.currentTarget;
+    b.disabled = true;
+    const txt = b.textContent;
+    b.textContent = 'Consultando...';
+    try {
+      const r = await api('/feriados/sincronizar', { method: 'POST', body: {} });
+      toast(r.agregados ? `Feriados actualizados: ${r.agregados} nuevos` : 'Los feriados ya estaban al día');
+      META = await api('/meta'); renderDatos();
+    } catch (err) {
+      toast(/conexion/i.test(err.message) ? 'Sin conexión: carga manual disponible' : err.message, 'err');
+      b.disabled = false; b.textContent = txt;
+    }
+  };
   $('#fe-add').onclick = async () => {
     if (!$('#fe-fecha').value) return;
     await api('/feriados', { method: 'POST', body: { fecha: $('#fe-fecha').value, nombre: $('#fe-nombre').value } });

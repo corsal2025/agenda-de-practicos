@@ -79,3 +79,20 @@ test('FRASES_TAB coincide con las pestañas reales y no duplica frases generales
 test('fechaLocal formatea en hora local', () => {
   assert.equal(L.fechaLocal(new Date(2026, 0, 5, 23, 59)), '2026-01-05');
 });
+
+test('elegirConsejo pone primero el aviso de mañana sin confirmar con atajo a WhatsApp', () => {
+  const t = L.elegirConsejo({ porconfirmar: 9, sinConfirmarManana: 3, fechaManana: '2026-10-13' });
+  assert.equal(t.id, 'manana');
+  assert.equal(t.texto, 'Mañana hay 3 personas sin confirmar.');
+  assert.equal(t.boton, 'Enviar WhatsApp');
+  assert.equal(t.accion, 'colaManana');
+  assert.equal(t.fecha, '2026-10-13');
+  assert.equal(L.consejosDesde({ sinConfirmarManana: 1 })[0].texto, 'Mañana hay 1 persona sin confirmar.');
+  assert.equal(L.elegirConsejo({ porconfirmar: 2, sinConfirmarManana: 0 }).id, 'porconfirmar');
+});
+
+test('proximoHabil salta fin de semana y feriados', () => {
+  assert.equal(L.proximoHabil('2026-10-09'), '2026-10-12'); // viernes -> lunes
+  assert.equal(L.proximoHabil('2026-10-09', ['2026-10-12']), '2026-10-13');
+  assert.equal(L.proximoHabil('2026-10-13'), '2026-10-14');
+});

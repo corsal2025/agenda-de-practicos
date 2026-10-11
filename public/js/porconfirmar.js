@@ -296,7 +296,28 @@ async function renderPorConfirmar() {
   }
 
   await cargarDatos();
+  // Atajo de Lico: preselecciona las citas del proximo dia habil y abre la cola de WhatsApp.
+  const fechaPend = colaMananaPendiente;
+  colaMananaPendiente = null;
+  if (fechaPend) {
+    $('#pc-rango').value = '7';
+    const deManana = visibles.filter((r) => r.fecha === fechaPend);
+    deManana.forEach((r) => seleccion.add(r.id));
+    $('#pc-tbody').querySelectorAll('input[data-sel]').forEach((el) => { el.checked = seleccion.has(Number(el.dataset.sel)); });
+    pintarSeleccion();
+    if (deManana.length) colaWhatsApp(deManana);
+    else toast('No quedan citas sin confirmar para mañana.', 'info');
+  }
 }
+
+let colaMananaPendiente = null;
+window.PorConfirmar = {
+  // fecha = proximo dia habil (YYYY-MM-DD); por defecto, mañana.
+  abrirColaManana(fecha) {
+    colaMananaPendiente = fecha || sumarDias(hoy(), 1);
+    if (location.hash === '#porconfirmar') renderPorConfirmar(); else irA('porconfirmar');
+  },
+};
 
 // Cola de WhatsApp: una ventana por clic del usuario (asi no la bloquea el navegador).
 function colaWhatsApp(filas) {

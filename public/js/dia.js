@@ -106,7 +106,9 @@ async function renderDia() {
         Imprimir informe
       </button>
     </div></div>
+    <div id="dd-cierre" class="no-print"></div>
     <div id="dd-cont" class="dd-cont">Cargando...</div>`;
+  pintarCierreDia(fecha);
   $('#dd-fecha').onchange = (e) => { estadoAgenda.fecha = e.target.value; renderDia(); };
   $('#dd-formato').onchange = (e) => { aplicarFormatoImpresion(e.target.value); toast(`Formato: ${PAGINAS[e.target.value].etq}`); };
   $('#dd-orientacion').onchange = (e) => { aplicarFormatoImpresion(null, e.target.value); toast(`Orientación: ${e.target.value === 'vertical' ? 'Vertical' : 'Horizontal'}`); document.body.classList.toggle('orientacion-horizontal', e.target.value === 'horizontal'); };
@@ -192,4 +194,94 @@ async function renderDia() {
     </article>`;
   }).join('');
   });
+}
+
+/* ---------- Cierre del dia: citas sin resultado ---------- */
+const CIERRE_RESULTADOS = [
+  { v: 'APROBADO', etq: 'Aprobó', cls: '' },
+  { v: 'REPROBADO', etq: 'Reprobó', cls: 'sec' },
+  { v: 'NO ASISTIO', etq: 'No asistió', cls: 'sec' },
+];
+async function pintarCierreDia(fecha) {
+  const cont = $('#dd-cierre');
+  if (!cont) return;
+  let data;
+  try { data = await api(`/cierre-dia?fecha=${fecha}`); } catch (e) {
+    cont.innerHTML = `<div class="panel"><p class="muted" style="color:var(--error)">Cierre del día: ${esc(e.message)}</p></div>`;
+    return;
+  }
+  if ($('#dd-cierre') !== cont) return; // cambio de vista mientras cargaba
+  if (!data.total) {
+    cont.innerHTML = fecha <= hoy()
+      ? '<div class="panel cierre-dia"><h2>Cierre del día</h2><p class="muted">Todas las citas de este día tienen resultado.</p></div>'
+      : '';
+    return;
+  }
+  cont.innerHTML = `<div class="panel cierre-dia">
+    <div class="fila" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <h2 style="margin:0">Cierre del día · ${data.total} ${data.total === 1 ? 'cita' : 'citas'} sin resultado</h2>
+      <div class="fila" style="gap:6px;align-items:center">
+        <label class="muted"><input type="checkbox" id="cd-todos"> Seleccionar todas</label>
+        <button class="btn chico sec" id="cd-noasist" disabled>Marcar seleccionadas como No asistió</button>
+      </div>
+    </div>
+    ${data.grupos.map((g) => `<h3 class="cierre-ex">${esc(nom(g.examinador))} <span class="muted">(${g.citas.length})</span></h3>
+      <div class="tabla-scroll"><table class="cierre-tabla"><tbody>${g.citas.map((c) => `<tr data-id="${c.id}">
+        <td class="c"><input type="checkbox" data-cd="${c.id}" aria-label="Seleccionar"></td>
+        <td class="num">${esc(c.hora)}</td>
+        <td class="num">${esc(c.rut || '')}</td>
+        <td>${esc(nom(c.nombre))}</td>
+        <td>${c.clase ? esc(c.clase) : ''}</td>
+        <td class="cierre-acc">${CIERRE_RESULTADOS.map((r) => `<button class="btn chico ${r.cls}" data-res="${esc(r.v)}" data-id="${c.id}">${esc(r.etq)}</button>`).join(' ')}</td>
+      </tr>`).join('')}</tbody></table></div>`).join('')}
+  </div>`;
+  const marcados = () => [...cont.querySelectorAll('input[data-cd]:checked')].map((el) => Number(el.dataset.cd));
+  const refrescarBoton = () => {
+    const n = marcados().length;
+    $('#cd-noasist').disabled = !n;
+    $('#cd-noasist').textContent = n ? `Marcar ${n} como No asistió` : 'Marcar seleccionadas como No asistió';
+  };
+  cont.querySelectorAll('input[data-cd]').forEach((el) => { el.onchange = refrescarBoton; });
+  $('#cd-todos').onchange = (e) => {
+    cont.querySelectorAll('input[data-cd]').forEach((el) => { el.checked = e.target.checked; });
+    refrescarBoton();
+  };
+  cont.querySelectorAll('button[data-res]').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await api(`/agenda/${b.dataset.id}/resultado`, { method: 'POST', body: { resultado: b.dataset.res } });
+        toast('Resultado guardado');
+        pintarCierreDia(fecha);
+      } catch (e) { b.disabled = false; toast(e.message, 'err'); }
+    };
+  });
+  $('#cd-noasist').onclick = async () => {
+    const ids = marcados();
+    if (!ids.length) return;
+    if (!confirm(`¿Marcar ${ids.length} ${ids.length === 1 ? 'cita' : 'citas'} como "No asistió"?`)) return;
+    try {
+      const r = await api('/cierre-dia', { method: 'POST', body: { fecha, ids, resultado: 'NO ASISTIO' } });
+      toast(`${r.actualizados} ${r.actualizados === 1 ? 'cita marcada' : 'citas marcadas'} como No asistió`);
+      pintarCierreDia(fecha);
+    } catch (e) { toast(e.message, 'err'); }
+  };
+}
+
+// Aviso discreto en la pestaña Agenda: despues de las 13:30 (ultimo bloque) si hoy quedan citas sin resultado.
+const CIERRE_HORA_MIN = 13 * 60 + 30;
+async function avisoCierreDia(fechaVista) {
+  const ahora = new Date();
+  if (fechaVista !== hoy() || ahora.getHours() * 60 + ahora.getMinutes() < CIERRE_HORA_MIN) return;
+  let data;
+  try { data = await apiReciente(`/cierre-dia?fecha=${fechaVista}`, 30e3); } catch (_) { return; }
+  const grid = $('#a-grid');
+  if (!data || !data.total || !grid || $('#a-cierre-aviso')) return;
+  const div = document.createElement('div');
+  div.id = 'a-cierre-aviso';
+  div.className = 'cierre-aviso no-print';
+  div.innerHTML = `<span>Hoy quedan <b>${data.total}</b> ${data.total === 1 ? 'cita' : 'citas'} sin resultado</span>
+    <button class="btn chico" type="button">Cerrar el día →</button>`;
+  div.querySelector('button').onclick = () => { estadoAgenda.fecha = fechaVista; irA('dia'); };
+  grid.closest('.panel').insertAdjacentElement('beforebegin', div);
 }

@@ -120,3 +120,13 @@
   header.top nav button { padding: 8px 6px 10px; font-size: 12.5px; gap: 5px; }
   header.top nav .nav-ico { width: 14px; height: 14px; }
 }
+
+/* Cierre del dia */
+.cierre-aviso { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  margin:0 0 .6rem; padding:.5rem .8rem; border:1px solid var(--alerta-bd); background:var(--alerta-bg);
+  color:var(--alerta); border-radius:8px; font-size:.9rem; }
+.cierre-dia .cierre-ex { margin:.8rem 0 .3rem; font-size:1rem; }
+.cierre-tabla { width:100%; border-collapse:collapse; }
+.cierre-tabla td { padding:.3rem .4rem; border-bottom:1px solid var(--alerta-bd); }
+.cierre-acc { white-space:nowrap; text-align:right; }
+@media (max-width: 640px) { .cierre-acc { white-space:normal; } }

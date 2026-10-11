@@ -936,6 +936,45 @@ app.post('/api/agenda/:id/resultado', wrap((req, res) => {
   res.json({ ok: true });
 }));
 
+// ---------- CIERRE DEL DIA ----------
+const RE_FECHA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_CIERRE = 200;
+const SIN_RESULTADO = "(a.rut IS NOT NULL OR a.nombre IS NOT NULL) AND a.bloqueado = 0 AND (a.resultado IS NULL OR a.resultado = '')";
+app.get('/api/cierre-dia', wrap((req, res) => {
+  const fecha = req.query.fecha || hoyISO();
+  if (!RE_FECHA_ISO.test(fecha)) throw bad('Fecha invalida (YYYY-MM-DD)');
+  const filas = db.prepare(`SELECT a.id, a.fecha, a.hora, a.rut, a.nombre, a.clase, a.contacto,
+      a.confirmo_asistencia, a.examinador_id, e.nombre AS examinador
+    FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
+    WHERE a.fecha = ? AND ${SIN_RESULTADO} ORDER BY e.nombre, a.hora`).all(fecha);
+  const grupos = [];
+  for (const f of filas) {
+    let g = grupos[grupos.length - 1];
+    if (!g || g.examinador_id !== f.examinador_id) { g = { examinador_id: f.examinador_id, examinador: f.examinador, citas: [] }; grupos.push(g); }
+    g.citas.push(f);
+  }
+  res.json({ fecha, total: filas.length, grupos });
+}));
+app.post('/api/cierre-dia', wrap((req, res) => {
+  const { fecha, ids, resultado } = req.body || {};
+  if (!RE_FECHA_ISO.test(fecha || '')) throw bad('Fecha invalida (YYYY-MM-DD)');
+  if (!resultado || !catalogo('resultado').includes(resultado)) throw bad(`Resultado no valido: ${resultado}`);
+  if (!Array.isArray(ids) || !ids.length) throw bad('Debes indicar al menos una cita.');
+  if (ids.length > MAX_CIERRE) throw bad(`Maximo ${MAX_CIERRE} citas por vez.`);
+  const limpios = [...new Set(ids.map(Number))];
+  if (limpios.some((n) => !Number.isInteger(n) || n <= 0)) throw bad('Ids invalidos.');
+  const upd = db.prepare(`UPDATE agenda AS a SET resultado = ?, actualizado_en = datetime('now','localtime')
+    WHERE a.id = ? AND a.fecha = ? AND ${SIN_RESULTADO}`);
+  const actualizados = tx(() => {
+    let n = 0;
+    for (const id of limpios) {
+      if (upd.run(resultado, id, fecha).changes) { n++; logReq(req, id, 'editar', `resultado = ${resultado} (cierre del dia)`); }
+    }
+    return n;
+  });
+  res.json({ ok: true, actualizados, omitidos: limpios.length - actualizados });
+}));
+
 app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
   const origenId = Number(req.params.id);
   const { destino_id, motivo, forzar } = req.body || {};
@@ -1207,6 +1246,17 @@ app.post('/api/feriados', wrap((req, res) => {
   logReq(req, null, 'editar', `feriado + ${fecha}`);
   res.json({ ok: true });
 }));
+app.post('/api/feriados/sincronizar', wrap(async (req, res) => {
+  const pedido = req.body && req.body.anio;
+  const actual = new Date().getFullYear();
+  if (pedido !== undefined && pedido !== null && pedido !== '' && !/^\d{4}$/.test(String(pedido))) throw bad('Anio invalido');
+  const anios = pedido ? [Number(pedido)] : [actual, actual + 1];
+  const detalle = [];
+  for (const anio of anios) detalle.push({ anio, ...(await feriados.sincronizar(anio)) });
+  const agregados = detalle.reduce((s, d) => s + d.agregados, 0);
+  logReq(req, null, 'editar', `feriados sincronizados (+${agregados})`);
+  res.json({ ok: true, agregados, detalle });
+}));
 app.delete('/api/feriados', wrap((req, res) => {
   feriados.quitar(req.query.fecha);
   logReq(req, null, 'editar', `feriado - ${req.query.fecha}`);
@@ -1416,6 +1466,13 @@ function iniciar() {
     const n = db.prepare('SELECT COUNT(*) n FROM agenda').get().n;
     if (!n) console.log('  Base vacia. Importa el Excel desde "Datos" o corre: npm run migrar\n');
     backupMod.programar();
+    // Feriados automaticos: solo si el anio actual no tiene ninguno. No bloquea el arranque.
+    const anio = new Date().getFullYear();
+    if (!feriados.cantidadAnio(anio)) {
+      feriados.sincronizar(anio)
+        .then((r) => console.log(`  Feriados ${anio}: +${r.agregados} desde ${r.fuente}`))
+        .catch((e) => console.log(`  Feriados ${anio}: ${e.message}`));
+    }
     if (correo.habilitado) recordatorios.programar();
     else console.log('  Correos deshabilitados (falta configurar SMTP_HOST/SMTP_USER/SMTP_PASS)\n');
   });
