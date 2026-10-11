@@ -27,6 +27,8 @@ const recordatorios = require('./recordatorios');
 const auth = require('./auth');
 const rut = require('./rut');
 const telefono = require('./telefono');
+const sugerencias = require('./sugerencias');
+const limpieza = require('./limpieza');
 
 const app = express();
 app.disable('x-powered-by');
@@ -652,6 +654,45 @@ app.post('/api/agenda/:id/liberar', wrap((req, res) => {
   }
   logReq(req, id, 'liberar', `${bloque.fecha} ${bloque.hora} ${bloque.nombre || bloque.bloqueo_motivo || ''}`);
   res.json({ ok: true, encolado: teniaPersona });
+}));
+
+// ---------- LISTA DE ESPERA: sugerencias para un cupo libre ----------
+// Solo sugiere candidatos; la asignacion usa /cola-reagendar/:id/asignar o /agenda/:id/reagendar.
+app.get('/api/sugerencias-cupo/:id', wrap((req, res) => {
+  const cupo = db.prepare('SELECT * FROM agenda WHERE id = ?').get(Number(req.params.id));
+  if (!cupo) throw bad('Bloque no encontrado', 404);
+  if (cupo.rut || cupo.nombre) throw bad('El bloque ya está ocupado.');
+  if (cupo.bloqueado) throw bad('El bloque está bloqueado.');
+  res.json({ cupo: traer(cupo.id), ...sugerencias.sugerir(cupo) });
+}));
+
+// ---------- LIMPIEZA DE DATOS (correccion rapida) ----------
+app.get('/api/limpieza', wrap((req, res) => res.json(limpieza.listar())));
+
+app.patch('/api/agenda/:id/contacto', wrap((req, res) => {
+  const id = Number(req.params.id);
+  const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
+  if (!bloque) throw bad('Bloque no encontrado', 404);
+  if (!(bloque.rut || bloque.nombre)) throw bad('El bloque no tiene una cita.');
+  const body = req.body || {};
+  if (body.visto_en && bloque.actualizado_en && body.visto_en !== bloque.actualizado_en) {
+    const e = bad('Otra persona modificó esta cita. Recarga la lista.', 409);
+    e.bloque = traer(id);
+    throw e;
+  }
+  const cambios = limpieza.validarContacto(body);
+  limpieza.aplicarContacto(id, cambios);
+  const detalle = Object.entries(cambios).map(([k, v]) => `${k}: ${bloque[k] ?? '—'} -> ${v ?? '—'}`).join('; ');
+  logReq(req, id, 'editar', `correccion rapida ${bloque.fecha} ${bloque.hora}: ${detalle}`);
+  res.json({ ok: true, bloque: traer(id) });
+}));
+
+app.post('/api/limpieza/vaciar-correos-invalidos', wrap((req, res) => {
+  if (!(req.body && req.body.confirmar === true)) throw bad('Falta confirmar la operación.');
+  const archivo = backupMod.backup('pre-limpieza');
+  const ids = limpieza.vaciarCorreosInvalidos();
+  logReq(req, null, 'editar', `limpieza: ${ids.length} correo(s) invalido(s) vaciado(s)`);
+  res.json({ ok: true, vaciados: ids.length, backup: archivo });
 }));
 
 // ---------- COLA DE REAGENDAMIENTO ----------

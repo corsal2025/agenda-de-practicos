@@ -657,6 +657,7 @@ function formularioCita(b, alGuardar) {
         await api(`/agenda/${b.id}/liberar`, { method: 'POST', body: { motivo: 'Liberado desde formulario' } });
         cerrarModal(); alGuardar && alGuardar();
         toast('Bloque liberado');
+        if (window.SugerenciasCupo) window.SugerenciasCupo.abrir(b.id, alGuardar);
       } catch (e) { toast(e.message, 'err'); }
     };
   }
@@ -2059,6 +2060,7 @@ function slotCard(b) {
     return `<div class="${cls}" style="cursor:default">
       <span class="sub" style="color:var(--tinta-3);font-size:11px">—</span>
       ${b.hora === META.hora_d_a5 ? '<span class="badges"><span class="badge dpesada">Bloque para D y A5</span></span>' : ''}
+      ${b.fecha >= META.hoy ? `<button type="button" class="btn-sugerir" data-id="${b.id}" title="Sugerir postulantes de la cola o lista de espera">Sugerir</button>` : ''}
     </div>`;
   }
 
@@ -2916,7 +2918,9 @@ async function renderErrores() {
     <div class="chips" id="e-chips" style="margin:.6rem 0"></div></div>
     <div class="panel tabla-scroll"><table><thead><tr>
       <th class="c">Sev</th><th>Tipo</th><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th>RUT</th><th>Nombre</th><th>Detalle</th><th class="c"></th>
-    </tr></thead><tbody id="e-body"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div>`;
+    </tr></thead><tbody id="e-body"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div>
+    <div id="e-limpieza"></div>`;
+  if (window.Limpieza) window.Limpieza.render($('#e-limpieza'));
   const cargar = () => cargarVista('errores', '/errores', (rep) => {
     pintarBadgeErrores(rep); // mismo reporte: no se vuelve a pedir /errores solo para el numerito
     $('#e-chips').innerHTML = [`<button class="chip" data-t="">Todos (${rep.total})</button>`]

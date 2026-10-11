@@ -1860,3 +1860,19 @@ header.top nav button[data-tab="vencimientos"] .nav-ico { color: var(--error, #d
 .kpi-delta.neutro { color: var(--tinta-3); }
 .tabla-heat td { font-variant-numeric: tabular-nums; font-weight: 600; }
 .tabla-heat td.heat-peor { outline: 2px solid var(--error); outline-offset: -2px; font-weight: 800; }
+
+/* ---------- Lista de espera: botón Sugerir en cupos libres ---------- */
+.slot.libre .btn-sugerir {
+  margin-top: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--azul-linea); border-radius: 4px; background: var(--azul-50); color: var(--azul-700);
+}
+.slot.libre .btn-sugerir:hover { background: var(--azul); color: #fff; }
+.aviso-sug { background: var(--alerta-bg); color: var(--alerta); padding: .45rem .7rem; border-radius: 6px; font-size: .85rem; }
+
+/* ---------- Corrección rápida (Reporte de errores) ---------- */
+.tabla-limpieza .lz-in {
+  width: 100%; min-width: 140px; padding: 4px 6px; font: inherit; font-size: .85rem;
+  border: 1px solid var(--linea); border-radius: 4px; background: var(--papel); color: var(--tinta);
+}
+.tabla-limpieza .lz-acc { white-space: nowrap; }
+.tabla-limpieza .sev { margin: 1px 0; display: inline-block; }
