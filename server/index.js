@@ -1055,12 +1055,16 @@ app.get('/api/buscar', wrap((req, res) => {
   if (q.length < 3) return res.json([]);
   const like = `%${q}%`;
   const rutLimpio = `%${rut.limpiar(q)}%`;
+  // Telefono por digitos: el buscador formatea numeros como RUT mientras se escribe.
+  const digitos = q.replace(/\D/g, '');
+  const telLike = digitos.length >= 3 ? `%${digitos}%` : like;
   const rows = db.prepare(`
     ${SELECT_BLOQUE}
     WHERE (a.rut IS NOT NULL OR a.nombre IS NOT NULL)
-      AND (REPLACE(REPLACE(a.rut,'.',''),'-','') LIKE ? OR UPPER(a.nombre) LIKE UPPER(?) OR a.contacto LIKE ?)
+      AND (REPLACE(REPLACE(a.rut,'.',''),'-','') LIKE ? OR UPPER(a.nombre) LIKE UPPER(?) OR a.contacto LIKE ?
+        OR REPLACE(REPLACE(REPLACE(REPLACE(a.contacto,' ',''),'+',''),'-',''),'.','') LIKE ?)
     ORDER BY a.fecha DESC, a.hora LIMIT 100
-  `).all(rutLimpio, like, like);
+  `).all(rutLimpio, like, like, telLike);
   res.json(rows);
 }));
 

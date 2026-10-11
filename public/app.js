@@ -267,6 +267,22 @@ function formatearSiEsRut(v) {
   const cuerpo = c.slice(0, -1);
   return `${cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.')}-${c.slice(-1)}`;
 }
+// Formato progresivo mientras se escribe: "123456789" -> "12.345.678-9".
+// Solo actua si el texto tiene unicamente digitos, K, puntos o guion (no toca nombres ni "+56 9...").
+function formatoRutProgresivo(v) {
+  if (!/^[0-9kK.\-]+$/.test(v)) return v;
+  const c = v.toUpperCase().replace(/[^0-9K]/g, '');
+  if (c.length < 2 || /K./.test(c)) return v;
+  return `${c.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}-${c.slice(-1)}`;
+}
+function rutEnVivo(input) {
+  if (!input) return;
+  input.addEventListener('input', (e) => {
+    if (e.inputType && e.inputType.startsWith('delete')) return; // borrar no reformatea
+    const f = formatoRutProgresivo(input.value);
+    if (f !== input.value) { input.value = f; input.setSelectionRange(f.length, f.length); }
+  });
+}
 // Autocompleta puntos y guion al salir del campo, solo si el RUT es valido.
 function autoformatoRut(input) {
   if (!input) return;
@@ -2770,6 +2786,7 @@ async function renderBuscar() {
   };
 
   autoformatoRut(qi);
+  rutEnVivo(qi);
   qi.addEventListener('input', () => {
     clearTimeout(tmr);
     const q = qi.value.trim();
@@ -2819,11 +2836,31 @@ async function historial(rutv, nombre) {
     <tbody>${rows.map((r) => `<tr>
       <td class="c">${esc(fFecha(r.fecha))}</td><td class="c">${esc(r.hora)}</td><td>${esc(r.examinador)}</td>
       <td class="c">${esc(r.clase)}</td><td>${esc(r.tipo_cita)}</td><td>${esc(r.resultado)}</td>
-      <td class="c"><button class="btn chico" data-id="${r.id}">Abrir</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">Sin citas.</td></tr>'}
+      <td class="c"><button class="btn chico" data-ir="${r.id}" data-fecha="${esc(r.fecha)}">Ir a la agenda</button> <button class="btn chico sec" data-id="${r.id}">Abrir</button></td></tr>`).join('') || '<tr><td colspan="7" class="muted">Sin citas.</td></tr>'}
     </tbody></table></div></div>`;
   $('#bx-hist').querySelectorAll('button[data-id]').forEach((el) => {
     el.onclick = () => abrirSlotPorId(Number(el.dataset.id), recargar(() => historial(rutv, nombre)));
   });
+  $('#bx-hist').querySelectorAll('button[data-ir]').forEach((el) => {
+    el.onclick = () => irACitaEnAgenda(Number(el.dataset.ir), el.dataset.fecha);
+  });
+}
+// Abre la pestana Agenda en el dia de la cita, sin filtro de examinador, y resalta su tarjeta.
+async function irACitaEnAgenda(id, fecha) {
+  estadoAgenda.fecha = fecha;
+  estadoAgenda.examinador_id = '';
+  irA('agenda');
+  for (let i = 0; i < 30; i++) {
+    const card = document.querySelector(`.slot[data-id="${id}"]`);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.classList.add('slot-destacada');
+      setTimeout(() => card.classList.remove('slot-destacada'), 4000);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  toast('No se encontró la cita en la agenda de ese día', 'err');
 }
 
 /* ================= tab: ERRORES ================= */

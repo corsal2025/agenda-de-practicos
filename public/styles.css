@@ -1814,3 +1814,7 @@ header.top nav button[data-tab="vencimientos"] .nav-ico { color: var(--error, #d
 .cuenta-tramite.urgente { animation: parpadeo-urgente 1s ease-in-out infinite; }
 @keyframes parpadeo-urgente { 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .cuenta-tramite.urgente { animation: none; outline: 2px solid currentColor; } }
+
+/* Tarjeta resaltada al llegar desde el buscador */
+.slot.slot-destacada { box-shadow: 0 0 0 3px var(--azul), 0 0 18px var(--azul); animation: destacar 1s ease-in-out 3; }
+@keyframes destacar { 50% { box-shadow: 0 0 0 3px var(--azul), 0 0 2px var(--azul); } }

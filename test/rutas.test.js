@@ -606,6 +606,13 @@ test('GET buscar-historial: por RUT normalizado y, sin RUT, por nombre', async (
   assert.equal((await api('GET', '/buscar-historial')).status, 400);
 });
 
+test('GET buscar: encuentra por telefono aunque el texto venga con formato de RUT', async () => {
+  const b = slot(diaNuevo(), '09:30', { rut: '5.126.663-3', nombre: 'TELEFONO PRUEBA', clase: 'B', contacto: '+56 9 8123 4567' });
+  const r = await api('GET', `/buscar?q=${encodeURIComponent('98.123.456-7')}`);
+  assert.equal(r.status, 200);
+  assert.ok(r.datos.some((x) => x.id === b.id));
+});
+
 // ---------- vigencia del tramite D/A5: dias restantes ----------
 const diasHasta = (iso) => Math.round((Date.UTC(...iso.split('-').map((n, i) => Number(n) - (i === 1 ? 1 : 0)))
   - Date.UTC(...hoyISO().split('-').map((n, i) => Number(n) - (i === 1 ? 1 : 0)))) / 86400000);
