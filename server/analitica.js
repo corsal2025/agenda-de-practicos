@@ -2,6 +2,9 @@
 const { db } = require('./db');
 const { hoyISO } = require('./fechas');
 const est = require('./estadisticas');
+const feriados = require('./feriados');
+const { HORA_D_A5 } = require('./config');
+const { sumarDias } = require('./fechas');
 
 const OCUPADA = `(a.bloqueado = 0 AND (a.rut IS NOT NULL OR a.nombre IS NOT NULL))`;
 
@@ -53,6 +56,33 @@ function filasPeriodo(desde, hasta) {
     SELECT a.fecha, a.hora, a.clase, a.intento, a.resultado, a.agendado_en, a.fecha_inicio_tramite, a.rut, a.nombre
     FROM agenda a WHERE ${OCUPADA} AND a.fecha BETWEEN ? AND ?
   `).all(desde, hasta);
+}
+
+// Capacidad futura desde hoy (independiente del filtro desde/hasta).
+function capacidad(hoy) {
+  const hasta = sumarDias(hoy, 180);
+  const bloques = db.prepare(`
+    SELECT a.fecha, a.hora, a.examinador_id, a.bloqueado,
+      CASE WHEN a.rut IS NULL AND a.nombre IS NULL THEN 1 ELSE 0 END AS libre
+    FROM agenda a WHERE a.fecha BETWEEN ? AND ?
+  `).all(hoy, hasta).map((r) => ({ ...r, libre: !!r.libre }));
+  const agendadosPorDia = db.prepare(`
+    SELECT substr(agendado_en, 1, 10) AS dia, COUNT(*) AS n FROM agenda
+    WHERE agendado_en IS NOT NULL AND substr(agendado_en, 1, 10) BETWEEN ? AND ? GROUP BY dia
+  `).all(sumarDias(hoy, -30), hoy);
+  return est.proyeccionCapacidad({ bloques, hoy, feriados: feriados.set(), agendadosPorDia, horaPesada: HORA_D_A5 });
+}
+
+function cargaExaminadores(desde, hasta, hoy) {
+  const rows = db.prepare(`
+    SELECT e.nombre AS examinador, a.fecha FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
+    WHERE ${OCUPADA} AND a.fecha BETWEEN ? AND ?
+  `).all(desde, hasta);
+  const proximas = db.prepare(`
+    SELECT e.nombre AS examinador, COUNT(*) AS n FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
+    WHERE ${OCUPADA} AND a.fecha >= ? AND a.fecha < ? GROUP BY e.nombre
+  `).all(hoy, sumarDias(hoy, 30));
+  return est.cargaExaminadores(rows, proximas);
 }
 
 function resumen(desde, hasta) {
@@ -120,6 +150,8 @@ function resumen(desde, hasta) {
     inasistencia_dia_hora: est.inasistenciaDiaHora(filas),
     tiempo_espera: est.tiempoEspera(filas),
     tramites_vencidos: est.tramitesVencidos(filas, hoy),
+    capacidad: capacidad(hoy),
+    carga_examinadores: cargaExaminadores(desde, hasta, hoy),
   };
 }
 

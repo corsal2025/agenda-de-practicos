@@ -115,11 +115,13 @@
   header.top nav button[data-tab="examinador"] { display: none; }
 }
 
-/* Notebooks (1024-1439 px): menu compacto para que las 11 pestanas quepan en una fila */
+/* Notebooks (1024-1439 px): menu compacto en una sola fila (las de uso ocasional van en "Más") */
 @media (min-width: 1024px) and (max-width: 1439px) {
   header.top nav button { padding: 8px 6px 10px; font-size: 12.5px; gap: 5px; }
   header.top nav .nav-ico { width: 14px; height: 14px; }
+  header.top nav { flex-wrap: nowrap; }
 }
+@media (min-width: 1440px) { header.top nav { flex-wrap: nowrap; } }
 
 /* Cierre del dia */
 .cierre-aviso { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;

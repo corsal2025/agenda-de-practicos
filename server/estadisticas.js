@@ -121,6 +121,79 @@ function tramitesVencidos(rows, hoy = hoyISO()) {
   return { vencido_en_cita: enCita, vencido_en_cita_con_resultado: conRes, personas: personas.size, vencidos_sin_resultado_hoy: sinResHoy };
 }
 
+// ---------- Proyeccion de capacidad (desde hoy, independiente del filtro) ----------
+const HORIZONTE_LLENADO = 120;
+const VENTANA_RITMO = 30;
+const esFinDeSemana = (iso) => diaSemana(iso) == null;
+
+// bloques: [{fecha, hora, examinador_id, libre, bloqueado}] desde hoy. agendadosPorDia: [{dia, n}].
+function proyeccionCapacidad({ bloques, hoy, feriados = new Set(), agendadosPorDia = [], horaPesada = '12:30', siguientesPesada = ['13:00', '13:30'] }) {
+  const habil = (f) => f >= hoy && !esFinDeSemana(f) && !feriados.has(f);
+  const libres = bloques.filter((x) => x.libre && !x.bloqueado && habil(x.fecha));
+  const libreKey = new Set(libres.map((x) => `${x.fecha}|${x.examinador_id}|${x.hora}`));
+  const lim30 = sumarDiasISO(hoy, 30);
+  const lim60 = sumarDiasISO(hoy, 60);
+  const porDia = new Map();
+  let l30 = 0; let l60 = 0; let p30 = 0; let p60 = 0;
+  for (const x of libres) {
+    porDia.set(x.fecha, (porDia.get(x.fecha) || 0) + 1);
+    const util = x.hora === horaPesada && siguientesPesada.every((h) => libreKey.has(`${x.fecha}|${x.examinador_id}|${h}`));
+    if (x.fecha < lim30) { l30 += 1; if (util) p30 += 1; }
+    if (x.fecha < lim60) { l60 += 1; if (util) p60 += 1; }
+  }
+  const desdeRitmo = sumarDiasISO(hoy, -VENTANA_RITMO);
+  const agendados = agendadosPorDia.filter((d) => d.dia > desdeRitmo && d.dia <= hoy).reduce((a, d) => a + d.n, 0);
+  const ritmo = +(agendados / VENTANA_RITMO).toFixed(2);
+  const fechas = [...porDia.keys()].sort();
+  const primer = fechas[0] || null;
+  const total = libres.length;
+  let fechaLleno = null;
+  if (ritmo > 0) {
+    const dias = Math.ceil(total / ritmo);
+    if (dias <= HORIZONTE_LLENADO) fechaLleno = sumarDiasISO(hoy, dias);
+  }
+  return {
+    hoy,
+    libres_30: l30, libres_60: l60, libres_total: total,
+    libres_1230_30: p30, libres_1230_60: p60,
+    ritmo_diario: ritmo, agendados_30: agendados,
+    fecha_lleno: fechaLleno,
+    primer_cupo: primer,
+    dias_hasta_primer_cupo: primer ? diasEntre(hoy, primer) : null,
+    por_dia: fechas.filter((f) => f < lim60).map((fecha) => ({ fecha, libres: porDia.get(fecha) })),
+  };
+}
+
+// ---------- Carga por examinador ----------
+const UMBRAL_DESBALANCE = 20;
+// rows: [{examinador, fecha}] del periodo; proximas: [{examinador, n}] proximos 30 dias.
+function cargaExaminadores(rows, proximas = []) {
+  const m = new Map();
+  const get = (k) => {
+    if (!m.has(k)) m.set(k, { examinador: k, citas: 0, fechas: new Set(), proximas_30: 0 });
+    return m.get(k);
+  };
+  for (const r of rows) { const g = get(r.examinador || SIN_DATO); g.citas += 1; if (r.fecha) g.fechas.add(r.fecha); }
+  for (const p of proximas) get(p.examinador || SIN_DATO).proximas_30 += p.n || 0;
+  const total = rows.length;
+  const n = m.size;
+  if (!n) return { filas: [], promedio: 0, total: 0, desbalanceados: 0, umbral: UMBRAL_DESBALANCE };
+  const promedio = r1(total / n);
+  const filas = [...m.values()].map((g) => {
+    const desv = promedio ? r1((g.citas - promedio) / promedio * 100) : 0;
+    let desbalance = null;
+    if (total && desv > UMBRAL_DESBALANCE) desbalance = 'alto';
+    else if (total && desv < -UMBRAL_DESBALANCE) desbalance = 'bajo';
+    return {
+      examinador: g.examinador, citas: g.citas, participacion: pct(g.citas, total),
+      dias_trabajados: g.fechas.size, citas_por_dia: g.fechas.size ? r1(g.citas / g.fechas.size) : 0,
+      desviacion: desv, desbalance, proximas_30: g.proximas_30,
+    };
+  }).sort((a, b) => b.citas - a.citas || a.examinador.localeCompare(b.examinador));
+  return { filas, promedio, total, desbalanceados: filas.filter((f) => f.desbalance).length, umbral: UMBRAL_DESBALANCE };
+}
+
 module.exports = {
+  proyeccionCapacidad, cargaExaminadores,
   periodoAnterior, deltas, aprobacionPorClase, aprobacionPorIntento, inasistenciaDiaHora, tiempoEspera, tramitesVencidos, sumarMeses,
 };

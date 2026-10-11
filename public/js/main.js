@@ -5,6 +5,7 @@ const tabs = {
   papelera: renderPapelera, datos: renderDatos, vencimientos: renderVencimientos,
   examinador: () => window.renderExaminador(),
   calendario: renderCalendario,
+  jefatura: renderJefatura,
 };
 /* ================= arranque ================= */
 async function init({ forzarAgenda = false } = {}) {
@@ -33,6 +34,75 @@ async function init({ forzarAgenda = false } = {}) {
   }
 }
 document.querySelectorAll('#nav button[data-tab]').forEach((b) => { b.onclick = () => irA(b.dataset.tab); });
+
+/* menu "Más" del nav: pestañas de uso ocasional (accesible con teclado) */
+(function navMas() {
+  const btn = document.getElementById('nav-mas-btn');
+  const menu = document.getElementById('nav-mas-menu');
+  if (!btn || !menu) return;
+  const items = () => [...menu.querySelectorAll('button[data-tab]')];
+  const posicionar = () => {
+    const r = btn.getBoundingClientRect();
+    const ancho = menu.offsetWidth || 220;
+    menu.style.top = `${Math.round(r.bottom + 4)}px`;
+    menu.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - ancho - 8)))}px`;
+  };
+  const abierto = () => btn.getAttribute('aria-expanded') === 'true';
+  const cerrar = (foco) => {
+    if (!abierto()) return;
+    menu.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+    if (foco) btn.focus();
+  };
+  const abrir = (idx = 0) => {
+    menu.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    posicionar();
+    const it = items();
+    if (idx != null && it.length) it[(idx + it.length) % it.length].focus();
+  };
+  btn.onclick = () => (abierto() ? cerrar(false) : abrir(null));
+  btn.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); abrir(0); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); abrir(-1); }
+    else if (e.key === 'Escape') cerrar(true);
+  });
+  menu.addEventListener('keydown', (e) => {
+    const it = items();
+    const i = it.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); cerrar(true); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); it[(i + 1) % it.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); it[(i - 1 + it.length) % it.length].focus(); }
+    else if (e.key === 'Home') { e.preventDefault(); it[0].focus(); }
+    else if (e.key === 'End') { e.preventDefault(); it[it.length - 1].focus(); }
+    else if (e.key === 'Tab') cerrar(false);
+  });
+  menu.addEventListener('click', (e) => { if (e.target.closest('button[data-tab]')) cerrar(false); });
+  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#nav-mas')) cerrar(false); });
+  window.addEventListener('resize', () => cerrar(false));
+  document.getElementById('nav')?.addEventListener('scroll', () => cerrar(false), { passive: true });
+  // El boton "Más" se marca activo si la pestaña actual esta dentro del menu.
+  const marcar = () => {
+    const tab = (location.hash.slice(1) || '').split('?')[0];
+    btn.classList.toggle('activo', items().some((b) => b.dataset.tab === tab));
+  };
+  window.addEventListener('hashchange', marcar);
+  marcar();
+  // Insignia del "Más" = suma de las insignias de las pestañas del menu.
+  const badge = document.getElementById('badge-mas');
+  const sumar = () => {
+    let n = 0;
+    menu.querySelectorAll('.nav-badge').forEach((b) => {
+      if (b.hidden) return;
+      const v = parseInt(b.textContent, 10);
+      if (v > 0) n += v;
+    });
+    badge.textContent = n > 99 ? '99+' : n ? String(n) : '';
+    badge.hidden = !n;
+  };
+  new MutationObserver(sumar).observe(menu, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
+  sumar();
+})();
 
 /* tema claro / oscuro */
 (function tema() {

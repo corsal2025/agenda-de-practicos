@@ -20,7 +20,14 @@ const PASOS_TOUR = [
     target: '#nav',
     titulo: 'Pestañas y módulos principales',
     icono: '🧭',
-    descripcion: 'Desde aquí accedes a todos los módulos: <b>Citas disponibles</b>, <b>Agenda</b>, <b>Reagendar</b>, <b>Por confirmar</b>, <b>Calendario</b>, <b>Agenda del día</b>, <b>Estadísticas</b>, <b>Papelera</b>, <b>Datos</b> y <b>Reporte de errores</b>. Los números de color junto a algunas pestañas son avisos pendientes. Esta guía los recorre uno por uno.'
+    descripcion: 'Desde aquí accedes a todos los módulos: <b>Citas disponibles</b>, <b>Agenda</b>, <b>Reagendar</b>, <b>Por confirmar</b>, <b>Calendario</b>, <b>Agenda del día</b>, <b>Estadísticas</b> y el menú <b>Más ▾</b>. Los números de color junto a algunas pestañas son avisos pendientes. Esta guía los recorre uno por uno.'
+  },
+  {
+    seccion: 'Entorno general',
+    target: '#nav-mas-btn',
+    titulo: 'Menú «Más»',
+    icono: '☰',
+    descripcion: 'Las pestañas de uso ocasional están en <b>Más ▾</b>: <b>Jefatura</b>, <b>Papelera</b>, <b>Datos</b> y <b>Reporte de errores</b>. El número sobre <b>Más</b> suma los avisos de esas pestañas. Con el teclado: <b>↓</b> abre el menú, <b>↑ ↓</b> recorren las opciones y <b>Esc</b> lo cierra.'
   },
   {
     seccion: 'Entorno general',
@@ -488,6 +495,17 @@ const PASOS_TOUR = [
     titulo: 'Resultados por escuela de conductores',
     icono: '🏫',
     descripcion: 'Muestra, por <b>escuela de conductores</b>, la cantidad de citas, <b>aprobados, reprobados</b> y el <b>% de aprobación</b> (calculado sobre aprobados + reprobados).'
+  },
+
+  /* ---------- Jefatura ---------- */
+  {
+    seccion: 'Jefatura',
+    tab: 'jefatura',
+    target: '#jf-root',
+    listo: '#jf-kpis',
+    titulo: 'Tablero de Jefatura',
+    icono: '📋',
+    descripcion: 'Resumen de una página para la jefatura: <b>citas, ocupación, aprobación e inasistencia</b> con su variación frente al período anterior, la <b>proyección de capacidad</b>, avisos de <b>desbalance de carga</b> entre examinadores, los horarios con más inasistencia y los pendientes. Elige <b>Mes actual</b>, <b>Mes anterior</b> o un <b>Rango</b> y usa <b>Imprimir</b> para obtener una hoja A4.'
   },
 
   /* ---------- Papelera ---------- */

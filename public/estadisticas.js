@@ -37,7 +37,58 @@ function anPanelesExtraHtml() {
         <p class="muted" style="font-size:.8rem">En días. Para citas migradas del Excel el dato es aproximado.</p></div>
       <div class="panel"><h3>Trámites vencidos</h3><div class="kpis" id="vencidos-kpis"></div>
         <p class="muted" style="font-size:.8rem">El trámite vence 6 meses después de su inicio. Se cuentan citas del período cuya fecha fue posterior al vencimiento.</p></div>
-    </div>`;
+    </div>
+    <div class="panel"><h3>Proyección de capacidad</h3><div class="kpis" id="cap-kpis"></div>
+      <p class="cap-linea" id="cap-linea"></p>
+      <div class="grafico"><canvas id="g-cap"></canvas></div>
+      <p class="muted" style="font-size:.8rem">Desde hoy, sin importar el filtro. Solo días hábiles y bloques no bloqueados. Un 12:30 sirve para D/A5 si 13:00 y 13:30 del mismo examinador también están libres.</p></div>
+    <div class="panel"><h3>Carga por examinador</h3><div id="carga-aviso"></div>
+      <div class="tabla-scroll"><table><thead><tr><th>Examinador</th><th class="c">Citas</th><th>Participación</th><th class="c">Días</th><th class="c">Citas/día</th><th class="c">Desviación</th><th class="c">Próx. 30 días</th></tr></thead>
+      <tbody id="carga-tabla"></tbody></table></div>
+      <p class="muted" style="font-size:.8rem">Desviación respecto del promedio de citas por examinador en el período. Se marca desbalance sobre ±20%.</p></div>`;
+}
+
+/* ---------- Capacidad y carga (también los usa el tablero de Jefatura) ---------- */
+function anCapacidadTexto(c) {
+  if (!c) return '';
+  const primer = c.primer_cupo
+    ? `Primer cupo libre: ${fFecha(c.primer_cupo)} (${c.dias_hasta_primer_cupo === 0 ? 'hoy' : `en ${c.dias_hasta_primer_cupo} día${c.dias_hasta_primer_cupo === 1 ? '' : 's'}`}).`
+    : 'No hay cupos libres en la agenda generada.';
+  const lleno = c.ritmo_diario <= 0 ? 'Sin agendamientos en los últimos 30 días: no se puede proyectar el llenado.'
+    : c.fecha_lleno ? `Al ritmo actual (${c.ritmo_diario} agendamientos/día) la agenda se llena aprox. el ${fFecha(c.fecha_lleno)}.`
+      : `Al ritmo actual (${c.ritmo_diario} agendamientos/día) la agenda no se llena en los próximos 120 días.`;
+  return `${lleno} ${primer}`;
+}
+function anCargaAvisoHtml(ce) {
+  const d = (ce && ce.filas || []).filter((f) => f.desbalance);
+  if (!d.length) return '';
+  return `<div class="chips carga-avisos">${d.map((f) => `<span class="chip chip-desbalance ${f.desbalance}">⚠ ${esc(f.examinador)}: ${f.desviacion > 0 ? '+' : ''}${f.desviacion}% ${f.desbalance === 'alto' ? 'sobre' : 'bajo'} el promedio</span>`).join('')}</div>`;
+}
+function anCargaFilasHtml(ce) {
+  const filas = (ce && ce.filas) || [];
+  if (!filas.length) return '<tr><td colspan="7" class="muted">Sin datos en el período.</td></tr>';
+  const max = Math.max(...filas.map((f) => f.participacion), 1);
+  return filas.map((f) => `<tr><td>${esc(f.examinador)}${f.desbalance ? ` <span class="chip chip-desbalance ${f.desbalance}" title="Desbalance de carga">${f.desbalance === 'alto' ? 'sobrecarga' : 'baja carga'}</span>` : ''}</td>
+    <td class="c">${f.citas}</td>
+    <td><div class="barra-pct"><span style="width:${(f.participacion / max * 100).toFixed(0)}%"></span></div><b>${f.participacion}%</b></td>
+    <td class="c">${f.dias_trabajados}</td><td class="c">${f.citas_por_dia}</td>
+    <td class="c" style="font-weight:700;color:${f.desbalance ? 'var(--error)' : 'inherit'}">${f.desviacion > 0 ? '+' : ''}${f.desviacion}%</td>
+    <td class="c">${f.proximas_30}</td></tr>`).join('');
+}
+function pintarCapacidadCarga(a) {
+  const c = a.capacidad;
+  if (c && $('#cap-kpis')) {
+    $('#cap-kpis').innerHTML = anKpi('Libres próx. 30 días', c.libres_30) + anKpi('Libres próx. 60 días', c.libres_60)
+      + anKpi('12:30 libres D/A5 (30 d)', c.libres_1230_30) + anKpi('12:30 libres D/A5 (60 d)', c.libres_1230_60)
+      + anKpi('Agendamientos/día (30 d)', c.ritmo_diario)
+      + anKpi('Días al primer cupo', c.dias_hasta_primer_cupo == null ? '—' : c.dias_hasta_primer_cupo);
+    $('#cap-linea').textContent = anCapacidadTexto(c);
+    grafico('g-cap', 'bar', c.por_dia.map((d) => d.fecha), c.por_dia.map((d) => d.libres), 'Cupos libres');
+  }
+  if ($('#carga-tabla')) {
+    $('#carga-aviso').innerHTML = anCargaAvisoHtml(a.carga_examinadores);
+    $('#carga-tabla').innerHTML = anCargaFilasHtml(a.carga_examinadores);
+  }
 }
 
 const anFilaAprob = (x) => `<tr><td>${esc(x.k)}</td><td class="c">${x.citas}</td><td class="c">${x.con_resultado}</td>
@@ -77,6 +128,7 @@ function pintarAnExtra(a) {
   const tv = a.tramites_vencidos;
   $('#vencidos-kpis').innerHTML = anKpi('Citas con trámite vencido', tv.vencido_en_cita) + anKpi('De ellas con resultado', tv.vencido_en_cita_con_resultado)
     + anKpi('Personas', tv.personas) + anKpi('Vencidos hoy sin resultado', tv.vencidos_sin_resultado_hoy);
+  pintarCapacidadCarga(a);
 }
 
 /* ---------- Informe: filas comunes para Excel e impresión ---------- */
@@ -112,6 +164,12 @@ function anTablasInforme(a, escuelas) {
       ...(escuelas || []).map((x) => [x.escuela_conductores, x.total, x.aprobados, x.reprobados, x.pct_aprobacion == null ? '' : x.pct_aprobacion])]],
     ['Tiempo de espera', [['Mes', 'Citas', 'Promedio (días)', 'Mediana', 'P90'],
       ['TOTAL', te.n, te.promedio, te.mediana, te.p90], ...te.por_mes.map((m) => [m.mes, m.n, m.promedio, m.mediana, m.p90])]],
+    ['Carga examinadores', [['Examinador', 'Citas', '% participación', 'Días', 'Citas/día', 'Desviación %', 'Desbalance', 'Próx. 30 días'],
+      ...((a.carga_examinadores && a.carga_examinadores.filas) || []).map((f) => [f.examinador, f.citas, f.participacion, f.dias_trabajados, f.citas_por_dia, f.desviacion, f.desbalance || '', f.proximas_30])]],
+    ['Capacidad', [['Indicador', 'Valor'], ...(a.capacidad ? [['Libres próx. 30 días', a.capacidad.libres_30], ['Libres próx. 60 días', a.capacidad.libres_60],
+      ['12:30 libres D/A5 (30 días)', a.capacidad.libres_1230_30], ['12:30 libres D/A5 (60 días)', a.capacidad.libres_1230_60],
+      ['Agendamientos por día (últimos 30)', a.capacidad.ritmo_diario], ['Agenda llena aprox.', a.capacidad.fecha_lleno ? fFecha(a.capacidad.fecha_lleno) : ''],
+      ['Primer cupo libre', a.capacidad.primer_cupo ? fFecha(a.capacidad.primer_cupo) : '']] : [])]],
   ];
 }
 
