@@ -673,6 +673,16 @@ app.get('/api/sugerencias-cupo/:id', wrap((req, res) => {
   res.json({ cupo: traer(cupo.id), ...sugerencias.sugerir(cupo) });
 }));
 
+// ---------- PESTAÑA LISTA DE ESPERA ----------
+app.get('/api/lista-espera', wrap((req, res) => res.json({ personas: sugerencias.listarEspera() })));
+
+app.get('/api/lista-espera/:origen/:id/cupos', wrap((req, res) => {
+  let cupos;
+  try { cupos = sugerencias.cuposCompatibles(req.params.origen, req.params.id); } catch (e) { throw bad(e.message, e.status || 400); }
+  if (!cupos) throw bad('Esta persona ya no está en lista de espera.', 404);
+  res.json({ cupos });
+}));
+
 // ---------- LIMPIEZA DE DATOS (correccion rapida) ----------
 app.get('/api/limpieza', wrap((req, res) => res.json(limpieza.listar())));
 

@@ -114,3 +114,9 @@
 @media (min-width: 1024px) {
   header.top nav button[data-tab="examinador"] { display: none; }
 }
+
+/* Notebooks (1024-1439 px): menu compacto para que las 11 pestanas quepan en una fila */
+@media (min-width: 1024px) and (max-width: 1439px) {
+  header.top nav button { padding: 8px 6px 10px; font-size: 12.5px; gap: 5px; }
+  header.top nav .nav-ico { width: 14px; height: 14px; }
+}

@@ -71,3 +71,151 @@ const SugerenciasCupo = (() => {
   return { abrir };
 })();
 window.SugerenciasCupo = SugerenciasCupo;
+
+/* ================= Pestaña "Lista de espera": todos los que esperan un cupo =================
+   Lee GET /lista-espera y GET /lista-espera/:origen/:id/cupos; asigna con las mismas rutas
+   que el modal "Sugerir" (cola-reagendar/:id/asignar y agenda/:id/reagendar). */
+const ListaEspera = (() => {
+  let personas = [];
+  const filtros = { origen: 'todos', clase: '', q: '' };
+
+  async function badge() {
+    try {
+      const d = await api('/lista-espera');
+      pintarBadge('badge-espera', d.personas.length);
+      return d.personas;
+    } catch (_) { pintarBadge('badge-espera', 0); return null; }
+  }
+
+  const origenBadge = (p) => (p.origen === 'reagendar'
+    ? '<span class="badge reag">Reagendar</span>'
+    : '<span class="badge intento-1">Quiere adelantar</span>');
+  const tramiteHtml = (p) => (p.dias_restantes_tramite == null
+    ? SIN_INICIO_HTML : cuentaRegresivaHtml(p.dias_restantes_tramite, p.tramite_vence));
+  const citaActual = (p) => (p.origen === 'lista_espera'
+    ? `${esc(fFecha(p.fecha))} ${esc(p.hora || '')}${p.examinador ? `<div class="muted" style="font-size:.78rem">${esc(p.examinador)}</div>` : ''}`
+    : `<span class="muted">Sin cita</span>${p.motivo ? `<div class="muted" style="font-size:.78rem">${esc(p.motivo)}</div>` : ''}`);
+  const clasesDe = (p) => String(p.clase || '').toUpperCase().split(',').map((s) => s.trim()).filter(Boolean);
+
+  function filtrar() {
+    const q = filtros.q.trim().toUpperCase();
+    return personas.map((p, i) => ({ p, prio: i + 1 })).filter(({ p }) => {
+      if (filtros.origen === 'reagendar' && p.origen !== 'reagendar') return false;
+      if (filtros.origen === 'adelantar' && p.origen !== 'lista_espera') return false;
+      if (filtros.clase && !clasesDe(p).includes(filtros.clase)) return false;
+      if (q && !`${p.nombre || ''} ${p.rut || ''} ${p.correo || ''}`.toUpperCase().includes(q)) return false;
+      return true;
+    });
+  }
+
+  function pintar() {
+    const filas = filtrar();
+    $('#le-total').textContent = `${filas.length} de ${personas.length} en espera`;
+    $('#le-body').innerHTML = filas.length ? filas.map(({ p, prio }) => `<tr>
+      <td class="c num">${prio}</td>
+      <td><b>${esc(nom(p.nombre) || '—')}</b></td>
+      <td class="num">${esc(p.rut || '—')}</td>
+      <td class="c">${esc(p.clase || '—')}</td>
+      <td class="c">${origenBadge(p)}</td>
+      <td class="c num">${p.dias_esperando == null ? '—' : esc(p.dias_esperando)}</td>
+      <td class="c">${tramiteHtml(p)}</td>
+      <td class="c">${citaActual(p)}</td>
+      <td class="c num">${esc(p.cupos_compatibles)}</td>
+      <td class="c"><button class="btn chico" data-le="${esc(p.origen)}:${esc(p.id)}" ${p.cupos_compatibles ? '' : 'disabled'}>Buscar cupo</button></td>
+    </tr>`).join('') : '<tr><td colspan="10" class="muted">No hay personas en espera con estos filtros.</td></tr>';
+  }
+
+  function asignar(p, cupo) {
+    if (p.origen === 'reagendar') return api(`/cola-reagendar/${p.id}/asignar`, { method: 'POST', body: { destino_id: cupo.id } });
+    return api(`/agenda/${p.id}/reagendar`, { method: 'POST', body: { destino_id: cupo.id, motivo: 'Adelantada desde lista de espera' } });
+  }
+
+  async function buscarCupo(p, recargar) {
+    let cupos;
+    try {
+      ({ cupos } = await api(`/lista-espera/${encodeURIComponent(p.origen)}/${encodeURIComponent(p.id)}/cupos`));
+    } catch (e) { toast(e.message, 'err'); return; }
+    const filas = cupos.map((c, i) => `<tr><td class="num c">${esc(fFecha(c.fecha))}</td><td class="num c">${esc(c.hora)}</td>
+      <td>${esc(c.examinador || '—')}</td><td class="c"><button class="btn chico" data-i="${i}">Asignar</button></td></tr>`).join('');
+    const cuerpo = `<p style="margin-top:0"><b>${esc(nom(p.nombre))}</b> · ${esc(p.rut || '')} · Clase ${esc(p.clase || '—')}</p>
+      <p class="muted" style="font-size:.82rem">Cupos libres de los próximos 30 días compatibles (regla D/A5 y sin repetir día)${p.origen === 'lista_espera' ? ', anteriores a su cita actual' : ''}.</p>
+      <div class="tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th></th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="4" class="muted">No hay cupos compatibles.</td></tr>'}</tbody></table></div>`;
+    const ov = modal('Buscar cupo', cuerpo, '<button class="btn sec" id="le-cerrar">Cerrar</button>');
+    $('#le-cerrar').onclick = cerrarModal;
+    ov.querySelectorAll('button[data-i]').forEach((btn) => {
+      btn.onclick = async () => {
+        const c = cupos[Number(btn.dataset.i)];
+        const txt = p.origen === 'reagendar'
+          ? `¿Asignar a ${nom(p.nombre)} el ${fFecha(c.fecha)} ${c.hora}?`
+          : `¿Adelantar a ${nom(p.nombre)} al ${fFecha(c.fecha)} ${c.hora}? Su cita del ${fFecha(p.fecha)} ${p.hora} quedará libre.`;
+        if (!confirm(txt)) return;
+        btn.disabled = true;
+        try {
+          const r = await asignar(p, c);
+          cerrarModal();
+          toast(`Cupo asignado a ${nom(p.nombre)}`);
+          ((r && r.avisos) || []).forEach((a) => toast(a, 'err'));
+          if (typeof actualizarBadgeReagendar === 'function') actualizarBadgeReagendar();
+          recargar();
+        } catch (e) { btn.disabled = false; toast(e.message, 'err'); }
+      };
+    });
+  }
+
+  async function render() {
+    view.innerHTML = `
+      <div class="panel">
+        <div class="fila" style="align-items:center">
+          <h2 style="margin:0;flex:1">Lista de espera</h2>
+          <span class="pastilla" id="le-total">Cargando...</span>
+        </div>
+        <p class="muted">Todas las personas que esperan un cupo: la <b>cola de reagendar</b> y quienes tienen cita pero
+          <b>quieren adelantarla</b>. El orden es la prioridad: cola (más antigua primero), luego lista de espera
+          (cita más lejana primero); desempata el trámite más cerca de vencer.</p>
+        <div class="fila" id="le-filtros" style="flex-wrap:wrap;gap:8px">
+          <select id="le-origen"><option value="todos">Todos</option><option value="reagendar">Reagendar</option><option value="adelantar">Quiere adelantar</option></select>
+          <select id="le-clase"><option value="">Todas las clases</option></select>
+          <input id="le-q" type="search" placeholder="Buscar nombre, RUT o correo" style="flex:1;min-width:180px">
+        </div>
+        <div class="tabla-scroll" id="le-tabla"><table><thead><tr>
+          <th class="c">#</th><th>Nombre</th><th>RUT</th><th class="c">Clase</th><th class="c">Origen</th>
+          <th class="c">Esperando (días)</th><th class="c">Trámite</th><th class="c">Cita actual</th>
+          <th class="c">Cupos disponibles</th><th class="c">Acción</th>
+        </tr></thead><tbody id="le-body"><tr><td colspan="10">Cargando...</td></tr></tbody></table></div>
+      </div>`;
+    $('#le-origen').value = filtros.origen;
+    $('#le-q').value = filtros.q;
+    $('#le-origen').onchange = (e) => { filtros.origen = e.target.value; pintar(); };
+    $('#le-clase').onchange = (e) => { filtros.clase = e.target.value; pintar(); };
+    $('#le-q').oninput = (e) => { filtros.q = e.target.value; pintar(); };
+    async function cargar() {
+      const lista = await badge();
+      if (!$('#le-body')) return;
+      if (!lista) {
+        $('#le-body').innerHTML = '<tr><td colspan="10" class="muted">No se pudo cargar la lista de espera.</td></tr>';
+        $('#le-total').textContent = 'Error';
+        return;
+      }
+      personas = lista;
+      const clases = [...new Set(personas.flatMap(clasesDe))].sort();
+      if (filtros.clase && !clases.includes(filtros.clase)) filtros.clase = '';
+      $('#le-clase').innerHTML = '<option value="">Todas las clases</option>'
+        + clases.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+      $('#le-clase').value = filtros.clase;
+      pintar();
+    }
+    $('#le-body').onclick = (e) => {
+      const btn = e.target.closest('button[data-le]');
+      if (!btn) return;
+      const [origen, id] = btn.dataset.le.split(':');
+      const p = personas.find((x) => x.origen === origen && String(x.id) === id);
+      if (p) buscarCupo(p, cargar);
+    };
+    await cargar();
+  }
+
+  return { render, badge };
+})();
+window.ListaEspera = ListaEspera;
+function renderListaEspera() { return ListaEspera.render(); }

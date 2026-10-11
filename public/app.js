@@ -352,7 +352,7 @@ function logoHtml(cls) {
 
 /* ================= router ================= */
 const tabs = {
-  agenda: renderAgenda, disponibles: renderDisponibles, reagendar: renderReagendar,
+  agenda: renderAgenda, disponibles: renderDisponibles, reagendar: renderReagendar, espera: () => renderListaEspera(),
   porconfirmar: renderPorConfirmar,
   buscar: renderBuscar, errores: renderErrores, dia: renderDia, analitica: renderAnalitica,
   papelera: renderPapelera, datos: renderDatos, vencimientos: renderVencimientos,
@@ -1166,6 +1166,7 @@ async function renderAgenda() {
     requestAnimationFrame(ajustarOffsetsFijos);
   });
   actualizarBadgePapelera();
+  if (window.ListaEspera) window.ListaEspera.badge();
   actualizarBadgeErrores();
   actualizarBadgeReagendar();
   actualizarBadgePorConfirmar();
@@ -3977,6 +3978,18 @@ const PASOS_TOUR = [
     titulo: 'Descartar de la lista',
     icono: '🗑️',
     descripcion: '<b>Descartar</b> retira a un postulante de la lista de reagendamiento (pide confirmación). Úsalo cuando ya no corresponde reagendarlo.'
+  },
+
+  /* ---------- Lista de espera ---------- */
+  {
+    seccion: 'Lista de espera',
+    tab: 'espera',
+    target: '#le-tabla button[data-le]',
+    fallback: '#le-tabla',
+    listo: tourSinCargando('#le-tabla'),
+    titulo: 'Lista de espera: quién espera un cupo',
+    icono: '⏱️',
+    descripcion: 'Reúne la <b>cola de reagendar</b> y a quienes <b>quieren adelantar</b> su cita, en orden de prioridad. Filtra por origen, clase o texto. <b>Cupos disponibles</b> cuenta los cupos libres compatibles de los próximos 30 días; <b>Buscar cupo</b> los lista y <b>Asignar</b> los agenda (pide confirmación).'
   },
 
   /* ---------- Por confirmar ---------- */
