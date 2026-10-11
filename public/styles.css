@@ -1828,3 +1828,11 @@ header.top nav button[data-tab="vencimientos"] .nav-ico { color: var(--error, #d
 .tabla-porconfirmar .pc-correo { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tabla-porconfirmar .pc-tel { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .tabla-porconfirmar .wa-ok { color: #059669; font-weight: 700; margin-left: 6px; white-space: nowrap; }
+
+/* Estadisticas: comparacion con periodo anterior y mapa de inasistencia */
+.kpi-delta { font-size: 12px; font-weight: 700; margin-top: .3rem; font-variant-numeric: tabular-nums; }
+.kpi-delta.bueno { color: var(--ok); }
+.kpi-delta.malo { color: var(--error); }
+.kpi-delta.neutro { color: var(--tinta-3); }
+.tabla-heat td { font-variant-numeric: tabular-nums; font-weight: 600; }
+.tabla-heat td.heat-peor { outline: 2px solid var(--error); outline-offset: -2px; font-weight: 800; }

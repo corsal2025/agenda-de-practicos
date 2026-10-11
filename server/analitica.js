@@ -1,6 +1,7 @@
 'use strict';
 const { db } = require('./db');
 const { hoyISO } = require('./fechas');
+const est = require('./estadisticas');
 
 const OCUPADA = `(a.bloqueado = 0 AND (a.rut IS NOT NULL OR a.nombre IS NOT NULL))`;
 
@@ -15,11 +16,7 @@ function porGrupo(col, desde, hasta, extra = '') {
   `).all(desde, hasta);
 }
 
-function resumen(desde, hasta) {
-  desde = desde || '2000-01-01';
-  hasta = hasta || '2100-01-01';
-  const hoy = hoyISO();
-
+function kpisPeriodo(desde, hasta) {
   const one = (sql, ...p) => db.prepare(sql).get(desde, hasta, ...p);
 
   const totBloques = one(`SELECT COUNT(*) n FROM agenda a WHERE a.fecha BETWEEN ? AND ?`).n;
@@ -32,6 +29,38 @@ function resumen(desde, hasta) {
   const reagendadas = one(`SELECT COUNT(*) n FROM agenda a WHERE a.tipo_cita = 'REAGENDADO' AND a.fecha BETWEEN ? AND ?`).n;
   const confirmadas = one(`SELECT COUNT(*) n FROM agenda a WHERE a.confirmo_asistencia = 1 AND a.fecha BETWEEN ? AND ?`).n;
   const listaEspera = one(`SELECT COUNT(*) n FROM agenda a WHERE a.lista_espera = 'SI' AND a.fecha BETWEEN ? AND ?`).n;
+  return {
+    bloques: totBloques,
+    bloqueadas,
+    ocupadas: totOcupadas,
+    ocupacion: disponiblesTot ? +(totOcupadas / disponiblesTot * 100).toFixed(1) : 0,
+    con_resultado: conResultado,
+    aprobados,
+    aprobacion: conResultado ? +(aprobados / conResultado * 100).toFixed(1) : 0,
+    inasistencia: conResultado ? +(noAsiste / conResultado * 100).toFixed(1) : 0,
+    reagendadas,
+    tasa_reagendamiento: totOcupadas ? +(reagendadas / totOcupadas * 100).toFixed(1) : 0,
+    confirmadas,
+    lista_espera: listaEspera,
+  };
+}
+
+const KPIS_COMPARADOS = ['ocupadas', 'ocupacion', 'aprobacion', 'inasistencia', 'tasa_reagendamiento'];
+const elegir = (o) => Object.fromEntries(KPIS_COMPARADOS.map((x) => [x, o[x]]));
+
+function filasPeriodo(desde, hasta) {
+  return db.prepare(`
+    SELECT a.fecha, a.hora, a.clase, a.intento, a.resultado, a.agendado_en, a.fecha_inicio_tramite, a.rut, a.nombre
+    FROM agenda a WHERE ${OCUPADA} AND a.fecha BETWEEN ? AND ?
+  `).all(desde, hasta);
+}
+
+function resumen(desde, hasta) {
+  desde = desde || '2000-01-01';
+  hasta = hasta || '2100-01-01';
+  const hoy = hoyISO();
+
+  const k = kpisPeriodo(desde, hasta);
   const agendadasHoy = db.prepare(`SELECT COUNT(*) n FROM agenda WHERE substr(agendado_en,1,10) = ?`).get(hoy).n;
 
   const tendencia = db.prepare(`
@@ -65,23 +94,15 @@ function resumen(desde, hasta) {
     reprobacion: r.con_resultado ? +((r.reprobados + r.no_asistio) / r.con_resultado * 100).toFixed(1) : 0,
   }));
 
+  const filas = filasPeriodo(desde, hasta);
+  const prev = est.periodoAnterior(desde === '2000-01-01' ? null : desde, hasta === '2100-01-01' ? null : hasta);
+  // Sin bloques en el periodo anterior no hay con que comparar (evita deltas contra cero).
+  const kPrev = prev ? kpisPeriodo(prev[0], prev[1]) : null;
+  const kAnt = kPrev && kPrev.bloques > 0 ? elegir(kPrev) : null;
+
   return {
     rango: [desde === '2000-01-01' ? null : desde, hasta === '2100-01-01' ? null : hasta],
-    kpis: {
-      bloques: totBloques,
-      bloqueadas,
-      ocupadas: totOcupadas,
-      ocupacion: disponiblesTot ? +(totOcupadas / disponiblesTot * 100).toFixed(1) : 0,
-      con_resultado: conResultado,
-      aprobados,
-      aprobacion: conResultado ? +(aprobados / conResultado * 100).toFixed(1) : 0,
-      inasistencia: conResultado ? +(noAsiste / conResultado * 100).toFixed(1) : 0,
-      reagendadas,
-      tasa_reagendamiento: totOcupadas ? +(reagendadas / totOcupadas * 100).toFixed(1) : 0,
-      confirmadas,
-      lista_espera: listaEspera,
-      agendadas_hoy: agendadasHoy,
-    },
+    kpis: { ...k, agendadas_hoy: agendadasHoy },
     por_resultado: porGrupo('a.resultado', desde, hasta, `AND a.resultado IS NOT NULL`),
     por_examinador: porGrupo('e.nombre', desde, hasta),
     por_examinador_resultado: porExamRes,
@@ -91,6 +112,14 @@ function resumen(desde, hasta) {
     por_intento: porGrupo('a.intento', desde, hasta, `AND a.intento IS NOT NULL`),
     tendencia,
     tendencia_agendamiento: tendenciaAgendamiento,
+    periodo_anterior: prev,
+    kpis_anterior: kAnt,
+    deltas: kAnt ? est.deltas(elegir(k), kAnt) : null,
+    aprobacion_por_clase: est.aprobacionPorClase(filas),
+    aprobacion_por_intento: est.aprobacionPorIntento(filas),
+    inasistencia_dia_hora: est.inasistenciaDiaHora(filas),
+    tiempo_espera: est.tiempoEspera(filas),
+    tramites_vencidos: est.tramitesVencidos(filas, hoy),
   };
 }
 

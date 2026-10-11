@@ -708,3 +708,16 @@ test('correo/confirmacion-masiva: con SMTP envia, genera token y cuenta sin corr
   assert.deepEqual([r.datos.enviados, r.datos.sin_correo, r.datos.fallidos], [1, 1, 0]);
   assert.ok(db.prepare('SELECT token_confirmacion FROM agenda WHERE id = ?').get(a.id).token_confirmacion);
 });
+
+test('GET /api/analitica incluye comparacion y agregados nuevos', async () => {
+  const { status, datos } = await api('GET', '/analitica?desde=2026-03-01&hasta=2026-03-31');
+  assert.equal(status, 200);
+  assert.deepEqual(datos.periodo_anterior, ['2026-01-29', '2026-02-28']);
+  // Sin bloques en el periodo anterior no hay comparacion (no se compara contra cero).
+  if (datos.kpis_anterior) assert.equal(typeof datos.deltas.aprobacion, 'number');
+  else assert.equal(datos.deltas, null);
+  for (const k of ['aprobacion_por_clase', 'aprobacion_por_intento']) assert.ok(Array.isArray(datos[k]));
+  assert.ok(Array.isArray(datos.inasistencia_dia_hora.celdas));
+  assert.equal(typeof datos.tiempo_espera.n, 'number');
+  assert.equal(typeof datos.tramites_vencidos.vencido_en_cita, 'number');
+});

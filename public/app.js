@@ -3267,7 +3267,9 @@ async function renderAnalitica() {
       <div class="campo"><label>Desde</label><input type="date" id="an-desde" value="${r.desde || ''}"></div>
       <div class="campo"><label>Hasta</label><input type="date" id="an-hasta" value="${r.hasta || ''}"></div>
       <button class="btn" id="an-ok">Aplicar filtro</button>
-    </div></div>
+      <button class="btn sec" id="an-xlsx">Descargar informe (Excel)</button>
+      <button class="btn sec" id="an-print">Imprimir informe</button>
+    </div><p class="muted" id="an-comp" style="text-align:center;font-size:.8rem;margin:.4rem 0 0"></p></div>
     <div class="kpis" id="an-kpis"></div>
     <div class="grid2">
       <div class="panel"><h3>Resultado de examenes</h3><div class="grafico"><canvas id="g-res"></canvas></div></div>
@@ -3290,7 +3292,8 @@ async function renderAnalitica() {
         <th>Escuela</th><th class="c">Citas</th><th class="c">Aprobó</th><th class="c">Reprobó</th><th>% aprobación</th>
       </tr></thead><tbody id="esc-tabla"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div>
       <p class="muted" style="font-size:.8rem">El % se calcula sobre aprobados + reprobados (incluye reprobado por inasistencia).</p>
-    </div>`;
+    </div>
+    ${anPanelesExtraHtml()}`;
   const cargar = () => {
     const q = new URLSearchParams();
     if ($('#an-desde').value) q.set('desde', $('#an-desde').value);
@@ -3299,6 +3302,7 @@ async function renderAnalitica() {
     return cargarVista('analitica', `/analitica?${q}`, pintarAn);
   };
   const pintarEscuelas = (rows) => {
+    AN_ESTADO.escuelas = rows || [];
     if (!$('#esc-tabla')) return;
     $('#esc-tabla').innerHTML = (rows || []).length ? rows.map((x) => `<tr>
       <td>${esc(x.escuela_conductores)}</td><td class="c">${x.total}</td>
@@ -3312,11 +3316,13 @@ async function renderAnalitica() {
     limpiarCharts();
     const k = a.kpis;
     $('#an-kpis').innerHTML = [
-      ['Bloques', k.bloques], ['Bloqueados', k.bloqueadas], ['Citas agendadas', k.ocupadas], ['Ocupacion', k.ocupacion + '%'],
-      ['Con resultado', k.con_resultado], ['Aprobacion', k.aprobacion + '%'], ['Inasistencia', k.inasistencia + '%'],
-      ['Reagendadas', k.reagendadas], ['Tasa reagend.', k.tasa_reagendamiento + '%'],
+      ['Bloques', k.bloques], ['Bloqueados', k.bloqueadas], ['Citas agendadas', k.ocupadas, 'ocupadas'], ['Ocupacion', k.ocupacion + '%', 'ocupacion'],
+      ['Con resultado', k.con_resultado], ['Aprobacion', k.aprobacion + '%', 'aprobacion'], ['Inasistencia', k.inasistencia + '%', 'inasistencia'],
+      ['Reagendadas', k.reagendadas], ['Tasa reagend.', k.tasa_reagendamiento + '%', 'tasa_reagendamiento'],
       ['En lista espera', k.lista_espera], ['Agendadas hoy', k.agendadas_hoy],
-    ].map(([t, n]) => `<div class="kpi"><div class="n">${n}</div><div class="t">${t}</div></div>`).join('');
+    ].map(([t, n, c]) => `<div class="kpi"><div class="n">${n}</div><div class="t">${t}</div>${c ? anDeltaHtml(a, c) : ''}</div>`).join('');
+    $('#an-comp').textContent = a.periodo_anterior
+      ? `Comparado con el período anterior: ${fFecha(a.periodo_anterior[0])} al ${fFecha(a.periodo_anterior[1])}` : 'Elige Desde y Hasta para comparar con el período anterior.';
     const pares = (arr) => [arr.map((x) => x.k), arr.map((x) => x.n)];
     grafico('g-res', 'doughnut', ...pares(a.por_resultado));
     grafico('g-exam', 'bar', ...pares(a.por_examinador), 'Citas');
@@ -3338,8 +3344,11 @@ async function renderAnalitica() {
     grafico('g-tipo', 'bar', ...pares(a.por_tipo), 'Citas');
     grafico('g-tend', 'line', a.tendencia.map((x) => x.dia), a.tendencia.map((x) => x.n), 'Citas');
     grafico('g-agend', 'line', a.tendencia_agendamiento.map((x) => x.dia), a.tendencia_agendamiento.map((x) => x.n), 'Agendados');
+    pintarAnExtra(a);
   };
   $('#an-ok').onclick = cargar;
+  $('#an-xlsx').onclick = descargarInformeExcel;
+  $('#an-print').onclick = imprimirInforme;
   cargar();
 }
 
