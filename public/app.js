@@ -369,6 +369,21 @@ async function proximoDiaConAgenda(desde, n) {
 const opt = (arr, sel) => ['<option value="">--</option>']
   .concat(arr.map((v) => `<option ${v === sel ? 'selected' : ''}>${esc(v)}</option>`)).join('');
 
+/* ================= WhatsApp (sin API: enlaces) ================= */
+// Numero en formato internacional chileno (solo digitos) o '' si no sirve para WhatsApp.
+function telWaDe(contacto) {
+  const n = String(contacto || '').replace(/\D/g, '');
+  return n.startsWith('56') ? n : (n.length === 9 ? '56' + n : '');
+}
+// Mensaje con los datos de la cita. `cierre` cambia la peticion final.
+function mensajeWaCita(b, examinador, cierre = 'Por favor confirma tu asistencia respondiendo a este mensaje.') {
+  const nomP = nom(b.nombre) || 'Estimado/a postulante';
+  const claseP = b.clase ? ` (Clase ${b.clase})` : '';
+  return `Hola ${nomP}, te contactamos desde la Dirección de Tránsito respecto a tu examen práctico de conducir${claseP}. Te recordamos que tu cita está agendada para el día ${fFecha(b.fecha)} a las ${b.hora || ''} hrs con el examinador ${examinador || 'por asignar'}. ${cierre}`;
+}
+const CORREO_OK_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const correoOk = (c) => CORREO_OK_RE.test(String(c || '').trim());
+
 function modal(titulo, cuerpoHtml, pieHtml, extraCls = '') {
   const root = $('#modal-root');
   root.innerHTML = '';
@@ -846,22 +861,28 @@ async function renderPorConfirmar() {
     </div>
 
     <div class="panel" style="margin-top:.75rem">
+      <div class="pc-toolbar">
+        <span class="pastilla" id="pc-sel-info">0 seleccionados</span>
+        <button class="btn chico" id="pc-mail-sel" title="Envía el correo con los enlaces para confirmar, rechazar o reagendar">✉ Enviar correo de confirmación</button>
+        <button class="btn chico sec" id="pc-wa-sel" title="Abre una cola para escribir por WhatsApp uno a uno">💬 WhatsApp a seleccionados</button>
+      </div>
       <div class="tabla-scroll">
-        <table style="width:100%">
+        <table class="tabla-porconfirmar">
           <thead>
             <tr>
-              <th class="c" style="width:95px">Fecha</th>
-              <th class="c" style="width:65px">Hora</th>
-              <th class="c">Postulante</th>
-              <th class="c" style="width:115px;white-space:nowrap">RUT</th>
-              <th class="c" style="width:65px">Clase</th>
-              <th class="c" style="width:150px">Teléfono</th>
-              <th class="c" style="min-width:180px">Correo</th>
-              <th class="c" style="min-width:230px">Gestión de asistencia</th>
+              <th class="c pc-chk"><input type="checkbox" id="pc-chk-todos" aria-label="Seleccionar todos"></th>
+              <th class="c">Fecha</th>
+              <th class="c">Hora</th>
+              <th>Postulante</th>
+              <th class="c">RUT</th>
+              <th class="c">Clase</th>
+              <th class="c">Teléfono</th>
+              <th>Correo</th>
+              <th class="c">Gestión de asistencia</th>
             </tr>
           </thead>
           <tbody id="pc-tbody">
-            <tr><td colspan="8" class="c muted" style="padding:2rem">Cargando citas por confirmar...</td></tr>
+            <tr><td colspan="9" class="c muted" style="padding:2rem">Cargando citas por confirmar...</td></tr>
           </tbody>
         </table>
       </div>
@@ -869,6 +890,21 @@ async function renderPorConfirmar() {
   `;
 
   let citasCargadas = [];
+  let visibles = [];
+  const seleccion = new Set();
+
+  // Sin seleccion, las acciones masivas aplican a todas las filas visibles.
+  const objetivo = () => (seleccion.size ? visibles.filter((r) => seleccion.has(r.id)) : visibles);
+  const pintarSeleccion = () => {
+    const n = seleccion.size;
+    $('#pc-sel-info').textContent = `${n} ${n === 1 ? 'seleccionado' : 'seleccionados'}`;
+    $('#pc-mail-sel').textContent = n ? '✉ Enviar correo de confirmación' : `✉ Enviar correo de confirmación a todos (${visibles.length})`;
+    $('#pc-wa-sel').textContent = n ? '💬 WhatsApp a seleccionados' : `💬 WhatsApp a todos (${visibles.length})`;
+    $('#pc-mail-sel').disabled = $('#pc-wa-sel').disabled = !visibles.length;
+    const todos = $('#pc-chk-todos');
+    todos.checked = visibles.length > 0 && visibles.every((r) => seleccion.has(r.id));
+    todos.indeterminate = !todos.checked && visibles.some((r) => seleccion.has(r.id));
+  };
 
   const pintarLista = () => {
     const q = ($('#pc-q').value || '').trim().toLowerCase();
@@ -880,47 +916,48 @@ async function renderPorConfirmar() {
       return nomP.includes(q) || rutP.includes(q) || telP.includes(q);
     });
 
+    visibles = filtradas;
+    for (const id of [...seleccion]) if (!filtradas.some((r) => r.id === id)) seleccion.delete(id);
+    pintarSeleccion();
     if (filtradas.length && !q) pcTeniaPendientes = true;
     $('#pc-total-badge').textContent = `${filtradas.length} ${filtradas.length === 1 ? 'cita pendiente' : 'citas pendientes'}`;
 
     if (!filtradas.length) {
       $('#pc-tbody').innerHTML = q
-        ? licoVacioFila(8, 'explica', 'Sin coincidencias', 'No se encontraron postulantes que coincidan con la búsqueda.')
-        : licoVacioFila(8, 'celebra', '¡Todo al día!', 'No hay citas pendientes de confirmación en este rango. Lico aprueba esta gestión.');
+        ? licoVacioFila(9, 'explica', 'Sin coincidencias', 'No se encontraron postulantes que coincidan con la búsqueda.')
+        : licoVacioFila(9, 'celebra', '¡Todo al día!', 'No hay citas pendientes de confirmación en este rango. Lico aprueba esta gestión.');
       if (!q && pcTeniaPendientes) licoConfeti($('#pc-tbody'));
       pcTeniaPendientes = false;
       return;
     }
 
     $('#pc-tbody').innerHTML = filtradas.map((r) => {
-      const numLimpio = String(r.contacto || '').replace(/\D/g, '');
-      const telWa = numLimpio.startsWith('56') ? numLimpio : (numLimpio.length === 9 ? '56' + numLimpio : '');
-      const nomP = nom(r.nombre) || 'Estimado/a postulante';
-      const examP = r.examinador || 'por asignar';
-      const fechaP = fFecha(r.fecha);
-      const horaP = r.hora || '';
-      const claseP = r.clase ? ` (Clase ${r.clase})` : '';
-      const mensajeWa = `Hola ${nomP}, te contactamos desde la Dirección de Tránsito respecto a tu examen práctico de conducir${claseP}. Te recordamos que tu cita está agendada para el día ${fechaP} a las ${horaP} hrs con el examinador ${examP}. Por favor confírmanos si podrás asistir o si necesitas reagendar tu hora para otra fecha.`;
+      const telWa = telWaDe(r.contacto);
+      const mensajeWa = mensajeWaCita(r, r.examinador, 'Por favor confírmanos si podrás asistir o si necesitas reagendar tu hora para otra fecha.');
+      const correoTxt = String(r.correo || '').trim();
 
       return `
       <tr data-id="${r.id}">
-        <td class="c" style="white-space:nowrap"><b>${esc(fFecha(r.fecha))}</b></td>
-        <td class="c"><b>${esc(r.hora)}</b></td>
-        <td class="c"><b>${esc(nom(r.nombre) || '(Sin nombre)')}</b></td>
-        <td class="c num" style="white-space:nowrap;font-weight:600">${esc(r.rut || '-')}</td>
+        <td class="c pc-chk"><input type="checkbox" data-sel="${r.id}" ${seleccion.has(r.id) ? 'checked' : ''} aria-label="Seleccionar"></td>
+        <td class="c nw"><b>${esc(fFecha(r.fecha))}</b></td>
+        <td class="c nw"><b>${esc(r.hora)}</b></td>
+        <td class="pc-nombre"><b>${esc(nom(r.nombre) || '(Sin nombre)')}</b></td>
+        <td class="c num nw" style="font-weight:600">${esc(r.rut || '-')}</td>
         <td class="c">${r.clase ? clasesTagsHtml(r.clase) : '<span class="muted">-</span>'}</td>
-        <td class="c num">
+        <td class="c num nw">
           ${r.contacto ? `
-            <div style="display:inline-flex;flex-direction:column;align-items:center;gap:4px">
+            <span class="pc-tel">
               <a href="tel:${esc(r.contacto)}" style="text-decoration:none;font-weight:600;color:var(--azul)">📞 ${esc(fTel(r.contacto))}</a>
-              ${telWa ? `<a href="whatsapp://send?phone=${telWa}&text=${encodeURIComponent(mensajeWa)}" class="btn-wa" title="Escribir por WhatsApp a este postulante para confirmar o reagendar">💬 WhatsApp</a>` : ''}
-            </div>
+              ${telWa ? `<a href="whatsapp://send?phone=${telWa}&text=${encodeURIComponent(mensajeWa)}" class="btn-wa" title="Escribir por WhatsApp a este postulante para confirmar o reagendar">💬</a>` : ''}
+            </span>
           ` : '<span class="muted">Sin teléfono</span>'}
         </td>
-        <td class="c" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-          ${r.correo ? `<a href="mailto:${esc(r.correo)}" style="color:var(--azul)" title="${esc(r.correo)}">${esc(r.correo)}</a>` : '<span class="muted">Sin correo</span>'}
+        <td class="pc-correo">
+          ${correoOk(correoTxt)
+            ? `<a href="mailto:${esc(correoTxt)}" style="color:var(--azul)" title="${esc(correoTxt)}">${esc(correoTxt)}</a>`
+            : (correoTxt ? `<span class="muted" title="Valor registrado: ${esc(correoTxt)}">Correo inválido</span>` : '<span class="muted">Sin correo</span>')}
         </td>
-        <td class="c" style="white-space:nowrap">
+        <td class="c nw">
           <button class="btn chico" data-si="${r.id}" style="background:#10b981;border-color:#059669;color:#fff;font-weight:700;margin-right:4px">✔ Confirmó</button>
           <button class="btn chico sec" data-no="${r.id}" style="color:#b91c1c;font-weight:600;margin-right:4px">✖ No asiste</button>
           <button class="btn chico sec" data-reag="${r.id}" style="color:var(--azul);font-weight:600;margin-right:4px" title="Derivar a Reagendar">🔄 Reagendar</button>
@@ -929,6 +966,13 @@ async function renderPorConfirmar() {
       `;
     }).join('');
 
+    $('#pc-tbody').querySelectorAll('input[data-sel]').forEach((el) => {
+      el.onchange = () => {
+        const id = Number(el.dataset.sel);
+        if (el.checked) seleccion.add(id); else seleccion.delete(id);
+        pintarSeleccion();
+      };
+    });
     $('#pc-tbody').querySelectorAll('button[data-si]').forEach((el) => {
       el.onclick = () => marcarAsistencia(Number(el.dataset.si), 1);
     });
@@ -993,6 +1037,28 @@ async function renderPorConfirmar() {
     }
   };
 
+  $('#pc-chk-todos').onchange = (e) => {
+    if (e.target.checked) visibles.forEach((r) => seleccion.add(r.id)); else seleccion.clear();
+    $('#pc-tbody').querySelectorAll('input[data-sel]').forEach((el) => { el.checked = e.target.checked; });
+    pintarSeleccion();
+  };
+
+  $('#pc-mail-sel').onclick = async () => {
+    const filas = objetivo();
+    const conCorreo = filas.filter((r) => correoOk(r.correo)).length;
+    if (!conCorreo) return toast('Ninguna de las citas elegidas tiene un correo válido.', 'alerta');
+    if (!confirm(`¿Enviar el correo de solicitud de confirmación a ${conCorreo} postulante(s)? (${filas.length - conCorreo} sin correo válido)`)) return;
+    try {
+      toast('Enviando correos...', 'info');
+      const r = await api('/correo/confirmacion-masiva', { method: 'POST', body: { ids: filas.map((x) => x.id) } });
+      toast(`Correos enviados: ${r.enviados}. Sin correo: ${r.sin_correo}. Fallidos: ${r.fallidos}.`, r.fallidos ? 'alerta' : 'ok');
+    } catch (e) {
+      toast(e.message, 'err');
+    }
+  };
+
+  $('#pc-wa-sel').onclick = () => colaWhatsApp(objetivo());
+
   $('#pc-q').oninput = pintarLista;
   $('#pc-rango').onchange = cargarDatos;
   $('#pc-refrescar').onclick = cargarDatos;
@@ -1037,6 +1103,49 @@ async function renderPorConfirmar() {
   }
 
   await cargarDatos();
+}
+
+// Cola de WhatsApp: una ventana por clic del usuario (asi no la bloquea el navegador).
+function colaWhatsApp(filas) {
+  const items = filas.map((r) => ({ r, tel: telWaDe(r.contacto), enviado: false }));
+  const conTel = items.filter((x) => x.tel);
+  const sinTel = items.filter((x) => !x.tel);
+  const urlDe = (x) => `https://wa.me/${x.tel}?text=${encodeURIComponent(mensajeWaCita(x.r, x.r.examinador, 'Por favor confírmanos tu asistencia respondiendo a este mensaje.'))}`;
+  const cuerpo = `
+    <p class="muted" style="margin-top:0">Cada botón abre WhatsApp en una pestaña nueva con el mensaje listo. Envíalo y vuelve aquí para continuar con el siguiente.</p>
+    <div class="tabla-scroll" style="max-height:50vh;overflow-y:auto"><table class="tabla-porconfirmar"><thead><tr>
+      <th>Postulante</th><th class="c">Cita</th><th class="c">Teléfono</th><th class="c"></th></tr></thead><tbody>
+      ${conTel.map((x, i) => `<tr>
+        <td class="pc-nombre">${esc(nom(x.r.nombre) || '(Sin nombre)')}</td>
+        <td class="c nw">${esc(fFecha(x.r.fecha))} ${esc(x.r.hora || '')}</td>
+        <td class="c num nw">${esc(fTel(x.r.contacto))}</td>
+        <td class="c nw"><button class="btn chico" data-i="${i}">Abrir WhatsApp</button><span class="wa-ok" data-ok="${i}" hidden>enviado ✓</span></td>
+      </tr>`).join('') || '<tr><td colspan="4" class="c muted">Nadie con teléfono válido.</td></tr>'}
+    </tbody></table></div>
+    ${sinTel.length ? `<p class="muted" style="margin-bottom:0"><b>Sin teléfono (${sinTel.length}):</b> ${sinTel.map((x) => esc(nom(x.r.nombre) || x.r.rut || '(Sin nombre)')).join(', ')}</p>` : ''}`;
+  const pie = `<span class="muted" id="wa-progreso" style="margin-right:auto"></span>
+    <button class="btn sec" id="wa-cerrar">Cerrar</button>
+    <button class="btn" id="wa-siguiente">Siguiente ▶</button>`;
+  const ov = modal('Cola de WhatsApp', cuerpo, pie);
+  const pintar = () => {
+    const hechos = conTel.filter((x) => x.enviado).length;
+    ov.querySelector('#wa-progreso').textContent = `${hechos} de ${conTel.length} enviados`;
+    ov.querySelector('#wa-siguiente').disabled = hechos === conTel.length;
+  };
+  const abrir = (i) => {
+    window.open(urlDe(conTel[i]), '_blank', 'noopener');
+    conTel[i].enviado = true;
+    ov.querySelector(`[data-ok="${i}"]`).hidden = false;
+    ov.querySelector(`button[data-i="${i}"]`).textContent = 'Reabrir';
+    pintar();
+  };
+  ov.querySelectorAll('button[data-i]').forEach((b) => { b.onclick = () => abrir(Number(b.dataset.i)); });
+  ov.querySelector('#wa-siguiente').onclick = () => {
+    const i = conTel.findIndex((x) => !x.enviado);
+    if (i >= 0) abrir(i);
+  };
+  ov.querySelector('#wa-cerrar').onclick = cerrarModal;
+  pintar();
 }
 
 /* ================= tab: AGENDA ================= */
@@ -2043,14 +2152,9 @@ function slotCard(b) {
 
   const problema = problemaDatos(b);
   const esConfirmado = b.confirmo_asistencia === 1;
-  const numLimpio = String(b.contacto || '').replace(/\D/g, '');
-  const telWa = numLimpio.startsWith('56') ? numLimpio : (numLimpio.length === 9 ? '56' + numLimpio : '');
-  const nomP = nom(b.nombre) || 'Estimado/a postulante';
+  const telWa = telWaDe(b.contacto);
   const examP = b.examinador || (META.examinadores.find((e) => e.id === b.examinador_id) || {}).nombre || 'por asignar';
-  const fechaP = fFecha(b.fecha);
-  const horaP = b.hora || '';
-  const claseP = b.clase ? ` (Clase ${b.clase})` : '';
-  const mensajeWa = `Hola ${nomP}, te contactamos desde la Dirección de Tránsito respecto a tu examen práctico de conducir${claseP}. Te recordamos que tu cita está agendada para el día ${fechaP} a las ${horaP} hrs con el examinador ${examP}. Por favor confirma tu asistencia respondiendo a este mensaje.`;
+  const mensajeWa = mensajeWaCita(b, examP);
 
   return `<div class="${cls}" data-id="${b.id}">
     ${problema ? `<span class="alerta-dato" title="${esc(problema)}">⚠</span>` : ''}

@@ -150,4 +150,15 @@ function recordatorio(bloque) {
   return enviar(bloque.correo, `Recordatorio oficial (Faltan 3 días) - Examen práctico ${fFecha(bloque.fecha)} ${bloque.hora}`, cuerpo);
 }
 
-module.exports = { habilitado, confirmacion, recordatorio, plantilla };
+function solicitudConfirmacion(bloque) {
+  const links = armarLinks(bloque);
+  const cuerpo = plantilla({
+    titulo: 'Solicitud de confirmación — Examen práctico de conducir',
+    intro: 'Necesitamos que confirmes tu asistencia al examen práctico de conducir. Revisa los datos de tu cita y respóndenos usando los botones de este correo:',
+    bloque,
+    links,
+  });
+  return enviar(bloque.correo, `Confirma tu asistencia - Examen práctico ${fFecha(bloque.fecha)} ${bloque.hora}`, cuerpo);
+}
+
+module.exports = { habilitado, confirmacion, recordatorio, solicitudConfirmacion, plantilla };

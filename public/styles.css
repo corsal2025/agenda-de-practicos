@@ -1818,3 +1818,13 @@ header.top nav button[data-tab="vencimientos"] .nav-ico { color: var(--error, #d
 /* Tarjeta resaltada al llegar desde el buscador */
 .slot.slot-destacada { box-shadow: 0 0 0 3px var(--azul), 0 0 18px var(--azul); animation: destacar 1s ease-in-out 3; }
 @keyframes destacar { 50% { box-shadow: 0 0 0 3px var(--azul), 0 0 2px var(--azul); } }
+
+/* ---- Por confirmar: tabla compacta, sin cortar numeros ---- */
+.pc-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: .6rem; }
+.tabla-porconfirmar { width: 100%; }
+.tabla-porconfirmar .nw { white-space: nowrap; }
+.tabla-porconfirmar .pc-chk { width: 32px; }
+.tabla-porconfirmar .pc-nombre { min-width: 140px; max-width: 220px; }
+.tabla-porconfirmar .pc-correo { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tabla-porconfirmar .pc-tel { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.tabla-porconfirmar .wa-ok { color: #059669; font-weight: 700; margin-left: 6px; white-space: nowrap; }

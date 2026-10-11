@@ -814,6 +814,41 @@ app.post('/api/agenda/enviar-correos-pendientes', wrap(async (req, res) => {
   });
 }));
 
+// Solicitud de confirmacion masiva para las citas elegidas en "Por confirmar".
+const MAX_IDS_MASIVO = 500;
+app.post('/api/correo/confirmacion-masiva', wrap(async (req, res) => {
+  const ids = (req.body || {}).ids;
+  if (!Array.isArray(ids) || !ids.length || ids.length > MAX_IDS_MASIVO || !ids.every((n) => Number.isInteger(n) && n > 0)) {
+    throw bad(`ids debe ser una lista de 1 a ${MAX_IDS_MASIVO} identificadores enteros.`);
+  }
+  if (!correo.habilitado) {
+    return res.status(400).json({ error: 'El envío de correos no está configurado (SMTP)', habilitado: false, enviados: 0, sin_correo: 0, fallidos: 0 });
+  }
+  const unicos = [...new Set(ids)];
+  const sel = db.prepare(`
+    SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
+    WHERE a.id = ? AND a.bloqueado = 0 AND (a.rut IS NOT NULL OR a.nombre IS NOT NULL)
+  `);
+  const enviarFn = correo.solicitudConfirmacion || correo.recordatorio;
+  let enviados = 0; let sinCorreo = 0; let fallidos = 0;
+  for (const id of unicos) {
+    const bloque = sel.get(id);
+    if (!bloque) { fallidos++; continue; }
+    if (!correoValido(bloque.correo)) { sinCorreo++; continue; }
+    if (!bloque.token_confirmacion) {
+      bloque.token_confirmacion = crypto.randomBytes(16).toString('hex');
+      db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').run(bloque.token_confirmacion, bloque.id);
+    }
+    let ok = false;
+    try { ok = Boolean(await enviarFn(bloque)); } catch (e) { console.error(`Error enviando a ${bloque.correo}:`, e.message); }
+    if (ok) {
+      enviados++;
+      logReq(req, bloque.id, 'correo_solicitud_confirmacion', String(bloque.correo).trim());
+    } else fallidos++;
+  }
+  res.json({ ok: true, habilitado: true, enviados, sin_correo: sinCorreo, fallidos });
+}));
+
 app.post('/api/agenda/:id/confirmar', wrap(async (req, res) => {
   const id = Number(req.params.id);
   const { valor } = req.body || {};

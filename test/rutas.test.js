@@ -20,6 +20,7 @@ const llamadas = [];
 let confirmacionReal = async (b) => { enviados.push(b.id); llamadas.push(b); return true; };
 correo.confirmacion = (b) => confirmacionReal(b);
 correo.recordatorio = async () => true;
+correo.solicitudConfirmacion = async () => true;
 
 const { db } = require('../server/db');
 const { hoyISO } = require('../server/fechas');
@@ -681,4 +682,29 @@ test('estadisticas-escuelas: cuenta aprobados/reprobados y respeta el rango de f
   assert.equal(rango.pct_aprobacion, 33.3);
   assert.equal(fila((await api('GET', `/estadisticas-escuelas?desde=${d2}`)).datos).total, 1);
   assert.equal((await api('GET', '/estadisticas-escuelas?desde=mal')).status, 400);
+});
+
+test('correo/confirmacion-masiva: valida ids y avisa si SMTP no esta configurado', async () => {
+  for (const ids of [undefined, [], ['1'], [1.5], [-1], Array.from({ length: 501 }, (_, i) => i + 1)]) {
+    assert.equal((await api('POST', '/correo/confirmacion-masiva', { ids })).status, 400);
+  }
+  const d = diaNuevo();
+  const s = slot(d, '09:00', { rut: '9-5', nombre: 'MASIVO', correo: 'masivo@test.cl' });
+  correo.habilitado = false;
+  try {
+    const r = await api('POST', '/correo/confirmacion-masiva', { ids: [s.id] });
+    assert.equal(r.status, 400);
+    assert.equal(r.datos.habilitado, false);
+    assert.match(r.datos.error, /no está configurado \(SMTP\)/);
+  } finally { correo.habilitado = true; }
+});
+
+test('correo/confirmacion-masiva: con SMTP envia, genera token y cuenta sin correo', async () => {
+  const d = diaNuevo();
+  const a = slot(d, '09:00', { rut: '9-6', nombre: 'CON CORREO', correo: 'con@test.cl' });
+  const b = slot(d, '10:00', { rut: '9-7', nombre: 'SIN CORREO', correo: '💌' });
+  const r = await api('POST', '/correo/confirmacion-masiva', { ids: [a.id, b.id] });
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.datos.enviados, r.datos.sin_correo, r.datos.fallidos], [1, 1, 0]);
+  assert.ok(db.prepare('SELECT token_confirmacion FROM agenda WHERE id = ?').get(a.id).token_confirmacion);
 });
