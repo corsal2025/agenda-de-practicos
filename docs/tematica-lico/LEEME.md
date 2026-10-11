@@ -8,7 +8,7 @@ Stack del original: ASP.NET Razor Pages + Bootstrap 5. El kit es **HTML/CSS/JS p
 | Archivo | Para qué sirve |
 |---|---|
 | `tema-lico.css` | Tema completo: paleta, componentes, animaciones, estilos de la guía. |
-| `lico.js` | La mascota Lico (SVG generado por código, sin imágenes). Solo la mascota. |
+| `lico.js` | La mascota Lico. **Fuente única: `public/lico.js`** (ver `lico.js.README.md`). |
 | `guia-interactiva.js` | Guía paso a paso con spotlight + Lico (incluye a Lico dentro). Es **un ejemplo a adaptar**: sus pasos (`PASOS_TOUR`) son de este sistema. |
 | `logo-municipal.png` | Logo usado en la cabecera. |
 

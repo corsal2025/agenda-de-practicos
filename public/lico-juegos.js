@@ -115,7 +115,7 @@
     manual = !!esManual;
     inicioMs = Date.now();
 
-    el.querySelector('.lt-cuerpo').innerHTML = window.Lico.svg(juego.pose);
+    el.querySelector('.lt-cuerpo').innerHTML = window.Lico.svg(juego.pose, { decorativo: true });
     ponerSueno(el.querySelector('.lt-cuerpo'));
     el.querySelector('.lt-globo').textContent = juego.texto;
     el.className = 'lico-travieso modo-' + id;
@@ -210,7 +210,7 @@
     var btn = document.getElementById('head-lico');
     var cont = btn && btn.querySelector('[data-lico]');
     if (!cont) return;
-    cont.innerHTML = window.Lico.svg(pose);
+    cont.innerHTML = window.Lico.svg(pose, { decorativo: true });
     if (pose === 'celebra') {
       btn.classList.remove('hl-salta');
       void btn.offsetWidth;
@@ -218,7 +218,7 @@
     }
     clearTimeout(timerReac);
     timerReac = setTimeout(function () {
-      cont.innerHTML = window.Lico.svg('saluda');
+      cont.innerHTML = window.Lico.svg('saluda', { decorativo: true });
       btn.classList.remove('hl-salta');
     }, 2800);
   }
@@ -238,6 +238,7 @@
     try { window.localStorage.setItem(CLAVE, encendido ? 'on' : 'off'); } catch (e) { /* sin almacenamiento */ }
     if (!encendido) { if (jugando) terminar(true); clearTimeout(timerIdle); timerIdle = null; } else { programar(IDLE_MS); }
     pintarInterruptor();
+    try { document.dispatchEvent(new CustomEvent('lico:cambio', { detail: { encendido: encendido } })); } catch (e) { /* navegador antiguo */ }
   }
   document.addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('#lico-onoff') : null;

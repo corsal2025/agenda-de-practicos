@@ -1746,7 +1746,31 @@ tbody tr:first-child td { border-top: 0; }
   content: ''; position: absolute; left: 6px; right: 6px; top: 50%; height: 2px;
   background: currentColor; transform: rotate(-35deg); border-radius: 2px;
 }
-#lico-onoff:focus-visible { outline: 3px solid var(--marca-amarillo); outline-offset: 2px; }
+#lico-onoff:focus-visible, #lico-consejos:focus-visible { outline: 3px solid var(--marca-amarillo); outline-offset: 2px; }
+#lico-consejos { position: relative; }
+#lico-consejos.lico-off { opacity: .55; }
+#lico-consejos.lico-off::after {
+  content: ''; position: absolute; left: 6px; right: 6px; top: 50%; height: 2px;
+  background: currentColor; transform: rotate(-35deg); border-radius: 2px;
+}
+
+/* Burbuja de Lico: atajo a la pestaña sugerida */
+.head-lico-burbuja { display: flex; flex-direction: column; gap: .4rem; }
+.head-lico-ir {
+  align-self: flex-start; background: var(--azul); color: #fff; border: 0; border-radius: 999px;
+  padding: .25rem .7rem; font: inherit; font-weight: 700; cursor: pointer;
+}
+.head-lico-ir:hover { filter: brightness(1.1); }
+.head-lico-ir:focus-visible { outline: 3px solid var(--marca-amarillo); outline-offset: 2px; }
+.lico-uso { display: block; }
+
+/* Lico en tema oscuro: contorno claro para que el azul no se pierda sobre el fondo */
+:root[data-tema="oscuro"] .lico-svg { filter: drop-shadow(0 0 1.5px rgba(231, 234, 243, .75)); }
+:root[data-tema="oscuro"] .head-lico-burbuja { box-shadow: 0 8px 24px rgba(0, 0, 0, .55); }
+:root[data-tema="oscuro"] .head-lico-ir { background: var(--azul-th); color: #fff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]):not([data-tema="oscuro"]) .lico-svg { filter: drop-shadow(0 0 1.5px rgba(231, 234, 243, .75)); }
+}
 
 /* ---------- Movimiento reducido ---------- */
 @media (prefers-reduced-motion: reduce) {
@@ -1763,7 +1787,7 @@ tbody tr:first-child td { border-top: 0; }
 
 /* ---------- Impresion: sin decoracion de la tematica ---------- */
 @media print {
-  .tour-overlay, .lico-svg, .head-lico-wrap, .lico-confeti, .lico-travieso, #lico-onoff { display: none !important; }
+  .tour-overlay, .lico-svg, .head-lico-wrap, .lico-confeti, .lico-travieso, #lico-onoff, #lico-consejos, #lico-sprite { display: none !important; }
 }
 
 /* Boton "Historial" junto al nombre en la cuadricula de agenda */

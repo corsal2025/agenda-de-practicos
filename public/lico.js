@@ -5,12 +5,23 @@
  *   <span data-lico="saluda"></span>     -> inserta a Lico en ese elemento
  * Uso por código:
  *   elemento.innerHTML = Lico.svg('celebra');
+ *   Lico.svg(pose, { decorativo: true })  -> sin role/aria-label (para contenedores aria-hidden)
+ *   Lico.uso(pose)                        -> <svg><use> a un sprite compartido (decorativo y liviano;
+ *                                            sin animaciones de partes internas: usar solo en toasts / vacíos)
  * Las animaciones (rebote, parpadeo, saludo) viven en tema-lico.css (.lico-svg ...).
  */
 (function () {
   'use strict';
 
-  function licoSvg(pose) {
+  var POSES = ['saluda', 'explica', 'alerta', 'celebra'];
+  var VIEWBOX = '-6 -4 232 228';
+  var poseValida = function (p) { return POSES.indexOf(p) >= 0 ? p : 'saluda'; };
+
+  function licoSvg(pose, opts) {
+    pose = poseValida(pose);
+    var a11y = opts && opts.decorativo
+      ? 'aria-hidden="true" focusable="false"'
+      : 'role="img" aria-label="Lico, la mascota de licencias de conducir"';
     var INK = '#23262a', AZ = '#26388c';
     var brazo = function (d) {
       return '<path d="' + d + '" stroke="' + AZ + '" stroke-width="9" fill="none" stroke-linecap="round"/>';
@@ -56,7 +67,7 @@
       cara = ojos(0) + bocaAbierta;
     }
 
-    return '<svg class="lico-svg" viewBox="-6 -4 232 228" role="img" aria-label="Lico, la mascota de licencias de conducir">' +
+    return '<svg class="lico-svg" viewBox="' + VIEWBOX + '" ' + a11y + '>' +
       '<ellipse cx="90" cy="214" rx="52" ry="7" fill="rgba(27,33,80,.18)"/>' +
       '<g class="lico-cuerpo">' +
         '<rect x="52" y="160" width="14" height="30" rx="7" fill="' + AZ + '"/><rect x="104" y="160" width="14" height="30" rx="7" fill="' + AZ + '"/>' +
@@ -80,11 +91,33 @@
     var els = document.querySelectorAll('[data-lico]');
     for (var i = 0; i < els.length; i++) {
       if (!els[i].querySelector('svg')) {
-        els[i].insertAdjacentHTML('afterbegin', licoSvg(els[i].getAttribute('data-lico')));
+        var oculto = !!els[i].closest('[aria-hidden="true"]');
+        els[i].insertAdjacentHTML('afterbegin', licoSvg(els[i].getAttribute('data-lico'), { decorativo: oculto }));
       }
     }
   }
 
-  window.Lico = { svg: licoSvg, mount: montarLicos };
+  // ---- Sprite: cada pose se construye una sola vez como <symbol> en un <svg> oculto ----
+  function asegurarSimbolo(pose) {
+    var id = 'lico-pose-' + pose;
+    if (document.getElementById(id)) return id;
+    var sprite = document.getElementById('lico-sprite');
+    if (!sprite) {
+      sprite = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      sprite.id = 'lico-sprite';
+      sprite.setAttribute('aria-hidden', 'true');
+      sprite.setAttribute('style', 'position:absolute;width:0;height:0;overflow:hidden');
+      (document.body || document.documentElement).appendChild(sprite);
+    }
+    var interior = licoSvg(pose, { decorativo: true }).replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
+    sprite.insertAdjacentHTML('beforeend', '<symbol id="' + id + '" viewBox="' + VIEWBOX + '">' + interior + '</symbol>');
+    return id;
+  }
+  function licoUso(pose) {
+    var id = asegurarSimbolo(poseValida(pose));
+    return '<svg class="lico-svg lico-uso" viewBox="' + VIEWBOX + '" aria-hidden="true" focusable="false"><use href="#' + id + '"/></svg>';
+  }
+
+  window.Lico = { svg: licoSvg, uso: licoUso, mount: montarLicos };
   document.addEventListener('DOMContentLoaded', montarLicos);
 })();

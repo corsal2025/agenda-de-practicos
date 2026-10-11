@@ -115,11 +115,13 @@ function toast(msg, tipo = 'ok') {
   const pose = tipo === 'err' ? 'alerta' : (tipo === 'ok' && /agendada|asignada|[ée]xito|Aprobó|Importacion completada|bloques nuevos/i.test(String(msg))) ? 'celebra' : '';
   // El Lico de la cabecera reacciona unos segundos (gesto pequeño; no hace nada si Lico esta desactivado)
   if (pose && window.LicoJuegos) window.LicoJuegos.reaccionar(pose);
+  // ...y explica en su burbuja que paso (solo con Lico y consejos automaticos activos)
+  if (pose && window.LicoAsistente) window.LicoAsistente.explicar(msg);
   if (pose && window.Lico) {
     const ico = document.createElement('span');
     ico.className = 'toast-lico';
     ico.setAttribute('aria-hidden', 'true');
-    ico.innerHTML = window.Lico.svg(pose);
+    ico.innerHTML = window.Lico.uso(pose);
     t.appendChild(ico);
   }
   const txt = document.createElement('span');
@@ -140,7 +142,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 // ---- Lico en estados vacios (titulo y texto se escapan aqui: pasar texto plano) ----
 let pcTeniaPendientes = false; // para el confeti al dejar Por confirmar en cero
 function licoVacio(pose, titulo, texto) {
-  const svg = window.Lico ? window.Lico.svg(pose) : '';
+  const svg = window.Lico ? window.Lico.uso(pose) : '';
   return `<div class="lico-vacio lico-vacio-${esc(pose)}"><span class="lico-vacio-img" aria-hidden="true">${svg}</span>
     <div class="lico-vacio-txt"><b>${esc(titulo)}</b><span>${esc(texto)}</span></div></div>`;
 }
@@ -170,77 +172,8 @@ function licoConfeti(origen) {
   } catch { /* decorativo */ }
 }
 
-// ---- Lico en la cabecera: al pulsarlo dice una frase corta y se calla solo ----
-const FRASES_LICO = [
-  'Pulsa "Cómo usar el sistema" y te llevo de paseo por todas las pestañas.',
-  'El buscador de arriba encuentra por RUT, nombre o teléfono. Con 3 caracteres basta.',
-  'Por confirmar en cero es mi estado favorito. Hasta me dan ganas de bailar.',
-  'Si un bloque se libera o se pisa, la cita no se pierde: queda en la Papelera.',
-  'Las clases D y A5 solo van en su bloque especial. Yo no hago las reglas, pero las cumplo.',
-  'Antes de importar un Excel con "Reemplazar todo", respira hondo. Es irreversible.',
-  'El tema oscuro existe. Tus ojos de la tarde te lo agradecerán.',
-  'Un RUT con dígito verificador incorrecto no pasa. Ni conmigo de abogado.',
-  'En Reagendar, "Ver bloques libres" te muestra dónde hay cupo antes de mover a alguien.',
-  'Si pulsas de nuevo el resultado activo (Aprobó, Reprobó...), se borra. Así de simple.',
-  'Mi licencia está al día. ¿Y la tuya?',
-  'El Reporte de errores vacío es una obra de arte administrativa.',
-  'Revisa el teléfono y el correo del postulante: sin ellos no puedo avisarle de nada.',
-  'Cada bloque libre es un postulante más cerca de su licencia. Sin presión.'
-];
-// Consejos segun la pestaña abierta (se mezclan con los generales al pulsar a Lico)
-const FRASES_TAB = {
-  disponibles: ['Aquí ves los bloques libres. Filtra por clase de licencia antes de ofrecer una hora.', 'Un clic en un bloque libre abre el formulario de agendamiento. Revisa teléfono y correo.'],
-  agenda: ['Agenda: marca Aprobó, Reprobó o No asistió. Si te equivocas, pulsa de nuevo el resultado y se borra.', 'Bloquear un día o un tramo horario sin cita es un solo paso. Pon siempre el motivo.'],
-  reagendar: ['Reagendar: elige primero a la persona y mira los bloques libres antes de mover a nadie.', 'Quien no asistió o fue derivado aparece aquí. Que nadie se quede sin nueva hora.'],
-  porconfirmar: ['Por confirmar en cero es mi estado favorito. Hasta confeti sale.', 'Confirmar asistencia a tiempo evita bloques vacíos el día del examen.'],
-  dia: ['Agenda del día: elige formato y orientación antes de imprimir. Yo desaparezco al imprimir.', 'Revisa el diseño (hoja única o por examinador) según cómo lo vayan a leer en sala.'],
-  analitica: ['Estadísticas: compara períodos con calma. Los números cuentan una historia.', 'Si el rango no muestra datos, prueba ampliar las fechas.'],
-  papelera: ['La Papelera guarda las citas liberadas. Restaurar es mejor que volver a digitar.', 'Vaciar la Papelera es definitivo. Respira hondo antes de pulsar.'],
-  datos: ['Datos: haz un backup antes de importar un Excel. Con "Reemplazar todo" no hay vuelta atrás.', 'Generar la grilla crea bloques solo en días hábiles. Revisa el rango.'],
-  errores: ['El Reporte de errores vacío es una obra de arte administrativa.', 'Cada error trae su detalle: corrige el dato en origen y desaparece del reporte.']
-};
-function licoSaludoHora() {
-  const hr = new Date().getHours();
-  const s = hr < 12 ? 'Buenos días' : hr < 20 ? 'Buenas tardes' : 'Buenas noches';
-  return s + '. Soy Lico. Pulsa mi carita cuando quieras un consejo.';
-}
-function iniciarLicoCabecera() {
-  const btn = document.getElementById('head-lico');
-  const burbuja = document.getElementById('head-lico-burbuja');
-  if (!btn || !burbuja) return;
-  let ultimo = -1, timer = null;
-  const cerrar = () => {
-    clearTimeout(timer);
-    burbuja.hidden = true;
-    btn.classList.remove('habla');
-  };
-  const decir = (txt, ms) => {
-    burbuja.textContent = txt; // siempre como texto, nunca como HTML
-    burbuja.hidden = false;
-    btn.classList.add('habla');
-    clearTimeout(timer);
-    timer = setTimeout(cerrar, ms || 7000);
-  };
-  btn.addEventListener('click', () => {
-    const tab = (location.hash.slice(1) || 'disponibles').split('?')[0];
-    const propias = FRASES_TAB[tab] || [];
-    const pool = FRASES_LICO.concat(propias, propias); // las de la pestaña pesan el doble
-    let i;
-    do { i = Math.floor(Math.random() * pool.length); } while (i === ultimo && pool.length > 1);
-    ultimo = i;
-    decir(pool[i], 7000);
-  });
-  // Saludo segun la hora: una sola vez por sesion y solo con Lico activado
-  try {
-    if (!sessionStorage.getItem('agenda-lico-saludo') && (!window.LicoJuegos || window.LicoJuegos.activo())) {
-      sessionStorage.setItem('agenda-lico-saludo', '1');
-      setTimeout(() => { if (burbuja.hidden && !document.getElementById('tour-overlay')) decir(licoSaludoHora(), 5500); }, 1500);
-    }
-  } catch (_) { /* sin sessionStorage: sin saludo */ }
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !burbuja.hidden) cerrar(); });
-  document.addEventListener('click', (e) => { if (!burbuja.hidden && !e.target.closest('.head-lico-wrap')) cerrar(); });
-}
-iniciarLicoCabecera();
+// ---- Lico en la cabecera: consejos, resumen del dia e hitos viven en lico-asistente.js ----
+if (window.LicoAsistente) window.LicoAsistente.iniciar({ apiReciente, irA: (t) => irA(t), hoy: () => hoy(), sumarDias: (f, n) => sumarDias(f, n), licoConfeti });
 
 // Digito verificador de un RUT (formato limpio, solo digitos + K final).
 function rutDvEsperado(cuerpo) {
@@ -3413,6 +3346,7 @@ async function actualizarBadgePorConfirmar() {
     const rows = (await apiReciente('/agenda?estado=porconfirmar', 30e3))
       .filter((r) => r.fecha >= hoy() && r.fecha <= hasta);
     pintarBadge('badge-porconfirmar', rows.length);
+    if (window.LicoAsistente) window.LicoAsistente.notar('porconfirmar', rows.length);
   } catch (_) {
     pintarBadge('badge-porconfirmar', 0);
   }
@@ -3434,7 +3368,11 @@ async function actualizarBadgePapelera() {
 }
 // Cuenta solo error+warning (los que valen la pena mirar); "info" queda fuera
 // para no saturar el numerito con avisos de rutina (ej. citas sin resultado).
-const pintarBadgeErrores = (rep) => pintarBadge('badge-errores', rep.hallazgos.filter((h) => h.severidad !== 'info').length);
+const pintarBadgeErrores = (rep) => {
+  const n = rep.hallazgos.filter((h) => h.severidad !== 'info').length;
+  pintarBadge('badge-errores', n);
+  if (window.LicoAsistente) window.LicoAsistente.notar('errores', n);
+};
 // /errores recorre todas las citas (es el pedido mas pesado): el numerito se
 // recalcula como maximo 1 vez por minuto aunque entremedio se guarden cambios.
 // La pestaña "Reporte de errores" siempre trae el reporte fresco.
@@ -4471,7 +4409,7 @@ async function renderPasoTour(esPrimerRender = false) {
   $('#tour-desc').innerHTML = paso.descripcion;
   // Lico (kit "Lico"): pose del paso; por defecto explica, saluda al inicio y celebra al final
   const poseLico = paso.pose || (tourPasoActual === 0 ? 'saluda' : tourPasoActual === PASOS_TOUR.length - 1 ? 'celebra' : 'explica');
-  if (window.Lico) $('#tour-mascota').innerHTML = window.Lico.svg(poseLico);
+  if (window.Lico) $('#tour-mascota').innerHTML = window.Lico.svg(poseLico, { decorativo: true });
   $('#tour-prog').style.width = `${Math.round(((tourPasoActual + 1) / PASOS_TOUR.length) * 100)}%`;
   $('#tour-prev').disabled = tourPasoActual === 0;
 
