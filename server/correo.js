@@ -197,15 +197,22 @@ function confirmacion(bloque) {
   return enviar(bloque.correo, `Confirmación de tu hora de examen práctico - ${fFecha(bloque.fecha)} ${bloque.hora}`, cuerpo);
 }
 
+// "mañana" / "en N días" segun cuanto falte: los recordatorios atrasados (PC apagado) se envian igual.
+function cuandoFalta(fechaCita, hoy = require('./fechas').hoyISO()) {
+  const n = require('./tramite').diasEntre(hoy, fechaCita);
+  return n <= 1 ? { corto: 'mañana', largo: 'mañana', asunto: 'Es mañana' } : { corto: `en ${n} días`, largo: `dentro de ${n} días`, asunto: `Faltan ${n} días` };
+}
+
 function recordatorio(bloque) {
   const links = armarLinks(bloque);
+  const c = cuandoFalta(bloque.fecha);
   const cuerpo = plantilla({
-    titulo: 'Recordatorio oficial — Tu examen práctico es en 3 días',
-    intro: 'Te recordamos que tu examen práctico de conducir está programado para dentro de 3 días. Por favor confirma tu asistencia o reagenda si tienes un imprevisto:',
+    titulo: `Recordatorio oficial — Tu examen práctico es ${c.corto}`,
+    intro: `Te recordamos que tu examen práctico de conducir está programado para ${c.largo}. Por favor confirma tu asistencia o reagenda si tienes un imprevisto:`,
     bloque,
     links,
   });
-  return enviar(bloque.correo, `Recordatorio oficial (Faltan 3 días) - Examen práctico ${fFecha(bloque.fecha)} ${bloque.hora}`, cuerpo);
+  return enviar(bloque.correo, `Recordatorio oficial (${c.asunto}) - Examen práctico ${fFecha(bloque.fecha)} ${bloque.hora}`, cuerpo);
 }
 
 function solicitudConfirmacion(bloque) {
@@ -221,6 +228,7 @@ function solicitudConfirmacion(bloque) {
 
 let habilitadoForzado = null; // los tests pueden asignar correo.habilitado
 module.exports = {
+  cuandoFalta,
   get habilitado() { return habilitadoForzado !== null ? habilitadoForzado : selector.modoActual() !== 'ninguno'; },
   set habilitado(v) { habilitadoForzado = v; },
   modo: () => selector.modoActual(),

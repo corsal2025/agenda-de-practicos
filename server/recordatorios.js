@@ -1,5 +1,6 @@
 'use strict';
-// Recordatorio automático 3 días antes del examen práctico, por correo electrónico.
+// Recordatorio automático por correo para examenes de los proximos 3 dias (desde mañana).
+// Usa una ventana y no un dia exacto: si el PC estuvo apagado ese dia, el recordatorio se envia al encender.
 const crypto = require('node:crypto');
 const { db } = require('./db');
 const correo = require('./correo');
@@ -13,14 +14,14 @@ function tresDiasISO() {
 const SELECT = `
   SELECT a.*, e.nombre AS examinador
   FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
-  WHERE a.fecha = ? AND a.bloqueado = 0 AND (a.rut IS NOT NULL OR a.nombre IS NOT NULL)
+  WHERE a.fecha > ? AND a.fecha <= ? AND a.bloqueado = 0 AND (a.rut IS NOT NULL OR a.nombre IS NOT NULL)
     AND a.correo IS NOT NULL AND a.correo != '' AND a.correo_recordatorio_enviado = 0
 `;
 
 async function enviarPendientes() {
   if (!correo.habilitado) return { enviados: 0, habilitado: false };
   const fechaObjetivo = tresDiasISO();
-  const filas = db.prepare(SELECT).all(fechaObjetivo);
+  const filas = db.prepare(SELECT).all(hoyISO(), fechaObjetivo);
   let enviados = 0;
   for (const bloque of filas) {
     if (!bloque.token_confirmacion) {
