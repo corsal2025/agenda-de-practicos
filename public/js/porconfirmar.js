@@ -20,6 +20,7 @@ async function renderPorConfirmar() {
           <button class="btn sec chico" id="pc-refrescar" title="Actualizar lista">↻ Actualizar</button>
           <button class="btn chico" id="btn-enviar-correos-masivos" title="Enviar enlace de confirmación por correo a todos los pendientes">✉ Enviar correos a pendientes</button>
           <button class="btn chico sec" id="btn-correo-prueba" style="color:var(--azul);font-weight:600" title="Enviar correos de prueba dirigidos a tu correo">🧪 Prueba a mi correo</button>
+          <span class="muted" id="pc-correo-modo" style="font-size:12px">${(() => { const m = (META && META.correo && META.correo.modo) || 'ninguno'; return m === 'outlook' ? 'Correo: vía Outlook' : m === 'smtp' ? 'Correo: vía SMTP' : 'Correo: no configurado'; })()}</span>
         </div>
       </div>
       <div class="fila" style="margin-top:1rem;gap:12px;align-items:flex-end">

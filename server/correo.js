@@ -4,8 +4,13 @@ const nodemailer = require('nodemailer');
 const { SMTP, URL_PUBLICA, PUERTO } = require('./config');
 const { log } = require('./db');
 const { esc } = require('./html');
+const outlook = require('./correo-outlook');
 
-const habilitado = Boolean(SMTP.host && SMTP.user && SMTP.pass);
+const smtpConfigurado = Boolean(SMTP.host && SMTP.user && SMTP.pass);
+const MODOS = new Set(['smtp', 'outlook', 'auto']);
+const MODO_CONFIG = MODOS.has(String(process.env.CORREO_MODO || '').toLowerCase())
+  ? String(process.env.CORREO_MODO).toLowerCase() : 'auto';
+const ERRORES_CAMBIO_OUTLOOK = new Set(['EAUTH', 'ECONNECTION']);
 const baseUrl = URL_PUBLICA || `http://localhost:${PUERTO}`;
 
 function fFecha(iso) {
@@ -13,7 +18,7 @@ function fFecha(iso) {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : String(iso || '');
 }
 
-const transporte = habilitado
+const transporte = smtpConfigurado
   ? nodemailer.createTransport({
       host: SMTP.host, port: SMTP.port, secure: SMTP.secure,
       auth: { user: SMTP.user, pass: SMTP.pass },
@@ -109,18 +114,67 @@ INSTRUCCIONES OBLIGATORIAS (Ley de Tránsito N° 18.290):
   };
 }
 
-async function enviar(destinatario, asunto, cuerpo) {
-  if (!habilitado || !destinatario) return false;
-  try {
-    await transporte.sendMail({ from: SMTP.from, to: destinatario, subject: asunto, text: cuerpo.text, html: cuerpo.html });
-    module.exports.ultimoError = null;
-    return true;
-  } catch (e) {
-    // Expuesto para que los envios masivos detecten errores sistemicos (EAUTH, ECONNECTION...).
-    module.exports.ultimoError = e;
-    log(null, 'correo_error', `${destinatario}: ${e.message}`);
+// Seleccion de transporte (pura, con dependencias inyectadas para test).
+// modo: 'smtp' | 'outlook' | 'auto'. En auto: SMTP primero; ante EAUTH/ECONNECTION
+// se pasa a Outlook por el resto de la ejecucion (se registra una sola vez).
+function crearSelector({ modo, smtpConfigurado, smtpEnviar, outlook, avisar = () => {} }) {
+  let smtpCaido = false;
+  function usaSmtp() {
+    if (modo === 'smtp') return smtpConfigurado;
+    if (modo === 'auto') return smtpConfigurado && !smtpCaido;
     return false;
   }
+  function usaOutlook() { return modo !== 'smtp' && outlook.disponibleSync(); }
+  function modoActual() {
+    if (usaSmtp()) return 'smtp';
+    if (usaOutlook()) return 'outlook';
+    return 'ninguno';
+  }
+  async function porOutlook(msg) {
+    if (!(await outlook.disponible())) return { ok: false, error: new Error('Outlook no disponible'), via: 'ninguno' };
+    const ok = await outlook.enviar(msg);
+    return { ok, error: ok ? null : (outlook.ultimoError || new Error('Error enviando por Outlook')), via: 'outlook' };
+  }
+  async function enviar(msg) {
+    if (usaSmtp()) {
+      try {
+        await smtpEnviar(msg);
+        return { ok: true, error: null, via: 'smtp' };
+      } catch (e) {
+        if (modo === 'auto' && ERRORES_CAMBIO_OUTLOOK.has(e && e.code) && (await outlook.disponible())) {
+          smtpCaido = true;
+          avisar(`SMTP fallo (${e.code}); se usara Outlook por el resto de la ejecucion.`);
+          return porOutlook(msg);
+        }
+        return { ok: false, error: e, via: 'smtp' };
+      }
+    }
+    if (modo === 'smtp') return { ok: false, error: null, via: 'ninguno' };
+    return porOutlook(msg);
+  }
+  return { enviar, modoActual };
+}
+
+const selector = crearSelector({
+  modo: MODO_CONFIG,
+  smtpConfigurado,
+  smtpEnviar: (m) => transporte.sendMail({ from: SMTP.from, to: m.to, subject: m.subject, text: m.text, html: m.html }),
+  outlook,
+  avisar: (t) => { console.warn(`[correo] ${t}`); log(null, 'correo_error', t); },
+});
+// Chequeo de Outlook asincrono y perezoso (correo-outlook no hace nada en test ni fuera de Windows).
+if (MODO_CONFIG !== 'smtp') outlook.disponible().catch(() => {});
+
+async function enviar(destinatario, asunto, cuerpo) {
+  if (!destinatario) return false;
+  const r = await selector.enviar({ to: destinatario, subject: asunto, text: cuerpo.text, html: cuerpo.html });
+  if (r.ok) { module.exports.ultimoError = null; return true; }
+  if (r.error) {
+    // Expuesto para que los envios masivos detecten errores sistemicos (EAUTH, ECONNECTION...).
+    module.exports.ultimoError = r.error;
+    log(null, 'correo_error', `${destinatario}: ${r.error.message}`);
+  }
+  return false;
 }
 
 function armarLinks(bloque) {
@@ -165,4 +219,12 @@ function solicitudConfirmacion(bloque) {
   return enviar(bloque.correo, `Confirma tu asistencia - Examen práctico ${fFecha(bloque.fecha)} ${bloque.hora}`, cuerpo);
 }
 
-module.exports = { habilitado, confirmacion, recordatorio, solicitudConfirmacion, plantilla, ultimoError: null };
+let habilitadoForzado = null; // los tests pueden asignar correo.habilitado
+module.exports = {
+  get habilitado() { return habilitadoForzado !== null ? habilitadoForzado : selector.modoActual() !== 'ninguno'; },
+  set habilitado(v) { habilitadoForzado = v; },
+  modo: () => selector.modoActual(),
+  enviarPrueba: enviar,
+  crearSelector,
+  confirmacion, recordatorio, solicitudConfirmacion, plantilla, ultimoError: null,
+};

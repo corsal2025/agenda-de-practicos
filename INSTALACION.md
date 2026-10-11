@@ -154,6 +154,25 @@ aplicación en un servidor propio. Es un paso aparte; avisar cuando haga falta.
 
 ---
 
+## Correo: SMTP u Outlook
+
+Variables en `.env`:
+
+- `CORREO_MODO` = `smtp` | `outlook` | `auto` (por defecto `auto`).
+  - `smtp`: usa solo `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS`.
+  - `outlook`: envía a través de **Outlook clásico** instalado en el PC servidor (sin SMTP AUTH).
+  - `auto`: intenta SMTP si está configurado; si falla por autenticación o conexión (EAUTH/ECONNECTION), cambia a Outlook por el resto de la ejecución.
+- `OUTLOOK_CUENTA` (opcional): dirección de la cuenta desde la que enviar, por ejemplo `examen.practico@munivalpo.cl`. Si no se indica, se usa la cuenta predeterminada del perfil.
+
+Requisitos para el modo Outlook:
+
+- **Outlook clásico** instalado en el PC servidor y configurado con la cuenta (idealmente abierto, con la sesión iniciada por el mismo usuario de Windows que ejecuta la agenda).
+- El **nuevo Outlook** (Outlook for Windows / "Nuevo Outlook") **no es compatible**: no expone la automatización COM.
+- Outlook puede mostrar un aviso de seguridad ("un programa intenta enviar correo") si el antivirus no está al día o la política lo exige; en ese caso hay que permitirlo o pedir a informática que lo autorice.
+
+La pestaña **Por confirmar** muestra junto al botón de prueba el modo en uso ("Correo: vía Outlook", "vía SMTP" o "no configurado").
+Para probar manualmente: `node server/probar-correo.js tu.correo@munivalpo.cl` (envía un solo correo e indica el modo usado).
+
 ## Notas técnicas
 
 - `node:sqlite` es experimental en Node: al arrancar aparece un

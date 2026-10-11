@@ -355,6 +355,7 @@ app.get('/api/meta', wrap((req, res) => {
     feriados: feriados.listar(),
     rango_agenda: db.prepare('SELECT MIN(fecha) desde, MAX(fecha) hasta FROM agenda').get(),
     logo: logoDisponible(),
+    correo: { modo: correo.modo() },
     organismo: process.env.AGENDA_ORGANISMO || 'Municipalidad de Valparaíso',
     unidad: process.env.AGENDA_UNIDAD || 'Departamento de Licencias de Conducir',
   });
