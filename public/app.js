@@ -2154,9 +2154,15 @@ function clasesTagsHtml(clase) {
 }
 
 function pintarGrilla(cont, filas, fecha) {
-  const exs = estadoAgenda.examinador_id
+  let exs = estadoAgenda.examinador_id
     ? META.examinadores.filter((e) => String(e.id) === String(estadoAgenda.examinador_id))
     : META.examinadores.filter((e) => e.activo);
+  // En celular se muestra un examinador a la vez (el selector "Examinador" elige cuál).
+  if (!estadoAgenda.examinador_id && exs.length > 1 && window.matchMedia && window.matchMedia('(max-width: 600px)').matches) {
+    exs = exs.slice(0, 1);
+    const sel = document.getElementById('a-exam');
+    if (sel) sel.value = String(exs[0].id);
+  }
   if (!filas.length) {
     cont.className = '';
     cont.style.gridTemplateColumns = '';

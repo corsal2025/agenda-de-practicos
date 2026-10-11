@@ -1,0 +1,116 @@
+/* =====================================================================
+   Responsive: tablet (601–1023px) y celular (<=600px).
+   Escritorio (>=1024px) no se ve afectado.
+   ===================================================================== */
+
+/* ---------- Tablet ---------- */
+@media (max-width: 1023px) {
+  html, body { max-width: 100%; overflow-x: clip; }
+  header.top nav { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  header.top nav button { flex: 0 0 auto; white-space: nowrap; }
+  .tabla-scroll, .grilla-horizontal-wrap { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  #a-grid.grilla { overflow-x: auto; }
+  .panel { max-width: 100%; }
+  img, canvas, svg { max-width: 100%; }
+}
+@media (min-width: 601px) and (max-width: 1023px) {
+  /* Agenda vertical: como mínimo 2 columnas legibles; más examinadores = scroll dentro del panel */
+  #a-grid.grilla { grid-auto-columns: minmax(220px, 1fr); }
+  #a-grid.grilla > .g-head, #a-grid.grilla > div:not(.g-hora):not(.g-esquina) { min-width: 220px; }
+}
+
+/* ---------- Celular ---------- */
+@media (max-width: 600px) {
+  /* Panel de filtros: deja de ser fijo para no tapar el contenido */
+  .panel-fijo { position: static; }
+  .g-head, .g-esquina { position: static; }
+  .panel { padding-left: 12px; padding-right: 12px; }
+  .panel-fijo .fila > div { flex-wrap: wrap; width: 100%; }
+  .panel-fijo .campo { flex: 1 1 140px; min-width: 0; }
+
+  /* Objetivos táctiles */
+  .btn, button.btn, .btn-vista, header.top nav button, select, input[type="date"], input[type="text"], input[type="search"] { min-height: 44px; }
+  .vista-selector { display: none; } /* en celular siempre una columna */
+
+  /* Agenda: un examinador a la vez, una sola columna de tarjetas */
+  #a-grid.grilla { grid-template-columns: 52px minmax(0, 1fr) !important; grid-auto-rows: auto; }
+  #a-grid .g-hora { font-size: 13px; }
+  .grilla-horizontal-wrap { overflow-x: auto; }
+
+  /* Tablas -> tarjetas apiladas */
+  .tabla-scroll { border: 0; box-shadow: none; overflow-x: visible; max-height: none !important; }
+  table.tabla-responsiva, table.tabla-responsiva tbody, table.tabla-responsiva tr, table.tabla-responsiva td { display: block; width: 100%; }
+  table.tabla-responsiva thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  table.tabla-responsiva tr {
+    background: var(--papel); border: 1px solid var(--linea); border-radius: 12px;
+    margin: 0 0 10px; padding: 6px 10px; box-shadow: var(--sh);
+  }
+  table.tabla-responsiva td {
+    display: flex; gap: 10px; justify-content: space-between; align-items: flex-start;
+    text-align: right !important; border: 0; border-bottom: 1px solid var(--linea); padding: 8px 0;
+    white-space: normal; word-break: break-word; min-width: 0;
+  }
+  table.tabla-responsiva td:last-child { border-bottom: 0; }
+  table.tabla-responsiva td::before {
+    content: attr(data-label); flex: 0 0 40%; text-align: left;
+    font-size: 12px; font-weight: 700; color: var(--tinta-3); text-transform: uppercase; letter-spacing: .03em;
+  }
+  table.tabla-responsiva td.sin-label { display: block; text-align: left !important; }
+  table.tabla-responsiva td.sin-label::before { content: none; }
+  /* Celdas de acciones: botones a todo el ancho */
+  table.tabla-responsiva td.sin-label .btn, table.tabla-responsiva td:has(> .btn:only-child) .btn { width: 100%; justify-content: center; }
+  table.tabla-responsiva td.sin-label { display: flex; flex-wrap: wrap; gap: 8px; }
+  table.tabla-responsiva td.sin-label > * { flex: 1 1 100%; }
+  table.tabla-responsiva td.sin-label > .lico-vacio { flex: 1 1 100%; }
+
+  /* Tablas que no se apilan (mapa de calor, etc.) siguen con scroll interno */
+  .tabla-scroll:has(table:not(.tabla-responsiva)) { overflow-x: auto; }
+
+  /* Estadísticas */
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .grafico { height: 240px; width: 100%; }
+  .grid2 { grid-template-columns: 1fr; }
+
+  /* Modales: pantalla completa */
+  .overlay { padding: 0; }
+  .modal, .modal.modal-lg, .modal.lateral {
+    width: 100%; max-width: 100%; min-height: 100vh; min-height: 100dvh; border-radius: 0; border-width: 0;
+    display: flex; flex-direction: column;
+  }
+  .modal .cuerpo { flex: 1; grid-template-columns: 1fr; }
+  .modal footer { flex-wrap: wrap; position: sticky; bottom: 0; background: var(--papel); }
+  .modal footer .btn { flex: 1 1 140px; }
+  .modal header .x { min-width: 44px; min-height: 44px; }
+
+  /* Guía interactiva: tarjeta abajo, ancho de pantalla */
+  .tour-card {
+    width: calc(100vw - 24px) !important; max-width: calc(100vw - 24px) !important;
+    left: 12px !important; right: 12px !important; top: auto !important; bottom: 12px !important;
+    max-height: 60vh; overflow-y: auto; padding: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  header.top nav { scroll-behavior: auto; }
+}
+
+/* Grillas de paneles (Estadisticas): las columnas no deben crecer por su contenido */
+@media (max-width: 1023px) {
+  .grid2, .grid3 { grid-template-columns: minmax(0, 1fr); }
+  .grid2 > *, .grid3 > * { min-width: 0; }
+  .grafico, .grafico canvas { max-width: 100%; }
+}
+
+/* Tarjetas de tablas en celular: los botones de accion bajan de linea en vez de salirse */
+@media (max-width: 600px) {
+  table.tabla-responsiva td.nw, table.tabla-responsiva td .nw { white-space: normal; }
+  table.tabla-responsiva td { flex-wrap: wrap; min-width: 0; }
+  table.tabla-responsiva td > div, table.tabla-responsiva td > span { flex-wrap: wrap; max-width: 100%; }
+  table.tabla-responsiva td .btn { flex: 1 1 auto; }
+}
+
+/* La vista Examinador es para celular/tablet: en escritorio no ocupa lugar en el menu
+   (sigue disponible en /#examinador). */
+@media (min-width: 1024px) {
+  header.top nav button[data-tab="examinador"] { display: none; }
+}
