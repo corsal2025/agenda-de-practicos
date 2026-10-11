@@ -23,7 +23,8 @@ const diasTxt = (n) => `${n} día${n === 1 ? '' : 's'}`;
 // Badge de cuenta regresiva: verde > 30, ambar 8-30, rojo <= 7, vencido si dias <= 0.
 function cuentaRegresivaHtml(dias, vence) {
   if (dias == null) return '';
-  const cls = dias <= 7 ? 'reprob' : dias <= 30 ? 'reag' : 'aprob';
+  // 14 dias o menos: rojo y parpadeando (ultimas dos semanas antes de perder el tramite).
+  const cls = dias <= 14 ? 'reprob urgente' : dias <= 30 ? 'reag' : 'aprob';
   const txt = dias <= 0 ? `⛔ Vencido hace ${diasTxt(-dias)}` : `⏳ Quedan ${diasTxt(dias)}`;
   return `<span class="badge ${cls} cuenta-tramite" title="El trámite vence el ${esc(fFecha(vence))}">${txt}</span>`;
 }

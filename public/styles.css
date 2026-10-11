@@ -175,13 +175,13 @@ header.top::after {
 .icono-btn:hover { background: var(--linea-2); color: var(--tinta); }
 
 header.top nav {
-  grid-column: 1 / -1; display: flex; gap: 16px; flex-wrap: nowrap; align-items: center;
-  overflow-x: auto; scrollbar-width: none; margin-top: 10px; padding-bottom: 2px;
+  grid-column: 1 / -1; display: flex; gap: 4px 2px; flex-wrap: wrap; align-items: center;
+  justify-content: center; margin-top: 10px; padding-bottom: 2px;
 }
 header.top nav::-webkit-scrollbar { display: none; }
 header.top nav button {
   background: transparent; border: 0; border-bottom: 3px solid transparent;
-  padding: 10px 14px 12px; font-size: 13.5px; font-weight: 600; color: var(--tinta-2);
+  padding: 8px 9px 10px; font-size: 13.5px; font-weight: 600; color: var(--tinta-2);
   white-space: nowrap;
   transition: color .12s, border-color .12s, background-color .12s;
   display: inline-flex; align-items: center; gap: 7px;
@@ -1807,3 +1807,10 @@ tbody tr:first-child td { border-top: 0; }
 /* Cuenta regresiva en la franja superior de la tarjeta, a la izquierda del aviso ⚠ */
 .slot-top { display: flex; justify-content: center; padding-right: 16px; margin: -2px 0 0; }
 .slot-top .badge { font-size: 10.5px; padding: 1px 7px; }
+
+header.top nav button[data-tab="vencimientos"] .nav-ico { color: var(--error, #dc2626); }
+
+/* Cuenta regresiva: parpadea en rojo cuando quedan 14 dias o menos */
+.cuenta-tramite.urgente { animation: parpadeo-urgente 1s ease-in-out infinite; }
+@keyframes parpadeo-urgente { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .cuenta-tramite.urgente { animation: none; outline: 2px solid currentColor; } }
