@@ -4,9 +4,9 @@
  *  1) Travesuras por inactividad: tras IDLE_MS sin actividad, Lico hace una gracia a pie de pantalla
  *     ('toc' | 'pelota' | 'duerme' | 'domina'). Cualquier mouse/tecla/clic/scroll/toque la despide al instante.
  *  2) Gracias en la cabecera: al pulsar el Lico de #head-lico hace una gracia en su sitio
- *     (salta, gira, baila, toc, duerme, pelota, domina). El consejo de texto lo sigue dando app.js.
+ *     (salta, gira, baila, toc, duerme, pelota, domina). El consejo de texto lo sigue dando lico-asistente.js.
  *  3) Reacciones: LicoJuegos.reaccionar('celebra' | 'alerta') cambia unos segundos la pose del Lico de la cabecera
- *     (la llama toast() en app.js tras un logro o un error).
+ *     (la llama toast() en public/js/core.js tras un logro o un error).
  *  4) Interruptor #lico-onoff: apaga/enciende todo lo animado. Se guarda en localStorage ('agenda-lico').
  *
  * Es solo decorativo (pointer-events: none), no aparece con la guía abierta, un cuadro de diálogo abierto, un
@@ -196,7 +196,7 @@
     }, g.ms);
   }
 
-  // Sin stopPropagation: el consejo de texto de app.js sigue funcionando.
+  // Sin stopPropagation: el consejo de texto de lico-asistente.js sigue funcionando.
   document.addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('.head-lico') : null;
     if (b) graciaLico(b);

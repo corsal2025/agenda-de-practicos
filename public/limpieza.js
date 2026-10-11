@@ -1,5 +1,5 @@
 /* ================= Corrección rápida de datos (dentro de Reporte de errores) =================
-   Usa helpers globales de app.js en tiempo de ejecución: api, toast, esc, fFecha, nom, abrirSlotPorId.
+   Usa helpers globales de public/js/core.js en tiempo de ejecución: api, toast, esc, fFecha, nom, abrirSlotPorId.
    Guarda con PATCH /agenda/:id/contacto (solo correo, teléfono y nombre, con validación en el servidor). */
 'use strict';
 

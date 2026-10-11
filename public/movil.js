@@ -1,5 +1,5 @@
 /* Vista movil del examinador (#examinador): registrar resultados en terreno.
- * Se carga antes de app.js; usa sus helpers (api, esc, toast, marcarResultado,
+ * Se carga antes de public/js/; usa sus helpers (api, esc, toast, marcarResultado,
  * cuentaRegresivaHtml, telWaDe, mensajeWaCita...) solo en tiempo de ejecucion. */
 (function () {
   const LS_EXAM = 'movil.examinador_id';

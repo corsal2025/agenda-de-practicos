@@ -1,5 +1,5 @@
 /* ================= Estadísticas: comparación, desgloses e informe mensual =================
-   Complementa renderAnalitica (app.js). Usa helpers globales: $, esc, fFecha, grafico, MARCA, FICHA_CSS. */
+   Complementa renderAnalitica (public/js/). Usa helpers globales: $, esc, fFecha, grafico, MARCA, FICHA_CSS. */
 'use strict';
 
 const AN_ESTADO = { a: null, escuelas: [] };

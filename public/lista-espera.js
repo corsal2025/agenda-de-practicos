@@ -1,5 +1,5 @@
 /* ================= Lista de espera automática: sugerir a quién dar un cupo libre =================
-   Usa helpers globales de app.js en tiempo de ejecución: api, modal, cerrarModal, toast, esc, fFecha, nom, $.
+   Usa helpers globales de public/js/core.js en tiempo de ejecución: api, modal, cerrarModal, toast, esc, fFecha, nom, $.
    No escribe por su cuenta: asigna con las rutas existentes
    (POST /cola-reagendar/:id/asignar y POST /agenda/:id/reagendar). */
 'use strict';

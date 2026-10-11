@@ -2,7 +2,7 @@
  * resumen del día, hitos celebrados una vez al día, pistas de los toasts y atajo Alt+L.
  *
  * - Lógica pura (consejos, resumen, hitos, "una vez al día") exportada para Node: test/lico.test.js.
- * - En el navegador expone window.LicoAsistente; app.js llama a LicoAsistente.iniciar(deps).
+ * - En el navegador expone window.LicoAsistente; public/js/core.js llama a LicoAsistente.iniciar(deps).
  * - Respeta el interruptor de Lico (LicoJuegos.activo()) y el de "consejos automáticos"
  *   (#lico-consejos, localStorage 'agenda-lico-consejos' = 'off').
  * - Todo el texto se inserta con textContent (nunca HTML con datos).
@@ -228,7 +228,7 @@
     if (window.LicoJuegos) window.LicoJuegos.reaccionar('celebra');
     if (consejosAuto()) decir(hito.texto, 6000);
   }
-  // app.js informa contadores reales (solo en caminos de éxito)
+  // public/js/ informa contadores reales (solo en caminos de éxito)
   function notar(clave, n) {
     if (typeof n !== 'number') return;
     var prev = {}; prev[clave] = vistos[clave];
