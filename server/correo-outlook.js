@@ -69,7 +69,8 @@ function enviarUno(msg, cuenta) {
 // Serializa los envios para evitar contencion COM.
 function enviar({ to, subject, html, text }) {
   if (!soportado()) return Promise.resolve(false);
-  const cuenta = process.env.OUTLOOK_CUENTA || null;
+  // Nunca enviar desde una cuenta cualquiera del perfil: por defecto la misma del correo municipal (SMTP_USER).
+  const cuenta = process.env.OUTLOOK_CUENTA || process.env.SMTP_USER || null;
   const p = cola.then(() => enviarUno({ to, subject, html: html || text }, cuenta));
   cola = p.catch(() => {});
   return p;
