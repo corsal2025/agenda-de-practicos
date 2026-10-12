@@ -166,3 +166,15 @@ html:not([data-escala="100"]) .top-inner { grid-template-columns: minmax(0, 1fr)
 html:not([data-escala="100"]) .top-brand-group { flex-wrap: wrap; gap: 10px 24px; }
 html:not([data-escala="100"]) .top-right { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; justify-content: flex-start; }
 html:not([data-escala="100"]) .estado { white-space: normal; }
+
+/* Escritorio: las pestanas se reparten todo el ancho disponible (tamano normal de letra) */
+@media (min-width: 1024px) {
+  html[data-escala="100"] header.top nav { justify-content: space-between; }
+  html[data-escala="100"] header.top nav > button,
+  html[data-escala="100"] header.top nav > .nav-mas { flex: 1 1 auto; justify-content: center; }
+  html[data-escala="100"] header.top nav > .nav-mas > button { width: 100%; justify-content: center; }
+}
+@media (min-width: 1024px) and (max-width: 1439px) {
+  html[data-escala="100"] header.top nav button { padding: 8px 10px 10px; font-size: 13.5px; gap: 7px; }
+  html[data-escala="100"] header.top nav .nav-ico { width: 16px; height: 16px; }
+}
