@@ -35,6 +35,42 @@ async function init({ forzarAgenda = false } = {}) {
 document.querySelectorAll('#nav button[data-tab]').forEach((b) => { b.onclick = () => irA(b.dataset.tab); });
 
 /* menu "Más" del nav: pestañas de uso ocasional (accesible con teclado) */
+// Pestañas "prioridad +": en escritorio, las del menú "Más" se muestran en la barra si caben;
+// solo las que no caben quedan dentro de "Más" (y "Más" se oculta si queda vacío).
+function acomodarNav() {
+  const nav = document.getElementById('nav');
+  const mas = document.getElementById('nav-mas');
+  const menu = document.getElementById('nav-mas-menu');
+  if (!nav || !mas || !menu) return;
+  const movibles = [...document.querySelectorAll('[data-nav-movible]')];
+  // 1) todas a la barra, antes de "Más"
+  movibles.forEach((b) => { b.removeAttribute('role'); nav.insertBefore(b, mas); });
+  mas.hidden = true;
+  if (window.innerWidth < 1024) return; // tablet/celular: la barra se desliza, sin menú
+  // 2) si no caben, se devuelven al menú en orden inverso de prioridad
+  const orden = [...movibles].sort((a, b) => Number(a.dataset.navMovible) - Number(b.dataset.navMovible));
+  while (nav.scrollWidth > nav.clientWidth + 1 && orden.length) {
+    mas.hidden = false;
+    const b = orden.shift();
+    b.setAttribute('role', 'menuitem');
+    menu.appendChild(b);
+  }
+  if (!menu.querySelector('button[data-tab]')) mas.hidden = true;
+}
+window.addEventListener('resize', () => setTimeout(acomodarNav, 0));
+document.fonts && document.fonts.ready && document.fonts.ready.then(acomodarNav);
+setTimeout(acomodarNav, 0);
+// Las insignias (contadores) cambian el ancho de las pestañas: re-acomodar cuando cambian.
+(function () {
+  const nav = document.getElementById('nav');
+  if (!nav || typeof MutationObserver !== 'function') return;
+  let t = null;
+  new MutationObserver((muts) => {
+    if (!muts.some((m) => m.target.closest && m.target.closest('.nav-badge') || (m.target.classList && m.target.classList.contains('nav-badge')))) return;
+    clearTimeout(t); t = setTimeout(acomodarNav, 50);
+  }).observe(nav, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
+}());
+
 (function navMas() {
   const btn = document.getElementById('nav-mas-btn');
   const menu = document.getElementById('nav-mas-menu');

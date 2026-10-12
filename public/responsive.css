@@ -175,6 +175,6 @@ html:not([data-escala="100"]) .estado { white-space: normal; }
   html[data-escala="100"] header.top nav > .nav-mas > button { width: 100%; justify-content: center; }
 }
 @media (min-width: 1024px) and (max-width: 1439px) {
-  html[data-escala="100"] header.top nav button { padding: 8px 10px 10px; font-size: 13.5px; gap: 7px; }
+  html[data-escala="100"] header.top nav button { padding: 8px 6px 10px; font-size: 13.5px; gap: 5px; }
   html[data-escala="100"] header.top nav .nav-ico { width: 16px; height: 16px; }
 }
