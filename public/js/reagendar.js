@@ -1,23 +1,6 @@
 /* ================= tab: DISPONIBLES ================= */
-let filtDisp = { desde: null, hasta: null, clase: '', examinador_id: '', rango: '' };
-const DISP_RANGOS = [['7', 'Próximos 7 días'], ['15', 'Próximos 15 días'], ['30', 'Próximos 30 días'], ['mes', 'Este mes'], ['prox', 'Próximo mes'], ['', 'Personalizado']];
+let filtDisp = { desde: null, hasta: null, clase: '', examinador_id: '' };
 const DISP_KEY_PLEGADO = 'disp-filtros-plegado';
-const DISP_DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-// Devuelve [desde, hasta] para un rango rápido, o null si es "Personalizado".
-function dispRangoFechas(r) {
-  const h = hoy();
-  if (/^\d+$/.test(r)) return [h, sumarDias(h, Number(r))];
-  const [y, m] = h.split('-').map(Number);
-  const iso = (yy, mm, dd) => `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
-  const ultimo = (yy, mm) => new Date(yy, mm, 0).getDate(); // mm 1-12
-  if (r === 'mes') return [h, iso(y, m, ultimo(y, m))];
-  if (r === 'prox') {
-    const ny = m === 12 ? y + 1 : y;
-    const nm = m === 12 ? 1 : m + 1;
-    return [iso(ny, nm, 1), iso(ny, nm, ultimo(ny, nm))];
-  }
-  return null;
-}
 function dispLeerPlegado() { try { return localStorage.getItem(DISP_KEY_PLEGADO) === '1'; } catch { return false; } }
 function dispGuardarPlegado(v) { try { localStorage.setItem(DISP_KEY_PLEGADO, v ? '1' : '0'); } catch { /* sin almacenamiento */ } }
 async function renderDisponibles() {
@@ -30,7 +13,6 @@ async function renderDisponibles() {
         <span class="muted disp-resumen" id="d-resumen" aria-live="polite"></span>
       </div>
       <div id="d-campos" ${plegado ? 'hidden' : ''}><div class="fila">
-      <div class="campo"><label for="d-rango">Rango</label><select id="d-rango">${DISP_RANGOS.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('')}</select></div>
       <div class="campo"><label for="d-desde">Desde</label><input type="date" id="d-desde" value="${esc(filtDisp.desde)}"></div>
       <div class="campo"><label for="d-hasta">Hasta</label><input type="date" id="d-hasta" value="${esc(filtDisp.hasta)}"></div>
       <div class="campo"><label for="d-clase">Clase</label><select id="d-clase">${opt(META.catalogos.clase, filtDisp.clase)}</select></div>
@@ -38,15 +20,11 @@ async function renderDisponibles() {
         ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}">${esc(e.nombre)}</option>`).join('')}</select></div>
       <button class="btn" id="d-buscar">Buscar</button>
     </div><p class="muted" id="d-regla"></p></div></div>
-    <div class="disp-acciones no-print" id="d-acciones" hidden>
-      <button type="button" class="btn chico" id="d-expandir">Expandir todo</button>
-      <button type="button" class="btn chico" id="d-contraer">Contraer todo</button>
-    </div>
-    <div class="disp-cab-fija" id="d-cab" aria-hidden="true" hidden><span>Hora</span><span>Examinador</span><span>Regla del bloque</span><span></span></div>
-    <div id="d-body"><div class="panel">Cargando...</div></div>`;
+    <div class="panel tabla-scroll"><table class="thead-fijo bajo-panel"><thead><tr>
+      <th class="c">Fecha</th><th class="c">Hora</th><th class="c">Examinador</th><th class="c">Regla del bloque</th><th class="c"></th>
+    </tr></thead><tbody id="d-body"><tr><td colspan="5">Cargando...</td></tr></tbody></table></div>`;
   $('#d-clase').value = filtDisp.clase;
   $('#d-exam').value = filtDisp.examinador_id;
-  $('#d-rango').value = filtDisp.rango || '';
   let total = null;
   const resumen = () => {
     const ex = META.examinadores.find((e) => String(e.id) === String(filtDisp.examinador_id));
@@ -69,41 +47,24 @@ async function renderDisponibles() {
   $('#d-plegar').onclick = () => plegar(!$('#d-campos').hidden);
   $('#d-resumen').hidden = !plegado;
   const buscar = async () => {
-    filtDisp = { desde: $('#d-desde').value, hasta: $('#d-hasta').value, clase: $('#d-clase').value, examinador_id: $('#d-exam').value, rango: $('#d-rango').value };
+    filtDisp = { desde: $('#d-desde').value, hasta: $('#d-hasta').value, clase: $('#d-clase').value, examinador_id: $('#d-exam').value };
     const pesada = META.clases_pesadas.includes(filtDisp.clase);
     $('#d-regla').textContent = pesada ? `Clase ${filtDisp.clase}: solo bloques de las ${META.hora_d_a5}.` : '';
-    const { rango, ...params } = filtDisp;
-    const q = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v)));
+    const q = new URLSearchParams(Object.fromEntries(Object.entries(filtDisp).filter(([, v]) => v)));
     const base = $('#d-regla').textContent;
     total = null;
     resumen();
     await cargarVista('disponibles', `/disponibles?${q}`, (rows) => pintarDisp(rows, base));
   };
-  const filaDisp = (r) => `<tr>
-      <td class="num c">${esc(r.hora)}</td><td class="c">${esc(r.examinador)}</td>
-      <td class="c"><span class="regla ${r.apto_pesada ? 'ok' : ''}">${r.apto_pesada ? 'D · A5 permitidas' : 'B, C, A1-A4 · sin D/A5'}</span></td>
-      <td class="c"><button class="btn chico" data-id="${Number(r.id)}">Agendar</button></td></tr>`;
-  const resumenDia = (fecha, lista) => {
-    const aptos = lista.filter((r) => r.apto_pesada);
-    const dia = DISP_DIAS[new Date(`${fecha}T12:00:00`).getDay()];
-    const n = lista.length;
-    const extra = aptos.length ? ` (${aptos.length} a las ${[...new Set(aptos.map((r) => r.hora))].join('/')} aptos D/A5)` : '';
-    return `<strong>${esc(dia)} ${esc(fFecha(fecha))}</strong> — ${n} cupo${n === 1 ? '' : 's'} libre${n === 1 ? '' : 's'}${esc(extra)}`;
-  };
   const pintarDisp = (rows, base) => {
     rows.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hora.localeCompare(b.hora) || a.examinador.localeCompare(b.examinador));
     total = rows.length;
     resumen();
-    const grupos = new Map();
-    rows.forEach((r) => { if (!grupos.has(r.fecha)) grupos.set(r.fecha, []); grupos.get(r.fecha).push(r); });
-    $('#d-acciones').hidden = grupos.size < 2;
-    $('#d-cab').hidden = !rows.length;
-    $('#d-body').innerHTML = rows.length
-      ? [...grupos].map(([fecha, lista], i) => `<details class="disp-dia"${i === 0 ? ' open' : ''}>
-        <summary>${resumenDia(fecha, lista)}</summary>
-        <table class="disp-tabla"><thead><tr><th class="c">Hora</th><th class="c">Examinador</th><th class="c">Regla del bloque</th><th class="c"></th></tr></thead>
-        <tbody>${lista.map(filaDisp).join('')}</tbody></table></details>`).join('')
-      : `<div class="panel"><table><tbody>${licoVacioFila(1, 'explica', 'Sin bloques libres en este rango', `No hay bloques libres entre ${fFecha(filtDisp.desde)} y ${fFecha(filtDisp.hasta)}. Los primeros meses suelen estar llenos: amplía la fecha "Hasta" o prueba un mes más adelante.`)}</tbody></table></div>`;
+    $('#d-body').innerHTML = rows.length ? rows.map((r) => `<tr>
+      <td class="num c">${esc(fFecha(r.fecha))}</td><td class="num c">${esc(r.hora)}</td><td class="c">${esc(r.examinador)}</td>
+      <td class="c"><span class="regla ${r.apto_pesada ? 'ok' : ''}">${r.apto_pesada ? 'D · A5 permitidas' : 'B, C, A1-A4 · sin D/A5'}</span></td>
+      <td class="c"><button class="btn chico" data-id="${Number(r.id)}">Agendar</button></td></tr>`).join('')
+      : licoVacioFila(5, 'explica', 'Sin bloques libres en este rango', `No hay bloques libres entre ${fFecha(filtDisp.desde)} y ${fFecha(filtDisp.hasta)}. Los primeros meses suelen estar llenos: amplía la fecha "Hasta" o prueba un mes más adelante.`);
     $('#d-regla').textContent = rows.length
       ? `${base ? base + ' · ' : ''}${rows.length} bloque(s) libre(s) en el rango.`
       : base;
@@ -112,16 +73,6 @@ async function renderDisponibles() {
     });
     setTimeout(ajustarOffsetsFijos, 0);
   };
-  const todos = (abrir) => $('#d-body').querySelectorAll('details.disp-dia').forEach((d) => { d.open = abrir; });
-  $('#d-expandir').onclick = () => todos(true);
-  $('#d-contraer').onclick = () => todos(false);
-  $('#d-rango').onchange = () => {
-    const f = dispRangoFechas($('#d-rango').value);
-    if (!f) return;
-    [$('#d-desde').value, $('#d-hasta').value] = f;
-    buscar();
-  };
-  ['#d-desde', '#d-hasta'].forEach((s) => { $(s).addEventListener('input', () => { $('#d-rango').value = ''; }); });
   $('#d-buscar').onclick = buscar;
   buscar();
 }

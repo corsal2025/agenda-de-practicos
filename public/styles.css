@@ -2011,7 +2011,7 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
   @page { size: A4; margin: 14mm; }
 }
 
-/* ---------- Citas disponibles: filtros plegables, grupos por día, cabecera fija ---------- */
+/* ---------- Citas disponibles: filtros plegables ---------- */
 .disp-filtros-cab { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
 .disp-filtros #d-campos { margin-top: .6rem; }
 .btn-plegar {
@@ -2020,41 +2020,14 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
 }
 .btn-plegar:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; border-radius: 4px; }
 .disp-resumen { font-size: 13px; }
-.disp-acciones { display: flex; gap: .5rem; justify-content: flex-end; margin: 0 0 .5rem; }
-/* Columnas compartidas entre la cabecera fija y las filas de cada día */
-.disp-cab-fija, .disp-tabla tr { display: grid; grid-template-columns: 14% 30% 36% 20%; align-items: center; }
-.disp-cab-fija {
-  position: sticky; top: calc(var(--alto-header) + var(--alto-panel-fijo)); z-index: 15;
-  background: var(--azul-th); color: #fff; border-bottom: 4px solid var(--marca-cian);
-  border-radius: var(--r) var(--r) 0 0;
-  font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
-}
-.disp-cab-fija span { padding: .6rem .75rem; text-align: center; }
-.disp-dia { background: var(--papel); border: 1px solid var(--linea); border-top: 0; }
-.disp-dia:last-child { border-radius: 0 0 var(--r) var(--r); margin-bottom: 1rem; }
-.disp-dia > summary {
-  cursor: pointer; padding: .65rem .9rem; background: var(--papel); color: var(--tinta, inherit);
-  border-bottom: 1px solid var(--linea);
-}
-.disp-dia > summary:focus-visible { outline: 2px solid var(--azul); outline-offset: -2px; }
-.disp-tabla { border: 0; }
-.disp-tabla thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.disp-tabla tbody, .disp-tabla tr { width: 100%; }
-.disp-tabla tbody { display: block; }
-.disp-tabla td { display: block; }
 
 /* Utilidad: encabezado de tabla fijo bajo la barra superior (escritorio) */
 .thead-fijo thead th { position: sticky; top: var(--alto-header); z-index: 4; }
+/* Bajo un panel .panel-fijo (p. ej. filtros de Citas disponibles) */
+.thead-fijo.bajo-panel thead th { top: calc(var(--alto-header) + var(--alto-panel-fijo)); }
 @media (min-width: 1024px) {
   .tabla-scroll:has(> table.thead-fijo) { overflow: visible; }
 }
-@media (max-width: 1023px) {
-  .disp-cab-fija { position: static; }
-}
 @media (max-width: 600px) {
-  .disp-cab-fija { display: none !important; }
-  .disp-tabla tr { display: block; }
-  .thead-fijo thead th { position: static; }
-  .disp-acciones { justify-content: stretch; }
-  .disp-acciones .btn { flex: 1 1 0; }
+  .thead-fijo thead th, .thead-fijo.bajo-panel thead th { position: static; }
 }
