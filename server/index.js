@@ -31,6 +31,9 @@ const sugerencias = require('./sugerencias');
 const limpieza = require('./limpieza');
 const vistas = require('./vistas');
 const intentos = require('./intentos');
+const asistencia = require('./asistencia');
+const { SELECT_BLOQUE, traer, marcarConfirmacionEnviada } = asistencia;
+const respuestasCorreo = require('./respuestas-correo');
 
 const app = express();
 app.disable('x-powered-by');
@@ -299,12 +302,6 @@ app.post('/reagendar/:id/:token/elegir', express.urlencoded({ extended: true }),
 } });
 
 
-// Marca la confirmacion como enviada solo si el bloque sigue con el mismo ocupante/token al
-// que se le envio (el SMTP puede tardar y el bloque pudo reasignarse mientras tanto).
-function marcarConfirmacionEnviada(b) {
-  return db.prepare('UPDATE agenda SET correo_confirmacion_enviado = 1 WHERE id = ? AND token_confirmacion IS ? AND rut IS ?')
-    .run(b.id, b.token_confirmacion ?? null, b.rut ?? null);
-}
 
 // Captura tanto errores sincronos como rechazos de handlers async.
 const wrap = (fn) => (req, res, next) => {
@@ -370,14 +367,6 @@ function logoDisponible() {
 }
 
 // ---------- AGENDA ----------
-const SELECT_BLOQUE = `
-  SELECT a.*, e.nombre AS examinador, f.nombre AS funcionario,
-         (a.rut IS NOT NULL OR a.nombre IS NOT NULL) AS ocupada
-  FROM agenda a
-  JOIN examinadores e ON e.id = a.examinador_id
-  LEFT JOIN funcionarios f ON f.id = a.funcionario_id
-`;
-const traer = (id) => db.prepare(`${SELECT_BLOQUE} WHERE a.id = ?`).get(Number(id));
 
 // Clases que exigen escuela de conductores (la vigencia de 6 meses aplica a todas las clases).
 const CLASES_TRAMITE = ['D', 'A5'];
@@ -937,24 +926,22 @@ app.post('/api/agenda/:id/confirmar', wrap(async (req, res) => {
   const bloque = traer(id);
   if (!bloque) throw bad('Bloque no encontrado', 404);
   const confirmo = valor === 1 || valor === true ? 1 : (valor === 0 || valor === false ? 0 : null);
-  const r = db.prepare(`UPDATE agenda SET confirmo_asistencia = ?, token_confirmacion = NULL, actualizado_en = datetime('now','localtime')
-    WHERE id = ? AND (rut IS NOT NULL OR nombre IS NOT NULL) AND bloqueado = 0`).run(confirmo, id);
-  if (!r.changes) throw bad('El bloque no tiene una cita.', 404);
-  logReq(req, id, 'confirmar_asistencia', `${bloque.fecha} ${bloque.hora} ${confirmo === 1 ? 'CONFIRMA' : confirmo === 0 ? 'NO ASISTE' : 'SIN CONFIRMAR'}`);
-
-  let correoEnviado = false;
-  const bloqueFinal = traer(id);
-  if (confirmo === 1 && bloqueFinal && bloqueFinal.correo && !bloqueFinal.correo_confirmacion_enviado) {
-    try {
-      const ok = await correo.confirmacion(bloqueFinal);
-      if (ok) marcarConfirmacionEnviada(bloqueFinal);
-      correoEnviado = Boolean(ok);
-    } catch (e) {
-      console.error('Error enviando correo de confirmacion:', e.message);
-    }
-  }
+  if (!asistencia.registrarAsistencia(id, confirmo, actorDe(req))) throw bad('El bloque no tiene una cita.', 404);
+  const correoEnviado = confirmo === 1 ? await asistencia.enviarConfirmacionSiFalta(id) : false;
 
   res.json({ ok: true, confirmo_asistencia: confirmo, correo_enviado: correoEnviado });
+}));
+
+// ---------- respuestas por correo (lectura automatica de Outlook) ----------
+app.get('/api/respuestas-correo', wrap((req, res) => {
+  const estado = ['revisar', 'aplicada', 'ignorada'].includes(req.query.estado) ? req.query.estado : null;
+  res.json({ items: respuestasCorreo.listar({ estado }), resumen: respuestasCorreo.resumen() });
+}));
+app.post('/api/respuestas-correo/:id/resolver', wrap(async (req, res) => {
+  const { accion, agenda_id } = req.body || {};
+  const r = respuestasCorreo.resolver(Number(req.params.id), { accion, agenda_id }, actorDe(req));
+  const correoEnviado = r.confirmar ? await asistencia.enviarConfirmacionSiFalta(r.agenda_id) : false;
+  res.json({ ok: true, estado: r.estado, agenda_id: r.agenda_id, correo_enviado: correoEnviado });
 }));
 
 app.post('/api/agenda/:id/resultado', wrap((req, res) => {
@@ -1023,10 +1010,7 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
 
   // Si no se indica destino_id, se deriva a la cola de pendientes de reagendar directamente
   if (!destino_id) {
-    const mot = String(motivo || 'POSTULANTE SOLICITA CAMBIO').trim();
-    db.prepare(`UPDATE agenda SET pendiente_reagendar = 1, pendiente_nota = ?, motivo_reagendamiento = ?, actualizado_en = datetime('now','localtime') WHERE id = ?`)
-      .run(mot, mot, origenId);
-    logReq(req, origenId, 'editar', `pendiente reagendar: ${mot}`);
+    asistencia.marcarPendienteReagendar(origenId, motivo, actorDe(req));
     return res.json({ ok: true, bloque: traer(origenId) });
   }
 
@@ -1525,6 +1509,7 @@ function iniciar() {
     }
     if (correo.habilitado) recordatorios.programar();
     else console.log('  Correos deshabilitados (falta configurar SMTP_HOST/SMTP_USER/SMTP_PASS)\n');
+    if (respuestasCorreo.programar()) console.log('  Lectura de respuestas por correo: cada 10 min (Outlook)');
   });
 }
 

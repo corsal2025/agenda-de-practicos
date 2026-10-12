@@ -40,6 +40,18 @@ async function renderPorConfirmar() {
       </div>
     </div>
 
+    <div class="panel" id="pc-respuestas" style="margin-top:.75rem">
+      <div class="fila" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <h3 style="margin:0;font-size:15px">✉ Respuestas por correo</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span class="pastilla" id="pc-resp-aplicadas">Aplicadas hoy: …</span>
+          <span class="pastilla" id="pc-resp-revisar">Por revisar: …</span>
+        </div>
+      </div>
+      <p class="muted" id="pc-resp-liberar" style="margin:.5rem 0 0;font-size:12.5px" hidden></p>
+      <div id="pc-resp-lista" style="margin-top:.5rem"></div>
+    </div>
+
     <div class="panel" style="margin-top:.75rem">
       <div class="pc-toolbar">
         <span class="pastilla" id="pc-sel-info">0 seleccionados</span>
@@ -255,7 +267,8 @@ async function renderPorConfirmar() {
 
   $('#pc-q').oninput = pintarLista;
   $('#pc-rango').onchange = cargarDatos;
-  $('#pc-refrescar').onclick = cargarDatos;
+  $('#pc-refrescar').onclick = () => { cargarDatos(); cargarRespuestasCorreo(); };
+  cargarRespuestasCorreo();
 
   if ($('#btn-enviar-correos-masivos')) {
     $('#btn-enviar-correos-masivos').onclick = async () => {
@@ -361,4 +374,53 @@ function colaWhatsApp(filas) {
   };
   ov.querySelector('#wa-cerrar').onclick = cerrarModal;
   pintar();
+}
+
+/* ---- Respuestas por correo (leídas automáticamente de Outlook) ---- */
+const RESP_ACCIONES = [
+  ['confirma', 'Confirmó', ''], ['no_asiste', 'No asiste', 'sec'], ['reagendar', 'Reagendar', 'sec'], ['ignorar', 'Ignorar', 'sec'],
+];
+async function cargarRespuestasCorreo() {
+  const cont = $('#pc-resp-lista');
+  if (!cont) return;
+  let datos;
+  try { datos = await api('/respuestas-correo?estado=revisar'); } catch (e) {
+    cont.innerHTML = `<p class="muted" style="font-size:12.5px">No se pudieron cargar las respuestas: ${esc(e.message)}</p>`;
+    return;
+  }
+  const r = datos.resumen || {};
+  $('#pc-resp-aplicadas').textContent = `Aplicadas hoy: ${Number(r.aplicadas_hoy) || 0}`;
+  $('#pc-resp-revisar').textContent = `Por revisar: ${Number(r.revisar) || 0}`;
+  const lib = $('#pc-resp-liberar');
+  const nLib = Number(r.por_liberar) || 0;
+  lib.hidden = !nLib;
+  lib.textContent = nLib ? `${nLib} ${nLib === 1 ? 'cita quedó' : 'citas quedaron'} como "No asiste" por correo: libera la hora desde la agenda si corresponde.` : '';
+  const items = datos.items || [];
+  if (!items.length) {
+    cont.innerHTML = '<p class="muted" style="font-size:12.5px;margin:0">No hay respuestas por revisar.</p>';
+    return;
+  }
+  cont.innerHTML = items.map((it) => {
+    const sugerida = it.agenda_id && it.cita_fecha
+      ? `Cita sugerida: ${esc(fFecha(it.cita_fecha))} ${esc(it.cita_hora)} — ${esc(it.cita_nombre || it.cita_rut || '')}`
+      : 'Sin cita asociada';
+    const botones = RESP_ACCIONES.map(([acc, txt, cls]) =>
+      `<button class="btn chico ${cls}" data-resp="${Number(it.id)}" data-acc="${acc}" ${acc !== 'ignorar' && !it.agenda_id ? 'disabled title="Sin cita asociada"' : ''}>${esc(txt)}</button>`).join(' ');
+    return `<div class="pc-resp-item" style="border-top:1px solid var(--borde, #e2e8f0);padding:.5rem 0">
+      <div style="font-size:13px"><b>${esc(it.remitente || 'Remitente desconocido')}</b> · <span class="muted">${esc(it.asunto || '')}</span></div>
+      <div style="font-size:12.5px;margin:.25rem 0;white-space:pre-wrap">${esc(it.extracto || '(sin texto)')}</div>
+      <div class="muted" style="font-size:12px;margin-bottom:.35rem">${sugerida}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${botones}</div>
+    </div>`;
+  }).join('');
+  cont.querySelectorAll('button[data-resp]').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await api(`/respuestas-correo/${b.dataset.resp}/resolver`, { method: 'POST', body: { accion: b.dataset.acc } });
+        toast('Respuesta registrada.', 'ok');
+      } catch (e) { toast(e.message, 'err'); }
+      cargarRespuestasCorreo();
+    };
+  });
 }

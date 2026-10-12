@@ -177,6 +177,9 @@ async function enviar(destinatario, asunto, cuerpo) {
   return false;
 }
 
+// Etiqueta del asunto: permite asociar las respuestas a la cita (server/correo-entrada.js).
+const etiqueta = (bloque) => (bloque && bloque.id ? ` [Cita ${bloque.id}]` : '');
+
 function armarLinks(bloque) {
   if (!bloque.token_confirmacion) return null;
   return {
@@ -194,7 +197,7 @@ function confirmacion(bloque) {
     bloque,
     links,
   });
-  return enviar(bloque.correo, `Confirmación de tu hora de examen práctico - ${fFecha(bloque.fecha)} ${bloque.hora}`, cuerpo);
+  return enviar(bloque.correo, `Confirmación de tu hora de examen práctico - ${fFecha(bloque.fecha)} ${bloque.hora}${etiqueta(bloque)}`, cuerpo);
 }
 
 // "mañana" / "en N días" segun cuanto falte: los recordatorios atrasados (PC apagado) se envian igual.
@@ -212,7 +215,7 @@ function recordatorio(bloque) {
     bloque,
     links,
   });
-  return enviar(bloque.correo, `Recordatorio oficial (${c.asunto}) - Examen práctico ${fFecha(bloque.fecha)} ${bloque.hora}`, cuerpo);
+  return enviar(bloque.correo, `Recordatorio oficial (${c.asunto}) - Examen práctico ${fFecha(bloque.fecha)} ${bloque.hora}${etiqueta(bloque)}`, cuerpo);
 }
 
 function solicitudConfirmacion(bloque) {
@@ -223,12 +226,12 @@ function solicitudConfirmacion(bloque) {
     bloque,
     links,
   });
-  return enviar(bloque.correo, `Confirma tu asistencia - Examen práctico ${fFecha(bloque.fecha)} ${bloque.hora}`, cuerpo);
+  return enviar(bloque.correo, `Confirma tu asistencia - Examen práctico ${fFecha(bloque.fecha)} ${bloque.hora}${etiqueta(bloque)}`, cuerpo);
 }
 
 let habilitadoForzado = null; // los tests pueden asignar correo.habilitado
 module.exports = {
-  cuandoFalta,
+  cuandoFalta, etiqueta,
   get habilitado() { return habilitadoForzado !== null ? habilitadoForzado : selector.modoActual() !== 'ninguno'; },
   set habilitado(v) { habilitadoForzado = v; },
   modo: () => selector.modoActual(),

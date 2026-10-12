@@ -62,6 +62,8 @@
     add('vencer', ve, (ve === 1 ? '1 trámite vence' : ve + ' trámites vencen') + ' en ' + DIAS_POR_VENCER + ' días o menos.', 'vencimientos', 'Ir a Por vencer');
     add('sintramite', st, 'Hoy hay ' + plural(st, 'cita', 'citas') + ' sin fecha de inicio de trámite.', 'agenda', 'Ir a Agenda');
     add('reagendar', re, plural(re, 'persona espera', 'personas esperan') + ' nueva hora en Reagendar.', 'reagendar', 'Ir a Reagendar');
+    var rc = num(c.respuestasRevisar);
+    add('respuestas', rc, 'Hay ' + plural(rc, 'respuesta', 'respuestas') + ' por correo por revisar.', 'porconfirmar', 'Ir a Por confirmar');
     add('errores', er, 'El Reporte de errores tiene ' + plural(er, 'hallazgo', 'hallazgos') + ' por revisar.', 'errores', 'Ir a Reporte de errores');
     return lista;
   }
@@ -168,7 +170,8 @@
     var pedir = function (p, ms) { return dep.apiReciente(p, ms || CACHE_MS).catch(function () { return null; }); };
     var r = await Promise.all([
       pedir('/agenda?estado=porconfirmar', 30e3), pedir('/cola-reagendar', 30e3), pedir('/agenda?estado=pendiente', 30e3),
-      pedir('/errores'), pedir('/tramites-por-vencer?filtro=30'), pedir('/agenda?fecha=' + hoy)
+      pedir('/errores'), pedir('/tramites-por-vencer?filtro=30'), pedir('/agenda?fecha=' + hoy),
+      pedir('/respuestas-correo?estado=revisar')
     ]);
     var ocupadasHoy = Array.isArray(r[5]) ? r[5].filter(function (b) { return !b.bloqueado && (b.rut || b.nombre); }) : null;
     var c = {
@@ -179,7 +182,8 @@
       errores: r[3] && Array.isArray(r[3].hallazgos) ? r[3].hallazgos.filter(function (h) { return h.severidad !== 'info'; }).length : null,
       porVencer: Array.isArray(r[4]) ? r[4].filter(function (x) { return x.dias_restantes_tramite <= DIAS_POR_VENCER; }).length : null,
       examenesHoy: ocupadasHoy ? ocupadasHoy.length : null,
-      sinTramiteHoy: ocupadasHoy ? ocupadasHoy.filter(function (b) { return !b.fecha_inicio_tramite; }).length : null
+      sinTramiteHoy: ocupadasHoy ? ocupadasHoy.filter(function (b) { return !b.fecha_inicio_tramite; }).length : null,
+      respuestasRevisar: r[6] && r[6].resumen ? r[6].resumen.revisar : null
     };
     cache = { t: Date.now(), c: c };
     return c;
