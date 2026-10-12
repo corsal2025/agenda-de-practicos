@@ -20,7 +20,7 @@ const PASOS_TOUR = [
     target: '#nav',
     titulo: 'Pestañas y módulos principales',
     icono: '🧭',
-    descripcion: 'Desde aquí accedes a todos los módulos: <b>Citas disponibles</b>, <b>Agenda</b>, <b>Reagendar</b>, <b>Por confirmar</b>, <b>Calendario</b>, <b>Agenda del día</b>, <b>Estadísticas</b> y el menú <b>Más ▾</b>. Los números de color junto a algunas pestañas son avisos pendientes. Esta guía los recorre uno por uno.'
+    descripcion: 'Desde aquí accedes a todos los módulos: <b>Citas disponibles</b>, <b>Agenda</b>, <b>Reagendar</b>, <b>Por confirmar</b>, <b>Agenda del día</b>, <b>Estadísticas</b> y el menú <b>Más ▾</b>. Los números de color junto a algunas pestañas son avisos pendientes. Esta guía los recorre uno por uno.'
   },
   {
     seccion: 'Entorno general',
@@ -366,24 +366,6 @@ const PASOS_TOUR = [
     titulo: 'Selección múltiple y envíos por lote',
     icono: '☑️',
     descripcion: 'Marca las <b>casillas</b> de cada fila (o la del encabezado para todas). Luego usa <b>Enviar correo de confirmación</b> para mandar el correo solo a los seleccionados (requiere el servicio de correo SMTP configurado), o <b>WhatsApp a seleccionados</b> para abrir una <b>cola de WhatsApp</b>: cada clic abre wa.me con el mensaje listo, <b>una persona a la vez</b>.'
-  },
-
-  /* ---------- Calendario ---------- */
-  {
-    seccion: 'Calendario',
-    tab: 'calendario',
-    target: '#cal-cont',
-    titulo: 'Calendario mensual',
-    icono: '📅',
-    descripcion: 'Vista del mes completo: cada día se colorea según su ocupación (<b>verde</b> mucho libre, <b>amarillo</b> medio, <b>rojo</b> lleno, <b>gris</b> feriado o fin de semana). Muestra cuántos cupos quedan libres y la marca <b>12:30 libre</b> cuando hay cupo apto para D/A5. Haz clic en un día para abrirlo en la Agenda.'
-  },
-  {
-    seccion: 'Calendario',
-    tab: 'calendario',
-    target: '#cal-hoy',
-    titulo: 'Cambiar de mes',
-    icono: '↔️',
-    descripcion: 'Usa las flechas para ir al mes anterior o siguiente, y <b>Hoy</b> para volver al mes actual. Arriba verás el total de cupos libres y el % de ocupación del mes.'
   },
 
   /* ---------- Agenda del día ---------- */

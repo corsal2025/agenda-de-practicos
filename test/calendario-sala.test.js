@@ -33,32 +33,6 @@ function slot(fecha, hora, extra = {}) {
 }
 const persona = { rut: '11.111.111-1', nombre: 'JUAN ANDRES GONZALEZ PEREZ', clase: 'B', contacto: '+56911111111', correo: 'a@b.cl' };
 
-test('calendario: rechaza mes invalido', async () => {
-  assert.equal((await get('/api/calendario?mes=2030-13')).status, 400);
-  assert.equal((await get('/api/calendario?mes=xx')).status, 400);
-});
-
-test('calendario: cuenta bloques por dia y marca feriados y fines de semana', async () => {
-  db.prepare("INSERT OR REPLACE INTO feriados (fecha, nombre) VALUES ('2031-03-05','Feriado X')").run();
-  slot('2031-03-03', '09:00', persona);
-  slot('2031-03-03', '09:30');
-  slot('2031-03-03', '12:30');
-  slot('2031-03-03', '13:00', { bloqueado: 1 });
-  const { status, datos } = await get('/api/calendario?mes=2031-03');
-  assert.equal(status, 200);
-  assert.equal(datos.dias.length, 31);
-  const d3 = datos.dias.find((d) => d.fecha === '2031-03-03');
-  assert.deepEqual(
-    { t: d3.total_bloques, o: d3.ocupados, l: d3.libres, b: d3.bloqueados, p: d3.libres_pesada, h: d3.es_habil, f: d3.feriado },
-    { t: 4, o: 1, l: 2, b: 1, p: 1, h: true, f: null },
-  );
-  const d5 = datos.dias.find((d) => d.fecha === '2031-03-05');
-  assert.equal(d5.feriado, 'Feriado X');
-  assert.equal(d5.es_habil, false);
-  assert.equal(datos.dias.find((d) => d.fecha === '2031-03-01').es_habil, false); // sabado
-  assert.equal(datos.dias.find((d) => d.fecha === '2031-03-04').total_bloques, 0);
-});
-
 test('iniciales: primer nombre y primer apellido', () => {
   assert.equal(iniciales('JUAN ANDRES GONZALEZ PEREZ'), 'J. G.');
   assert.equal(iniciales('maria soto'), 'M. S.');

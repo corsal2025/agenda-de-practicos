@@ -1234,12 +1234,7 @@ app.get('/api/dia', wrap((req, res) => {
   res.json({ fecha, examinadores: porExaminador });
 }));
 
-// ---------- CALENDARIO MENSUAL / SALA DE ESPERA ----------
-app.get('/api/calendario', wrap((req, res) => {
-  const r = vistas.calendarioMes(req.query.mes || hoyISO().slice(0, 7));
-  if (!r) throw bad('Mes inválido (formato AAAA-MM)');
-  res.json(r);
-}));
+// ---------- SALA DE ESPERA ----------
 // Pantalla publica (TV): solo hora, iniciales, clase, examinador y estado.
 app.get('/api/sala', wrap((req, res) => {
   const fecha = /^\d{4}-\d{2}-\d{2}$/.test(req.query.fecha || '') ? req.query.fecha : hoyISO();

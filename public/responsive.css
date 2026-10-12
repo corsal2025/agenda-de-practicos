@@ -133,15 +133,6 @@
 .cierre-acc { white-space:nowrap; text-align:right; }
 @media (max-width: 640px) { .cierre-acc { white-space:normal; } }
 
-/* Calendario mensual en telefono: lista vertical solo con dias habiles. */
-@media (max-width: 600px) {
-  .cal-grilla { grid-template-columns: 1fr; }
-  .cal-cab, .cal-vacio, .cal-nohabil { display: none; }
-  .cal-dia { flex-direction: row; align-items: center; min-height: 0; gap: 10px; flex-wrap: wrap; }
-  .cal-dow { display: inline; }
-  .cal-resumen { margin-left: 0; width: 100%; }
-}
-
 /* ===== Tamaño de letra (accesibilidad): escala proporcional de toda la interfaz ===== */
 html[data-escala="115"] body { zoom: 1.15; }
 html[data-escala="130"] body { zoom: 1.30; }

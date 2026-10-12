@@ -1,50 +1,10 @@
 'use strict';
-// Vistas de solo lectura: calendario mensual y pantalla de sala de espera.
+// Vista de solo lectura: pantalla de sala de espera.
 const { db } = require('./db');
-const { HORA_D_A5 } = require('./config');
-const { esHabil, hoyISO } = require('./fechas');
-const feriados = require('./feriados');
+const { hoyISO } = require('./fechas');
 
 const DURACION_MIN = 30;
-const RE_MES = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
-function calendarioMes(mes) {
-  const m = RE_MES.exec(String(mes || ''));
-  if (!m) return null;
-  const anio = Number(m[1]);
-  const nMes = Number(m[2]);
-  const ultimo = new Date(anio, nMes, 0).getDate();
-  const desde = `${mes}-01`;
-  const hasta = `${mes}-${String(ultimo).padStart(2, '0')}`;
-  const filas = db.prepare(`
-    SELECT fecha,
-      COUNT(*) total_bloques,
-      SUM(CASE WHEN bloqueado = 1 THEN 1 ELSE 0 END) bloqueados,
-      SUM(CASE WHEN bloqueado = 0 AND (rut IS NOT NULL OR nombre IS NOT NULL) THEN 1 ELSE 0 END) ocupados,
-      SUM(CASE WHEN bloqueado = 0 AND rut IS NULL AND nombre IS NULL THEN 1 ELSE 0 END) libres,
-      SUM(CASE WHEN bloqueado = 0 AND rut IS NULL AND nombre IS NULL AND hora = ? THEN 1 ELSE 0 END) libres_pesada
-    FROM agenda WHERE fecha BETWEEN ? AND ? GROUP BY fecha
-  `).all(HORA_D_A5, desde, hasta);
-  const porFecha = new Map(filas.map((f) => [f.fecha, f]));
-  const nombres = new Map(feriados.listar().filter((f) => f.fecha >= desde && f.fecha <= hasta).map((f) => [f.fecha, f.nombre]));
-  const set = feriados.set();
-  const dias = [];
-  for (let d = 1; d <= ultimo; d++) {
-    const fecha = `${mes}-${String(d).padStart(2, '0')}`;
-    const f = porFecha.get(fecha) || {};
-    dias.push({
-      fecha,
-      total_bloques: Number(f.total_bloques || 0),
-      ocupados: Number(f.ocupados || 0),
-      libres: Number(f.libres || 0),
-      bloqueados: Number(f.bloqueados || 0),
-      libres_pesada: Number(f.libres_pesada || 0),
-      feriado: nombres.get(fecha) || null,
-      es_habil: esHabil(fecha, set),
-    });
-  }
-  return { mes, dias };
-}
 
 // "JUAN ANDRES GONZALEZ PEREZ" -> "J. G." (primer nombre + primer apellido, formato chileno).
 function iniciales(nombre) {
@@ -87,4 +47,4 @@ function salaHoy(fecha = hoyISO(), ahora = new Date()) {
   return { fecha, citas };
 }
 
-module.exports = { calendarioMes, iniciales, estadoSala, salaHoy };
+module.exports = { iniciales, estadoSala, salaHoy };
