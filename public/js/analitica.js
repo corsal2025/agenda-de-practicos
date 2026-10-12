@@ -158,7 +158,7 @@ async function renderVencimientos() {
           </select></div>
       </div>
       <p class="muted">Citas de todas las clases desde hoy (y pasadas de los últimos 30 días sin resultado). El trámite vence 6 meses después de su inicio.</p>
-      <div class="tabla-scroll"><table class="tabla-vencimientos"><thead><tr>
+      <div class="tabla-scroll"><table class="tabla-vencimientos thead-fijo"><thead><tr>
         <th class="c">Días restantes</th><th>Nombre</th><th>RUT</th><th class="c">Clase</th><th>Teléfono</th>
         <th class="c">Fecha cita</th><th>Examinador</th><th class="c">Vence</th>
       </tr></thead><tbody id="ven-body"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>

@@ -368,8 +368,23 @@ function ajustarOffsetsFijos() {
   const header = document.querySelector('header.top');
   const panelFijo = document.querySelector('.panel-fijo');
   const raiz = document.documentElement.style;
-  if (header) raiz.setProperty('--alto-header', `${Math.round(header.getBoundingClientRect().height)}px`);
-  if (panelFijo) raiz.setProperty('--alto-panel-fijo', `${Math.round(panelFijo.getBoundingClientRect().height)}px`);
+  // Con letra agrandada (zoom en body) las medidas del viewport se pasan a unidades locales.
+  const z = parseFloat(getComputedStyle(document.body).zoom) || 1;
+  if (header) raiz.setProperty('--alto-header', `${Math.round(Math.max(header.getBoundingClientRect().bottom, header.getBoundingClientRect().height) / z)}px`);
+  if (panelFijo) raiz.setProperty('--alto-panel-fijo', `${Math.round(panelFijo.getBoundingClientRect().height / z)}px`);
+}
+// Recalcula solo cuando el encabezado o la vista cambian de tamaño (fuentes, filtros plegados,
+// datos que llegan despues): evita barras fijas que quedan escondidas bajo el panel.
+if (typeof ResizeObserver === 'function') {
+  const obsOffsets = new ResizeObserver(() => setTimeout(ajustarOffsetsFijos, 0));
+  const observarOffsets = () => {
+    const h = document.querySelector('header.top');
+    const v = document.getElementById('view');
+    if (h) obsOffsets.observe(h);
+    if (v) obsOffsets.observe(v);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', observarOffsets);
+  else observarOffsets();
 }
 function ruta() {
   cerrarModal();
@@ -378,9 +393,9 @@ function ruta() {
   genVista++; // las cargas pendientes de la pestaña anterior ya no pintan
   (tabs[tab] || renderAgenda)();
   if (window.Movil) window.Movil.trasRuta(tab);
-  requestAnimationFrame(ajustarOffsetsFijos);
+  setTimeout(ajustarOffsetsFijos, 0);
 }
-window.addEventListener('resize', () => requestAnimationFrame(ajustarOffsetsFijos));
+window.addEventListener('resize', () => setTimeout(ajustarOffsetsFijos, 0));
 window.addEventListener('hashchange', ruta);
 
 function textoForzar(b) {

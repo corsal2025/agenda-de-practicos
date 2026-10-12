@@ -182,7 +182,7 @@ const ListaEspera = (() => {
           <select id="le-clase"><option value="">Todas las clases</option></select>
           <input id="le-q" type="search" placeholder="Buscar nombre, RUT o correo" style="flex:1;min-width:180px">
         </div>
-        <div class="tabla-scroll" id="le-tabla"><table><thead><tr>
+        <div class="tabla-scroll" id="le-tabla"><table class="thead-fijo"><thead><tr>
           <th class="c">#</th><th>Nombre</th><th>RUT</th><th class="c">Clase</th><th class="c">Origen</th>
           <th class="c">Esperando (días)</th><th class="c">Trámite</th><th class="c">Cita actual</th>
           <th class="c">Cupos disponibles</th><th class="c">Acción</th>

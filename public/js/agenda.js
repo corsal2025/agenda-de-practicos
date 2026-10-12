@@ -74,7 +74,7 @@ async function renderAgenda() {
     pintarGrilla($('#a-grid'), filas, fecha);
     restaurarScroll();
     avisoCierreDia(fecha);
-    requestAnimationFrame(ajustarOffsetsFijos);
+    setTimeout(ajustarOffsetsFijos, 0);
   });
   actualizarBadgePapelera();
   if (window.ListaEspera) window.ListaEspera.badge();

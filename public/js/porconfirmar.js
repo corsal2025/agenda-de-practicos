@@ -59,7 +59,7 @@ async function renderPorConfirmar() {
         <button class="btn chico sec" id="pc-wa-sel" title="Abre una cola para escribir por WhatsApp uno a uno">💬 WhatsApp a seleccionados</button>
       </div>
       <div class="tabla-scroll">
-        <table class="tabla-porconfirmar">
+        <table class="tabla-porconfirmar thead-fijo">
           <thead>
             <tr>
               <th class="c pc-chk"><input type="checkbox" id="pc-chk-todos" aria-label="Seleccionar todos"></th>
