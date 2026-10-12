@@ -20,7 +20,7 @@ const PASOS_TOUR = [
     target: '#nav',
     titulo: 'Pestañas y módulos principales',
     icono: '🧭',
-    descripcion: 'Desde aquí accedes a todos los módulos: <b>Citas disponibles</b>, <b>Agenda</b>, <b>Reagendar</b>, <b>Por confirmar</b>, <b>Agenda del día</b>, <b>Estadísticas</b> y el menú <b>Más ▾</b>. Los números de color junto a algunas pestañas son avisos pendientes. Esta guía los recorre uno por uno.'
+    descripcion: 'Desde aquí accedes a todos los módulos: <b>Citas disponibles</b>, <b>Agenda</b>, <b>Reagendar</b>, <b>Por confirmar</b>, <b>Estadísticas</b> y el menú <b>Más ▾</b>. Los números de color junto a algunas pestañas son avisos pendientes. Esta guía los recorre uno por uno.'
   },
   {
     seccion: 'Entorno general',
@@ -224,6 +224,14 @@ const PASOS_TOUR = [
     icono: '🔓',
     descripcion: 'Estructura simétrica al bloqueo: reactiva días completos o bloques de horas específicos cuando una ausencia se cancela. Antes de confirmar, el diálogo te informa <b>cuántos bloques se reactivarán</b>.'
   },
+  {
+    seccion: 'Agenda',
+    tab: 'agenda',
+    target: '#a-acciones-dia',
+    titulo: 'Imprimir, cerrar el día y sala de espera',
+    icono: '🖨️',
+    descripcion: '<b>Imprimir día</b> genera el informe de la fecha y el examinador seleccionados, ordenado por hora (eliges formato, orientación y diseño: una hoja o una por examinador/a). <b>Cierre del día</b> abre un panel lateral para registrar el resultado de las citas que aún no lo tienen. <b>Sala de espera</b> abre la pantalla para la TV (solo iniciales, sin RUT), que se actualiza sola.'
+  },
 
   /* ---------- Reagendar ---------- */
   {
@@ -366,49 +374,6 @@ const PASOS_TOUR = [
     titulo: 'Selección múltiple y envíos por lote',
     icono: '☑️',
     descripcion: 'Marca las <b>casillas</b> de cada fila (o la del encabezado para todas). Luego usa <b>Enviar correo de confirmación</b> para mandar el correo solo a los seleccionados (requiere el servicio de correo SMTP configurado), o <b>WhatsApp a seleccionados</b> para abrir una <b>cola de WhatsApp</b>: cada clic abre wa.me con el mensaje listo, <b>una persona a la vez</b>.'
-  },
-
-  /* ---------- Agenda del día ---------- */
-  {
-    seccion: 'Agenda del día',
-    tab: 'dia',
-    target: '#dd-fecha',
-    titulo: 'Agenda del día: fecha',
-    icono: '🖨️',
-    descripcion: 'Informe imprimible de la jornada. Elige la <b>fecha</b> del informe; por defecto es la fecha que estabas viendo en la pestaña Agenda.'
-  },
-  {
-    seccion: 'Agenda del día',
-    tab: 'dia',
-    target: '#dd-formato',
-    titulo: 'Formato y orientación de la hoja',
-    icono: '📄',
-    descripcion: 'Selecciona el <b>formato de hoja</b> y, justo al lado, la <b>orientación</b> (vertical u horizontal). Los cambios se aplican de inmediato a la impresión.'
-  },
-  {
-    seccion: 'Agenda del día',
-    tab: 'dia',
-    target: '#dd-diseno',
-    titulo: 'Diseño del informe',
-    icono: '🧩',
-    descripcion: 'Imprime a <b>todos los examinadores en una sola hoja</b> o <b>una hoja por examinador/a</b>.'
-  },
-  {
-    seccion: 'Agenda del día',
-    tab: 'dia',
-    target: '#dd-print',
-    titulo: 'Imprimir informe',
-    icono: '🖨️',
-    descripcion: 'Abre el cuadro de impresión del navegador con la hoja tal como se ve abajo (la barra de filtros no se imprime). Al lado, <b>Abrir pantalla sala de espera</b> abre una vista para la TV con las citas de hoy (solo iniciales, sin RUT ni datos de contacto), que se actualiza sola cada 30 segundos.'
-  },
-  {
-    seccion: 'Agenda del día',
-    tab: 'dia',
-    target: '#dd-cont',
-    listo: tourSinCargando('#dd-cont'),
-    titulo: 'Vista previa del informe',
-    icono: '👁️',
-    descripcion: 'Así saldrá el informe en papel: las citas del día por examinador. Si la fecha no tiene bloques (fin de semana o feriado), verás un aviso.'
   },
 
   /* ---------- Por vencer ---------- */

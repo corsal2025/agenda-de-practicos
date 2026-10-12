@@ -70,7 +70,7 @@ test('recortar limita a 80 caracteres con elipsis', () => {
 });
 
 test('FRASES_TAB coincide con las pestañas reales y no duplica frases generales', () => {
-  const tabs = ['disponibles', 'agenda', 'reagendar', 'porconfirmar', 'vencimientos', 'dia', 'analitica', 'papelera', 'datos', 'errores'];
+  const tabs = ['disponibles', 'agenda', 'reagendar', 'porconfirmar', 'vencimientos', 'analitica', 'papelera', 'datos', 'errores'];
   assert.deepEqual(Object.keys(L.FRASES_TAB).sort(), tabs.slice().sort());
   const generales = new Set(L.FRASES_LICO);
   for (const lista of Object.values(L.FRASES_TAB)) for (const f of lista) assert.ok(!generales.has(f), f);

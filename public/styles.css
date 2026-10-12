@@ -617,6 +617,13 @@ tbody tr:first-child td { border-top: 0; }
   .hd-tabla .hd-obs, .hd-tabla .hd-res { width: auto; }
 }
 
+/* ---------- impresion del dia (Agenda > Imprimir día) ---------- */
+#impresion-dia { display: none; }
+@media print {
+  body.dia-imprimiendo main#view { display: none !important; }
+  body.dia-imprimiendo #impresion-dia { display: block; }
+}
+
 /* ---------- impresion ---------- */
 @media print {
   .barra-nacion, header.top, .no-print, #toast-root, #modal-root { display: none !important; }

@@ -32,7 +32,6 @@
     reagendar: ['Reagendar: elige primero a la persona y mira los bloques libres antes de mover a nadie.', 'Quien no asistió o fue derivado aparece aquí. Que nadie se quede sin nueva hora.'],
     porconfirmar: ['Por confirmar en cero es mi estado favorito. Hasta confeti sale.', 'Confirmar asistencia a tiempo evita bloques vacíos el día del examen.'],
     vencimientos: ['Por vencer: atiende primero los trámites con menos días restantes.', 'Un trámite vencido obliga a empezar de nuevo. Avisa con tiempo al postulante.'],
-    dia: ['Agenda del día: elige formato y orientación antes de imprimir. Yo desaparezco al imprimir.', 'Revisa el diseño (hoja única o por examinador) según cómo lo vayan a leer en sala.'],
     analitica: ['Estadísticas: compara períodos con calma. Los números cuentan una historia.', 'Si el rango no muestra datos, prueba ampliar las fechas.'],
     papelera: ['La Papelera guarda las citas liberadas. Restaurar es mejor que volver a digitar.', 'Vaciar la Papelera es definitivo. Respira hondo antes de pulsar.'],
     datos: ['Datos: haz un backup antes de importar un Excel. Con "Reemplazar todo" no hay vuelta atrás.', 'Generar la grilla crea bloques solo en días hábiles. Revisa el rango.'],

@@ -1,4 +1,4 @@
-/* ================= tab: AGENDA DEL DIA (informe de impresion) ================= */
+/* ================= Agenda: impresion del dia y cierre del dia ================= */
 const ESCUDO_SVG = `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="34" height="34">
   <path d="M20 2l15 5v11c0 9.5-6.2 16.8-15 20-8.8-3.2-15-10.5-15-20V7l15-5z" fill="#1b3a75"></path>
   <path d="M13 21l4.5 4.5L27 15" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
@@ -83,55 +83,9 @@ function hojaUnicaDia(data, exs, largaFecha, generado) {
   </article>`;
 }
 
-async function renderDia() {
-  const fecha = (estadoAgenda.fecha || hoy());
-  view.innerHTML = `
-    <div class="panel no-print"><div class="fila">
-      <div class="campo"><label>Fecha</label><input type="date" id="dd-fecha" value="${fecha}"></div>
-      <div class="campo"><label>Formato de hoja</label>
-        <select id="dd-formato">${Object.entries(PAGINAS).map(([k, v]) =>
-          `<option value="${k}" ${k === formatoImpresion() ? 'selected' : ''}>${esc(v.etq)}</option>`).join('')}</select></div>
-      <div class="campo"><label>Orientación</label>
-        <select id="dd-orientacion">
-          <option value="vertical" ${orientacionImpresion() === 'vertical' ? 'selected' : ''}>Vertical</option>
-          <option value="horizontal" ${orientacionImpresion() === 'horizontal' ? 'selected' : ''}>Horizontal</option>
-        </select></div>
-      <div class="campo"><label>Diseño</label>
-        <select id="dd-diseno">
-          <option value="unica" ${disenoDia() === 'unica' ? 'selected' : ''}>Todos los examinadores en una hoja</option>
-          <option value="porexam" ${disenoDia() === 'porexam' ? 'selected' : ''}>Una hoja por examinador/a</option>
-        </select></div>
-      <button class="btn" id="dd-print">
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6V2h8v4M4 12H2V6h12v6h-2M4 10h8v4H4z"/></svg>
-        Imprimir informe
-      </button>
-      <button class="btn sec" id="dd-sala" type="button" title="Pantalla para TV de la sala de espera (solo iniciales, sin RUT)">Abrir pantalla sala de espera</button>
-    </div></div>
-    <div id="dd-cierre" class="no-print"></div>
-    <div id="dd-cont" class="dd-cont">Cargando...</div>`;
-  pintarCierreDia(fecha);
-  $('#dd-fecha').onchange = (e) => { estadoAgenda.fecha = e.target.value; renderDia(); };
-  $('#dd-formato').onchange = (e) => { aplicarFormatoImpresion(e.target.value); toast(`Formato: ${PAGINAS[e.target.value].etq}`); };
-  $('#dd-orientacion').onchange = (e) => { aplicarFormatoImpresion(null, e.target.value); toast(`Orientación: ${e.target.value === 'vertical' ? 'Vertical' : 'Horizontal'}`); document.body.classList.toggle('orientacion-horizontal', e.target.value === 'horizontal'); };
-  $('#dd-print').onclick = () => window.print();
-  $('#dd-sala').onclick = () => window.open('/sala.html', 'sala-espera');
-  $('#dd-diseno').onchange = (e) => { try { localStorage.setItem('agenda-diseno-dia', e.target.value); } catch (_) { /* ignore */ } renderDia(); };
-
-  await cargarVista('dia', `/dia?fecha=${fecha}`, (data) => {
-  const exs = Object.keys(data.examinadores);
-  if (!exs.length) {
-    $('#dd-cont').innerHTML = `<div class="panel">${licoVacio('explica', 'Sin bloques este día', `No hay bloques para ${fFecha(fecha)}.`)}</div>`;
-    return;
-  }
-  const generado = fFechaHora(new Date().toISOString());
-  const largaFecha = fFechaLarga(fecha);
-  document.body.classList.toggle('dia-unica', disenoDia() === 'unica');
-  if (disenoDia() === 'unica') {
-    $('#dd-cont').innerHTML = hojaUnicaDia(data, exs, largaFecha, generado);
-    return;
-  }
-
-  $('#dd-cont').innerHTML = exs.map((ex, i) => {
+// Una hoja por examinador/a con N°, hora, RUT, nombre y clase.
+function hojasPorExaminador(data, exs, largaFecha, generado) {
+  return exs.map((ex, i) => {
     const filas = data.examinadores[ex];
     const citas = filas.filter((r) => !r.bloqueado && (r.rut || r.nombre));
     const conf = citas.filter((r) => r.confirmo_asistencia === 1).length;
@@ -195,7 +149,72 @@ async function renderDia() {
       </div>
     </article>`;
   }).join('');
-  });
+}
+
+// Informe imprimible del dia (fecha y, si se elige, solo un examinador).
+// Se pinta en #impresion-dia (fuera de la vista) y solo eso sale en papel.
+async function imprimirAgendaDia(fecha, examinadorId) {
+  let data;
+  try { data = await api(`/dia?fecha=${fecha}`); } catch (e) { toast(e.message, 'err'); return; }
+  let exs = Object.keys(data.examinadores || {});
+  const ex = examinadorId && META.examinadores.find((e) => String(e.id) === String(examinadorId));
+  if (ex) exs = exs.filter((n) => n === ex.nombre);
+  if (!exs.length) { toast(`No hay bloques para ${fFecha(fecha)}`, 'err'); return; }
+  const generado = fFechaHora(new Date().toISOString());
+  const largaFecha = fFechaLarga(fecha);
+  let cont = document.getElementById('impresion-dia');
+  if (!cont) {
+    cont = document.createElement('div');
+    cont.id = 'impresion-dia';
+    cont.className = 'dd-cont';
+    document.body.appendChild(cont);
+  }
+  const unica = disenoDia() === 'unica';
+  cont.innerHTML = unica ? hojaUnicaDia(data, exs, largaFecha, generado) : hojasPorExaminador(data, exs, largaFecha, generado);
+  document.body.classList.toggle('dia-unica', unica);
+  document.body.classList.add('dia-imprimiendo');
+  const limpiar = () => { document.body.classList.remove('dia-imprimiendo'); window.removeEventListener('afterprint', limpiar); };
+  window.addEventListener('afterprint', limpiar);
+  window.print();
+}
+
+// Dialogo previo: formato, orientacion y diseno de la hoja, luego imprime.
+function dialogoImprimirDia(fecha, examinadorId) {
+  const ex = examinadorId && META.examinadores.find((e) => String(e.id) === String(examinadorId));
+  modal(`Imprimir agenda · ${fFecha(fecha)}`, `
+    <p class="muted">${ex ? `Solo ${esc(ex.nombre)}` : 'Todos los examinadores'}, ordenado por hora.</p>
+    <div class="fila" style="flex-wrap:wrap;gap:10px">
+      <div class="campo"><label>Formato de hoja</label>
+        <select id="dd-formato">${Object.entries(PAGINAS).map(([k, v]) =>
+          `<option value="${k}" ${k === formatoImpresion() ? 'selected' : ''}>${esc(v.etq)}</option>`).join('')}</select></div>
+      <div class="campo"><label>Orientación</label>
+        <select id="dd-orientacion">
+          <option value="vertical" ${orientacionImpresion() === 'vertical' ? 'selected' : ''}>Vertical</option>
+          <option value="horizontal" ${orientacionImpresion() === 'horizontal' ? 'selected' : ''}>Horizontal</option>
+        </select></div>
+      <div class="campo"><label>Diseño</label>
+        <select id="dd-diseno">
+          <option value="unica" ${disenoDia() === 'unica' ? 'selected' : ''}>Todos los examinadores en una hoja</option>
+          <option value="porexam" ${disenoDia() === 'porexam' ? 'selected' : ''}>Una hoja por examinador/a</option>
+        </select></div>
+    </div>`, '<button class="btn sec" id="dd-cancelar">Cancelar</button> <button class="btn" id="dd-print">Imprimir</button>');
+  $('#dd-cancelar').onclick = cerrarModal;
+  $('#dd-print').onclick = () => {
+    const ori = $('#dd-orientacion').value;
+    aplicarFormatoImpresion($('#dd-formato').value, ori);
+    document.body.classList.toggle('orientacion-horizontal', ori === 'horizontal');
+    try { localStorage.setItem('agenda-diseno-dia', $('#dd-diseno').value); } catch (_) { /* ignore */ }
+    cerrarModal();
+    imprimirAgendaDia(fecha, examinadorId);
+  };
+}
+
+// Cierre del dia en panel lateral.
+function dialogoCierreDia(fecha) {
+  modal(`Cierre del día · ${fFecha(fecha)}`, '<div id="dd-cierre">Cargando...</div>',
+    '<button class="btn sec" id="cd-cerrar">Cerrar</button>', 'lateral');
+  $('#cd-cerrar').onclick = () => { cerrarModal(); if ((location.hash.slice(1) || '').split('?')[0] === 'agenda') renderAgenda(); };
+  pintarCierreDia(fecha);
 }
 
 /* ---------- Cierre del dia: citas sin resultado ---------- */
@@ -216,7 +235,7 @@ async function pintarCierreDia(fecha) {
   if (!data.total) {
     cont.innerHTML = fecha <= hoy()
       ? '<div class="panel cierre-dia"><h2>Cierre del día</h2><p class="muted">Todas las citas de este día tienen resultado.</p></div>'
-      : '';
+      : '<div class="panel cierre-dia"><p class="muted">Este día aún no ocurre: no hay citas por cerrar.</p></div>';
     return;
   }
   cont.innerHTML = `<div class="panel cierre-dia">
@@ -284,6 +303,6 @@ async function avisoCierreDia(fechaVista) {
   div.className = 'cierre-aviso no-print';
   div.innerHTML = `<span>Hoy quedan <b>${data.total}</b> ${data.total === 1 ? 'cita' : 'citas'} sin resultado</span>
     <button class="btn chico" type="button">Cerrar el día →</button>`;
-  div.querySelector('button').onclick = () => { estadoAgenda.fecha = fechaVista; irA('dia'); };
+  div.querySelector('button').onclick = () => dialogoCierreDia(fechaVista);
   grid.closest('.panel').insertAdjacentElement('beforebegin', div);
 }

@@ -386,9 +386,12 @@ if (typeof ResizeObserver === 'function') {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', observarOffsets);
   else observarOffsets();
 }
+// Pestañas eliminadas que redirigen a otra (enlaces o marcadores antiguos).
+const ALIAS_TABS = { dia: 'agenda' };
 function ruta() {
   cerrarModal();
   const tab = (location.hash.slice(1) || 'disponibles').split('?')[0];
+  if (ALIAS_TABS[tab]) { history.replaceState(null, '', `#${ALIAS_TABS[tab]}`); ruta(); return; }
   document.querySelectorAll('#nav button[data-tab]').forEach((b) => b.classList.toggle('activo', b.dataset.tab === tab));
   genVista++; // las cargas pendientes de la pestaña anterior ya no pintan
   (tabs[tab] || renderAgenda)();

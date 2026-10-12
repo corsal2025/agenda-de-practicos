@@ -1,7 +1,7 @@
 const tabs = {
   agenda: renderAgenda, disponibles: renderDisponibles, reagendar: renderReagendar, espera: () => renderListaEspera(),
   porconfirmar: renderPorConfirmar,
-  buscar: renderBuscar, errores: renderErrores, dia: renderDia, analitica: renderAnalitica,
+  buscar: renderBuscar, errores: renderErrores, analitica: renderAnalitica,
   papelera: renderPapelera, datos: renderDatos, vencimientos: renderVencimientos,
   examinador: () => window.renderExaminador(),
   jefatura: renderJefatura,
