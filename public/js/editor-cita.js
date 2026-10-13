@@ -115,26 +115,26 @@ function formularioCita(b, alGuardar) {
     ${(b.alerts || []).length ? `<div class="campo ancho">${alertasHtml(b)}</div>` : ''}
     <div class="campo ancho" id="f-intento-aviso" hidden></div>
     <div class="campo">
-      <label>Fecha de Inicio de Trámite *</label>
+      <label for="f-fecha-inicio">Fecha de Inicio de Trámite *</label>
       <input type="date" id="f-fecha-inicio" required value="${esc(b.fecha_inicio_tramite || '')}" max="${hoy()}" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
       <div id="f-cuenta-tramite" class="cuenta-tramite-zona" aria-live="polite"></div>
     </div>
     <div class="campo" id="zona-escuela" ${esClaseTramite(b.clase) ? '' : 'hidden'}>
-      <label>Escuela de Conductores</label>
+      <label for="f-escuela">Escuela de Conductores</label>
       <select id="f-escuela" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
         <option value="">-- Sin escuela --</option>
         ${c.escuela_conductores ? c.escuela_conductores.map((e) => `<option value="${esc(e)}" ${b.escuela_conductores === e ? 'selected' : ''}>${esc(e)}</option>`).join('') : ''}
       </select>
     </div>
     <div class="campo">
-      <label>Tipo de Reagendamiento</label>
+      <label for="f-tipo-reagendamiento">Tipo de Reagendamiento</label>
       <select id="f-tipo-reagendamiento" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
         <option value="">-- Sin tipo --</option>
         ${c.tipo_reagendamiento ? c.tipo_reagendamiento.map((tipo) => `<option value="${esc(tipo)}" ${b.tipo_reagendamiento === tipo ? 'selected' : ''}>${esc(tipo)}</option>`).join('') : ''}
       </select>
     </div>
     ${tieneCita ? `<div class="campo">
-      <label>Confirmó asistencia</label>
+      <label for="f-conf">Confirmó asistencia</label>
       <select id="f-conf">
         <option value="" ${b.confirmo_asistencia == null ? 'selected' : ''}>-- Sin respuesta --</option>
         <option value="1" ${b.confirmo_asistencia === 1 ? 'selected' : ''}>SÍ</option>
@@ -142,14 +142,14 @@ function formularioCita(b, alGuardar) {
       </select>
     </div>
     <div class="campo">
-      <label>Resultado</label>
+      <label for="f-res">Resultado</label>
       <select id="f-res">
         <option value="">-- Sin resultado --</option>
         ${(c.resultado || []).map((r) => `<option value="${esc(r)}" ${b.resultado === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}
       </select>
     </div>
     <div class="campo ancho">
-      <label>Comentarios</label>
+      <label for="f-coment">Comentarios</label>
       <textarea id="f-coment" rows="3">${esc(b.comentarios || '')}</textarea>
     </div>` : ''}
     ${tieneCita ? '<div class="campo ancho hist-cita" id="zona-hist-cita"><h4>Historial del solicitante</h4><div class="hist-lista">Cargando...</div></div>' : ''}
@@ -297,6 +297,8 @@ function formularioCita(b, alGuardar) {
 
 
   $('#btn-guardar').onclick = async () => {
+    const btnG = $('#btn-guardar');
+    if (btnG && btnG.disabled) return;
     const nombre = $('#f-nombre').value.trim();
     const rutVal = $('#f-rut').value.trim();
     const clases = clasesMarcadas();

@@ -25,11 +25,11 @@ async function renderPorConfirmar() {
       </div>
       <div class="fila" style="margin-top:1rem;gap:12px;align-items:flex-end">
         <div class="campo" style="flex:1;min-width:240px">
-          <label>Buscar en la lista (RUT, nombre o teléfono)</label>
+          <label for="pc-q">Buscar en la lista (RUT, nombre o teléfono)</label>
           <input type="search" id="pc-q" placeholder="Escribe para filtrar al instante..." autocomplete="off">
         </div>
         <div class="campo" style="min-width:180px">
-          <label>Rango de fechas</label>
+          <label for="pc-rango">Rango de fechas</label>
           <select id="pc-rango">
             <option value="7" selected>Próximos 7 días</option>
             <option value="15">Próximos 15 días</option>
