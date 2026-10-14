@@ -2008,3 +2008,10 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
 @media (max-width: 600px) {
   .thead-fijo thead th, .thead-fijo.bajo-panel thead th { position: static; }
 }
+
+/* Avisado por: casillas por medio de contacto */
+.slot-avisos { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; margin-top:4px; font-size:.78rem; color:var(--tinta-3); }
+.slot-avisos .aviso-tit { font-weight:600; }
+.slot-avisos .aviso-chk { display:inline-flex; align-items:center; gap:3px; cursor:pointer; }
+.slot-avisos .aviso-chk.sin { opacity:.5; cursor:default; }
+.slot-avisos input { margin:0; accent-color:var(--verde-700, #1f8a4c); }

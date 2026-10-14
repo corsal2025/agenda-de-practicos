@@ -509,7 +509,7 @@ app.put('/api/agenda/:id', wrap((req, res) => {
       UPDATE agenda SET bloqueado = 1, bloqueo_motivo = @motivo,
         rut=NULL, nombre=NULL, clase=NULL, contacto=NULL, correo=NULL, tipo_cita=NULL,
         motivo_reagendamiento=NULL, lista_espera=NULL, intento=NULL, funcionario_id=NULL,
-        fecha_inicio_tramite=NULL, confirmo_asistencia=NULL, resultado=NULL,
+        fecha_inicio_tramite=NULL, confirmo_asistencia=NULL, resultado=NULL, avisado_por=NULL,
         pendiente_reagendar=0, pendiente_nota=NULL,
         token_confirmacion=NULL, correo_confirmacion_enviado=0, correo_recordatorio_enviado=0,
         comentarios=@com, agendado_en=NULL, actualizado_en=datetime('now','localtime')
@@ -659,7 +659,7 @@ app.put('/api/agenda/:id', wrap((req, res) => {
 const LIMPIAR_SQL = `
   rut=NULL, nombre=NULL, clase=NULL, contacto=NULL, correo=NULL, tipo_cita=NULL,
   motivo_reagendamiento=NULL, lista_espera=NULL, intento=NULL, funcionario_id=NULL,
-  fecha_inicio_tramite=NULL, escuela_conductores=NULL, tipo_reagendamiento=NULL, confirmo_asistencia=NULL, resultado=NULL, comentarios=NULL,
+  fecha_inicio_tramite=NULL, escuela_conductores=NULL, tipo_reagendamiento=NULL, confirmo_asistencia=NULL, resultado=NULL, comentarios=NULL, avisado_por=NULL,
   bloqueado=0, bloqueo_motivo=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
   token_confirmacion=NULL, correo_confirmacion_enviado=0, correo_recordatorio_enviado=0,
   agendado_en=NULL, actualizado_en=datetime('now','localtime')`;
@@ -766,7 +766,7 @@ app.post('/api/cola-reagendar/:id/asignar', wrap((req, res) => {
     db.prepare(`
       UPDATE agenda SET rut=?, nombre=?, clase=?, contacto=?, correo=?, tipo_cita='REAGENDADO',
         motivo_reagendamiento=?, lista_espera=?, intento=?, funcionario_id=?, fecha_inicio_tramite=?,
-        confirmo_asistencia=NULL, resultado=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
+        confirmo_asistencia=NULL, resultado=NULL, avisado_por=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
         token_confirmacion=NULL, correo_confirmacion_enviado=0, correo_recordatorio_enviado=0,
         comentarios=?, agendado_en=?, actualizado_en=datetime('now','localtime')
       WHERE id=? AND (rut IS NULL OR rut='') AND (nombre IS NULL OR nombre='') AND bloqueado = 0
@@ -956,6 +956,22 @@ app.post('/api/agenda/:id/resultado', wrap((req, res) => {
   res.json({ ok: true });
 }));
 
+// ---------- AVISOS AL POSTULANTE ----------
+const MEDIOS_AVISO = ['telefono', 'whatsapp', 'correo'];
+app.post('/api/agenda/:id/aviso', wrap((req, res) => {
+  const id = Number(req.params.id);
+  const medio = String((req.body && req.body.medio) || '');
+  if (!MEDIOS_AVISO.includes(medio)) throw bad(`Medio de aviso no valido: ${medio}`);
+  const b = db.prepare('SELECT avisado_por FROM agenda WHERE id = ? AND (rut IS NOT NULL OR nombre IS NOT NULL) AND bloqueado = 0').get(id);
+  if (!b) throw bad('El bloque no tiene una cita.', 404);
+  const set = new Set(String(b.avisado_por || '').split(',').filter(Boolean));
+  if (req.body.avisado === false || req.body.avisado === 0) set.delete(medio); else set.add(medio);
+  const lista = MEDIOS_AVISO.filter((m) => set.has(m));
+  db.prepare("UPDATE agenda SET avisado_por = ?, actualizado_en = datetime('now','localtime') WHERE id = ?").run(lista.join(',') || null, id);
+  logReq(req, id, 'editar', `avisado por: ${lista.join(', ') || '(ninguno)'}`);
+  res.json({ ok: true, avisado_por: lista });
+}));
+
 // ---------- CIERRE DEL DIA ----------
 const RE_FECHA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_CIERRE = 200;
@@ -1041,7 +1057,7 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
       UPDATE agenda SET rut=@rut, nombre=@nombre, clase=@clase, contacto=@contacto, correo=@correo,
         tipo_cita='REAGENDADO', motivo_reagendamiento=@motivo, lista_espera=@lista_espera,
         intento=@intento, funcionario_id=@funcionario_id, fecha_inicio_tramite=@fit,
-        confirmo_asistencia=NULL, resultado=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
+        confirmo_asistencia=NULL, resultado=NULL, avisado_por=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
         token_confirmacion=NULL, correo_confirmacion_enviado=0, correo_recordatorio_enviado=0,
         comentarios=@comentarios, agendado_en=COALESCE(agendado_en, datetime('now','localtime')),
         actualizado_en=datetime('now','localtime')

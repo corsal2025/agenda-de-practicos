@@ -785,3 +785,22 @@ test('cierre-dia POST valida resultado, ids y fecha; marca solo filas sin result
   const mov = db.prepare("SELECT COUNT(*) n FROM movimientos WHERE agenda_id = ? AND detalle LIKE '%cierre del dia%'").get(a.id).n;
   assert.equal(mov, 1);
 });
+
+// ---------- Avisos al postulante (telefono / whatsapp / correo) ----------
+test('aviso POST marca y desmarca medios, valida medio y bloque, y se limpia al liberar', async () => {
+  const dia = diaNuevo();
+  const a = ocupado(dia, '08:00');
+  const libre = slot(dia, '09:00');
+  assert.equal((await api('POST', `/agenda/${a.id}/aviso`, { medio: 'paloma', avisado: true })).status, 400);
+  assert.equal((await api('POST', `/agenda/${libre.id}/aviso`, { medio: 'whatsapp', avisado: true })).status, 404);
+  let r = await api('POST', `/agenda/${a.id}/aviso`, { medio: 'whatsapp', avisado: true });
+  assert.equal(r.status, 200, r.texto);
+  r = await api('POST', `/agenda/${a.id}/aviso`, { medio: 'correo', avisado: true });
+  assert.deepEqual(r.datos.avisado_por, ['whatsapp', 'correo']);
+  assert.equal(leer(a.id).avisado_por, 'whatsapp,correo');
+  r = await api('POST', `/agenda/${a.id}/aviso`, { medio: 'whatsapp', avisado: false });
+  assert.deepEqual(r.datos.avisado_por, ['correo']);
+  const lib = await api('POST', `/agenda/${a.id}/liberar`, {});
+  assert.equal(lib.status, 200, lib.texto);
+  assert.equal(leer(a.id).avisado_por, null);
+});

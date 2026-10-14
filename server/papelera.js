@@ -8,7 +8,7 @@ const CAMPOS = [
   'rut', 'nombre', 'clase', 'contacto', 'correo', 'tipo_cita', 'motivo_reagendamiento',
   'lista_espera', 'intento', 'funcionario_id', 'fecha_inicio_tramite', 'confirmo_asistencia',
   'resultado', 'comentarios', 'bloqueado', 'bloqueo_motivo', 'pendiente_reagendar',
-  'pendiente_nota', 'agendado_en',
+  'pendiente_nota', 'agendado_en', 'avisado_por',
 ];
 
 // Guarda el contenido actual de un bloque ocupado/bloqueado antes de borrarlo.

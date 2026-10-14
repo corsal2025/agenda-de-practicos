@@ -40,6 +40,20 @@ async function cargarHistorialCita(b, alGuardar) {
 }
 
 // Reprobaciones previas (mismo RUT, alguna clase en comun) antes de esta cita.
+// Casillas "Avisado por": medios por los que se aviso al postulante (telefono, whatsapp, correo).
+const MEDIOS_AVISO = [['telefono', 'Teléfono'], ['whatsapp', 'WhatsApp'], ['correo', 'Correo']];
+function avisosHtml(b) {
+  const on = new Set(String(b.avisado_por || '').split(',').filter(Boolean));
+  const hay = { telefono: !!b.contacto, whatsapp: !!b.contacto, correo: !!b.correo };
+  const disp = MEDIOS_AVISO.filter(([m]) => hay[m]);
+  const todos = disp.length > 0 && disp.every(([m]) => on.has(m));
+  const casilla = ([m, etq]) => `<label class="aviso-chk${hay[m] ? '' : ' sin'}" title="${hay[m] ? 'Marcar si se avisó por ' + etq : 'Sin ' + (m === 'correo' ? 'correo' : 'teléfono') + ' registrado'}">
+      <input type="checkbox" data-aviso="${m}" ${on.has(m) ? 'checked' : ''} ${hay[m] ? '' : 'disabled'}>${etq}</label>`;
+  return `<div class="slot-avisos" data-id="${b.id}" onclick="event.stopPropagation()"><span class="aviso-tit">Avisado:</span>
+    ${MEDIOS_AVISO.map(casilla).join('')}
+    <label class="aviso-chk aviso-todos" title="Marcar o desmarcar todos los medios disponibles"><input type="checkbox" data-aviso="todos" ${todos ? 'checked' : ''} ${disp.length ? '' : 'disabled'}>Todos</label></div>`;
+}
+
 const RESULTADOS_REPROBADO = ['REPROBADO', 'REPROBADO INASISTENCIA'];
 function reprobacionesPrevias(b, rows) {
   if (!b.rut) return 0;
@@ -237,6 +251,7 @@ function slotCard(b) {
         <svg class="sc-ico" viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2zm13 2.383-4.708 2.825L15 11.105V5.383zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741zM1 11.105l4.708-2.897L1 5.383v5.722z"/></svg>
         <span>${esc(b.correo || 'Sin correo')}</span>
       </span>
+      ${avisosHtml(b)}
     </div>
 
     ${badges.length ? `<span class="badges">${badges.join('')}</span>` : ''}
@@ -328,6 +343,24 @@ function pintarGrilla(cont, filas, fecha) {
     }
     cont.innerHTML = html;
   }
+  cont.querySelectorAll('.slot-avisos input[data-aviso]').forEach((chk) => {
+    chk.onchange = async () => {
+      const box = chk.closest('.slot-avisos');
+      const id = Number(box.dataset.id);
+      const medios = chk.dataset.aviso === 'todos'
+        ? [...box.querySelectorAll('input[data-aviso]:not([data-aviso="todos"]):not(:disabled)')].map((i) => i.dataset.aviso)
+        : [chk.dataset.aviso];
+      const marcar = chk.checked;
+      try {
+        let lista = [];
+        for (const medio of medios) lista = (await api(`/agenda/${id}/aviso`, { method: 'POST', body: { medio, avisado: marcar } })).avisado_por;
+        box.querySelectorAll('input[data-aviso]:not([data-aviso="todos"])').forEach((i) => { i.checked = lista.includes(i.dataset.aviso); });
+        const habil = [...box.querySelectorAll('input[data-aviso]:not([data-aviso="todos"]):not(:disabled)')];
+        const t = box.querySelector('input[data-aviso="todos"]');
+        if (t) t.checked = habil.length > 0 && habil.every((i) => i.checked);
+      } catch (e) { chk.checked = !marcar; toast(e.message, 'err'); }
+    };
+  });
   cont.querySelectorAll('.slot-res .sr').forEach((el) => {
     el.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); el.click(); } };
     el.onclick = async (ev) => {
