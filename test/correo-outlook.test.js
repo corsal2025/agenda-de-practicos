@@ -84,3 +84,9 @@ test('bajo NODE_ENV=test Outlook nunca se invoca', async () => {
   assert.equal(await outlook.enviar(MSG), false);
   assert.equal(outlook.disponibleSync(), false);
 });
+
+test('chequeo de Outlook exige perfil configurado antes de instanciar COM (evita el asistente "Agregar un servicio")', () => {
+  const cmd = outlook.CMD_CHEQUEO;
+  assert.ok(cmd.indexOf('Outlook\Profiles') !== -1);
+  assert.ok(cmd.indexOf('Outlook\Profiles') < cmd.indexOf('New-Object -ComObject'));
+});

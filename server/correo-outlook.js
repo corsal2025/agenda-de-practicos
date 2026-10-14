@@ -11,6 +11,11 @@ const SCRIPT = path.join(__dirname, 'outlook-enviar.ps1');
 const PS_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass'];
 const TIMEOUT_CHEQUEO_MS = 15000;
 const TIMEOUT_ENVIO_MS = 60000;
+// Solo se instancia Outlook si el usuario ya tiene un perfil de correo configurado. Sin perfil,
+// Outlook muestra el asistente "Agregar un servicio" en pantalla al ser invocado por COM.
+const CMD_CHEQUEO = "try { $p = @('14.0','15.0','16.0') | ForEach-Object { Get-ChildItem " +
+  "(\"HKCU:\Software\Microsoft\Office\$_\Outlook\Profiles\") -ErrorAction SilentlyContinue }; " +
+  "if (-not $p) { 'NO'; return }; $o = New-Object -ComObject Outlook.Application; if ($o) { 'SI' } } catch { 'NO' }";
 
 function soportado() {
   // node --test marca a sus procesos con NODE_TEST_CONTEXT: tampoco se invoca PowerShell ahi.
@@ -23,8 +28,7 @@ function disponible() {
   if (!soportado()) return Promise.resolve(false);
   if (!cacheDisponible) {
     cacheDisponible = new Promise((resolve) => {
-      const cmd = "try { $o = New-Object -ComObject Outlook.Application; if ($o) { 'SI' } } catch { 'NO' }";
-      execFile('powershell.exe', [...PS_ARGS, '-Command', cmd], { timeout: TIMEOUT_CHEQUEO_MS, windowsHide: true },
+      execFile('powershell.exe', [...PS_ARGS, '-Command', CMD_CHEQUEO], { timeout: TIMEOUT_CHEQUEO_MS, windowsHide: true },
         (err, stdout) => resolve(!err && String(stdout).trim() === 'SI'));
     }).then((v) => { estadoDisponible = v; return v; });
   }
@@ -82,6 +86,6 @@ function enCola(fn) {
 }
 
 module.exports = {
-  disponible, disponibleSync, enviar, enCola, escribirPayload, argsEnvio, SCRIPT,
+  disponible, disponibleSync, CMD_CHEQUEO, enviar, enCola, escribirPayload, argsEnvio, SCRIPT,
   get ultimoError() { return ultimoError; },
 };
