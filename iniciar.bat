@@ -19,13 +19,15 @@ if not exist node_modules (
   call npm install --omit=dev
 )
 
+if "%PORT%"=="" set "PORT=4900"
+
 REM Si ya esta corriendo, solo abre el navegador.
-powershell -NoProfile -Command "try { Invoke-WebRequest http://localhost:4900/api/meta -UseBasicParsing -TimeoutSec 2 | Out-Null; exit 0 } catch { exit 1 }"
+powershell -NoProfile -Command "try { Invoke-WebRequest http://localhost:%PORT%/api/meta -UseBasicParsing -TimeoutSec 2 | Out-Null; exit 0 } catch { exit 1 }"
 if not errorlevel 1 (
-  start "" http://localhost:4900
+  start "" http://localhost:%PORT%
   exit /b 0
 )
 
-start "" http://localhost:4900
+start "" http://localhost:%PORT%
 "%NODE%" --no-warnings server\index.js
 pause

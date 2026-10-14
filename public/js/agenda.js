@@ -39,7 +39,6 @@ async function renderAgenda() {
           <span class="agenda-acciones-dia" id="a-acciones-dia" style="display:inline-flex;gap:6px;flex-wrap:wrap">
             <button class="btn sec" id="a-imprimir" type="button" data-tooltip="Imprime la agenda de la fecha y examinador seleccionados, ordenada por hora">🖨 Imprimir día</button>
             <button class="btn sec" id="a-cierre" type="button" data-tooltip="Registra el resultado de las citas del día que aún no lo tienen">✅ Cierre del día</button>
-            <button class="btn sec" id="a-sala" type="button" data-tooltip="Pantalla para TV de la sala de espera (solo iniciales, sin RUT)">📺 Sala de espera</button>
           </span>
         </div>
       </div>
@@ -55,7 +54,6 @@ async function renderAgenda() {
   $('#a-desbloqdia').onclick = () => dialogoDesbloquearDia();
   $('#a-imprimir').onclick = () => dialogoImprimirDia(estadoAgenda.fecha, estadoAgenda.examinador_id);
   $('#a-cierre').onclick = () => dialogoCierreDia(estadoAgenda.fecha);
-  $('#a-sala').onclick = () => window.open('/sala.html', 'sala-espera');
   if ($('#a-porconfirmar')) $('#a-porconfirmar').onclick = () => irA('porconfirmar');
   const btnV = $('#btn-vista-vertical');
   const btnH = $('#btn-vista-horizontal');

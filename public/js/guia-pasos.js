@@ -228,9 +228,9 @@ const PASOS_TOUR = [
     seccion: 'Agenda',
     tab: 'agenda',
     target: '#a-acciones-dia',
-    titulo: 'Imprimir, cerrar el día y sala de espera',
+    titulo: 'Imprimir y cerrar el día',
     icono: '🖨️',
-    descripcion: '<b>Imprimir día</b> genera el informe de la fecha y el examinador seleccionados, ordenado por hora (eliges formato, orientación y diseño: una hoja o una por examinador/a). <b>Cierre del día</b> abre un panel lateral para registrar el resultado de las citas que aún no lo tienen. <b>Sala de espera</b> abre la pantalla para la TV (solo iniciales, sin RUT), que se actualiza sola.'
+    descripcion: '<b>Imprimir día</b> genera el informe de la fecha y el examinador seleccionados, ordenado por hora (eliges formato, orientación y diseño: una hoja o una por examinador/a). <b>Cierre del día</b> abre un panel lateral para registrar el resultado de las citas que aún no lo tienen.'
   },
 
   /* ---------- Reagendar ---------- */

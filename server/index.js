@@ -1485,10 +1485,16 @@ function ipsLan() {
 
 function iniciar() {
   // Un rechazo no capturado se registra pero no tumba el servidor.
-  process.on('unhandledRejection', (motivo) => {
-    console.error('[unhandledRejection]', motivo);
-  });
-  app.listen(PUERTO, () => {
+  const archivoLog = path.join(RAIZ, 'data', 'server.log');
+  const registrar = (etiqueta, e) => {
+    const linea = `${new Date().toISOString()} [${etiqueta}] ${(e && e.stack) || e}\n`;
+    console.error(linea.trimEnd());
+    try { fs.appendFileSync(archivoLog, linea); } catch { /* sin log, no bloquear */ }
+  };
+  process.on('unhandledRejection', (motivo) => registrar('unhandledRejection', motivo));
+  // Una excepcion sincrona no capturada se registra pero no tumba el servidor.
+  process.on('uncaughtException', (e) => registrar('uncaughtException', e));
+  const servidor = app.listen(PUERTO, () => {
     console.log(`\n  Agenda de Practicos`);
     console.log(`  Este PC:        http://localhost:${PUERTO}`);
     for (const ip of ipsLan()) console.log(`  Otros PC (LAN): http://${ip}:${PUERTO}`);
@@ -1505,6 +1511,12 @@ function iniciar() {
     if (correo.habilitado) recordatorios.programar();
     else console.log('  Correos deshabilitados (falta configurar SMTP_HOST/SMTP_USER/SMTP_PASS)\n');
     if (respuestasCorreo.programar()) console.log('  Lectura de respuestas por correo: cada 10 min (Outlook)');
+  });
+  servidor.on('error', (e) => {
+    if (e.code === 'EADDRINUSE') registrar('listen', `Puerto ${PUERTO} ocupado: otra instancia ya esta corriendo. Cierrala o usa PORT=otro.`);
+    else if (e.code === 'EACCES') registrar('listen', `Sin permiso para usar el puerto ${PUERTO}.`);
+    else registrar('listen', e);
+    process.exit(1);
   });
 }
 
