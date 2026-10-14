@@ -288,21 +288,3 @@ async function pintarCierreDia(fecha) {
     } catch (e) { toast(e.message, 'err'); }
   };
 }
-
-// Aviso discreto en la pestaña Agenda: despues de las 13:30 (ultimo bloque) si hoy quedan citas sin resultado.
-const CIERRE_HORA_MIN = 13 * 60 + 30;
-async function avisoCierreDia(fechaVista) {
-  const ahora = new Date();
-  if (fechaVista !== hoy() || ahora.getHours() * 60 + ahora.getMinutes() < CIERRE_HORA_MIN) return;
-  let data;
-  try { data = await apiReciente(`/cierre-dia?fecha=${fechaVista}`, 30e3); } catch (_) { return; }
-  const grid = $('#a-grid');
-  if (!data || !data.total || !grid || $('#a-cierre-aviso')) return;
-  const div = document.createElement('div');
-  div.id = 'a-cierre-aviso';
-  div.className = 'cierre-aviso no-print';
-  div.innerHTML = `<span>Hoy quedan <b>${data.total}</b> ${data.total === 1 ? 'cita' : 'citas'} sin resultado</span>
-    <button class="btn chico" type="button">Cerrar el día →</button>`;
-  div.querySelector('button').onclick = () => dialogoCierreDia(fechaVista);
-  grid.closest('.panel').insertAdjacentElement('beforebegin', div);
-}
