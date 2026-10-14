@@ -2010,8 +2010,9 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
 }
 
 /* Avisado por: casillas por medio de contacto */
-.slot-avisos { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; margin-top:4px; font-size:.78rem; color:var(--tinta-3); }
+.slot-avisos { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:6px 14px; margin:12px 0 6px; font-size:.78rem; color:var(--tinta-3); }
 .slot-avisos .aviso-tit { font-weight:600; }
-.slot-avisos .aviso-chk { display:inline-flex; align-items:center; gap:3px; cursor:pointer; }
+.slot-avisos .aviso-chk { display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
 .slot-avisos .aviso-chk.sin { opacity:.5; cursor:default; }
-.slot-avisos input { margin:0; accent-color:var(--verde-700, #1f8a4c); }
+.slot-avisos input[type="checkbox"] { width:15px; height:15px; padding:0; margin:0; border-radius:3px; box-shadow:none; accent-color:var(--azul); }
+.slot-avisos input[type="checkbox"]:focus { box-shadow:none; outline:2px solid var(--azul); outline-offset:1px; }
