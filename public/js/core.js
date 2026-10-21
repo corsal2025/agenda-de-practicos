@@ -322,12 +322,12 @@ function telWaDe(contacto) {
 function mensajeWaCita(b, examinador, cierre = 'Por favor confirma tu asistencia respondiendo a este mensaje.') {
   const nomP = nom(b.nombre) || 'Estimado/a postulante';
   const claseP = b.clase ? ` (Clase ${b.clase})` : '';
-  return `Hola ${nomP}, te contactamos desde la Dirección de Tránsito respecto a tu examen práctico de conducir${claseP}. Te recordamos que tu cita está agendada para el día ${fFecha(b.fecha)} a las ${b.hora || ''} hrs con el examinador ${examinador || 'por asignar'}. ${cierre}`;
+  return `Hola ${nomP}, te contactamos desde la Dirección de Tránsito respecto a tu examen práctico de conducir${claseP}. Te recordamos que tu cita está agendada para el día ${fFecha(b.fecha)} a las ${b.hora || ''} hrs. ${cierre}`;
 }
 function mensajeSmsCita(b, examinador, cierre = 'Por favor responde para confirmar o reagendar.') {
   const nomP = nom(b.nombre) || 'Estimado/a';
   const claseP = b.clase ? ` Clase ${b.clase}` : '';
-  return `Dir. de Tránsito: Hola ${nomP}, recordamos tu examen práctico${claseP} el ${fFecha(b.fecha)} a las ${b.hora || ''} hrs con examinador ${examinador || 'por asignar'}. ${cierre}`;
+  return `Dir. de Tránsito: Hola ${nomP}, recordamos tu examen práctico${claseP} el ${fFecha(b.fecha)} a las ${b.hora || ''} hrs. ${cierre}`;
 }
 const CORREO_OK_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const correoOk = (c) => CORREO_OK_RE.test(String(c || '').trim());

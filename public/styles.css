@@ -2657,9 +2657,10 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
 
 .contacto-col-wrap {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 3px;
   white-space: nowrap !important;
   word-break: keep-all !important;
 }
