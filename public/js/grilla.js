@@ -225,6 +225,7 @@ function slotCard(b) {
   const telWa = telWaDe(b.contacto);
   const examP = b.examinador || (META.examinadores.find((e) => e.id === b.examinador_id) || {}).nombre || 'por asignar';
   const mensajeWa = mensajeWaCita(b, examP);
+  const mensajeSms = mensajeSmsCita(b, examP);
 
   return `<div class="${cls}" data-id="${b.id}">
     ${problema ? `<span class="alerta-dato" title="${esc(problema)}">⚠</span>` : ''}
@@ -245,7 +246,7 @@ function slotCard(b) {
           <svg class="sc-ico" viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M3.654 1.328a.678.678 0 0 0-1.015-.063L1.605 2.3c-.483.484-.661 1.169-.45 1.77a17.568 17.568 0 0 0 4.168 6.608 17.569 17.569 0 0 0 6.608 4.168c.601.211 1.286.033 1.77-.45l1.034-1.034a.678.678 0 0 0-.063-1.015l-2.307-1.794a.678.678 0 0 0-.58-.122l-2.19.547a1.745 1.745 0 0 1-1.657-.459L5.482 8.06a1.745 1.745 0 0 1-.46-1.657l.548-2.19a.678.678 0 0 0-.122-.58L3.654 1.328z"/></svg>
           <span class="num">${esc(fTel(b.contacto) || 'Sin teléfono')}</span>
         </span>
-        ${telWa ? `<a href="whatsapp://send?phone=${telWa}&text=${encodeURIComponent(mensajeWa)}" class="btn-wa" title="Escribir por WhatsApp a este postulante con los datos de su cita" onclick="event.stopPropagation()">💬 WhatsApp</a>` : ''}
+        ${telWa ? `<a href="sms:+${telWa}?body=${encodeURIComponent(mensajeSms)}" class="btn-sms" title="Enviar mensaje de texto (SMS) con los datos de su cita" onclick="event.stopPropagation()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:middle;margin-right:2px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>SMS</a>` : ''}
       </div>
       <span class="sc-item ${b.correo ? 'slot-mail' : 'sin'}" title="${b.correo ? 'Correo: ' + esc(b.correo) : 'Sin correo registrado'}">
         <svg class="sc-ico" viewBox="0 0 16 16" width="11" height="11" fill="currentColor"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2zm13 2.383-4.708 2.825L15 11.105V5.383zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741zM1 11.105l4.708-2.897L1 5.383v5.722z"/></svg>
@@ -483,6 +484,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     const esConfirmado = b.confirmo_asistencia === 1;
     const telWa = telWaDe(b.contacto);
     const mensajeWa = mensajeWaCita(b, examNombre);
+    const mensajeSms = mensajeSmsCita(b, examNombre);
     const problema = problemaDatos(b);
     const noAsiste = b.resultado === 'NO ASISTIO' || b.resultado === 'REPROBADO INASISTENCIA';
     const avisadoSet = new Set(String(b.avisado_por || '').split(',').filter(Boolean));
@@ -542,7 +544,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
 
       // Avisos compactos
       const chkTel = `<label class="chk-aviso-mini ${b.contacto ? '' : 'sin'}" title="${b.contacto ? 'Avisado por Teléfono' : 'Sin teléfono'}"><input type="checkbox" data-aviso="telefono" ${avisadoSet.has('telefono') ? 'checked' : ''} ${b.contacto ? '' : 'disabled'}>Tel</label>`;
-      const chkWa = `<label class="chk-aviso-mini ${b.contacto ? '' : 'sin'}" title="${b.contacto ? 'Avisado por WhatsApp' : 'Sin teléfono'}"><input type="checkbox" data-aviso="whatsapp" ${avisadoSet.has('whatsapp') ? 'checked' : ''} ${b.contacto ? '' : 'disabled'}>WA</label>`;
+      const chkWa = `<label class="chk-aviso-mini ${b.contacto ? '' : 'sin'}" title="${b.contacto ? 'Avisado por mensaje de texto (SMS)' : 'Sin teléfono'}"><input type="checkbox" data-aviso="whatsapp" ${avisadoSet.has('whatsapp') ? 'checked' : ''} ${b.contacto ? '' : 'disabled'}>SMS</label>`;
       const chkMail = `<label class="chk-aviso-mini ${b.correo ? '' : 'sin'}" title="${b.correo ? 'Avisado por Correo' : 'Sin correo'}"><input type="checkbox" data-aviso="correo" ${avisadoSet.has('correo') ? 'checked' : ''} ${b.correo ? '' : 'disabled'}>Mail</label>`;
 
       // Formatear RUT y Teléfono sin posibilidad de salto de línea
@@ -590,7 +592,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           <td class="td-contacto">
             <div class="contacto-col-wrap">
               ${telFmt ? `<span class="tel-txt num">${telFmt}</span>` : '<span class="sin-tel text-muted">—</span>'}
-              ${telWa ? `<a href="whatsapp://send?phone=${telWa}&text=${encodeURIComponent(mensajeWa)}" class="btn-wa-tabla" onclick="event.stopPropagation()" title="Escribir por WhatsApp">💬 WhatsApp</a>` : ''}
+              ${telWa ? `<a href="sms:+${telWa}?body=${encodeURIComponent(mensajeSms)}" class="btn-sms-tabla" onclick="event.stopPropagation()" title="Enviar mensaje de texto (SMS) a este postulante"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:middle;margin-right:3px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Mensaje de texto</a>` : ''}
             </div>
           </td>
           <td class="td-avisos">

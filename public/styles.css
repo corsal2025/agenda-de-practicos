@@ -1446,12 +1446,13 @@ tbody tr:first-child td { border-top: 0; }
   align-items: center;
   gap: 6px;
 }
-.btn-wa {
+.btn-wa,
+.btn-sms {
   display: inline-flex;
   align-items: center;
   gap: 3px;
   padding: 2px 7px;
-  background: #25d366;
+  background: #0284c7;
   color: #ffffff;
   border-radius: 4px;
   font-size: 10.5px;
@@ -1460,9 +1461,11 @@ tbody tr:first-child td { border-top: 0; }
   transition: opacity .12s ease;
   flex: none;
 }
-.btn-wa:hover {
+.btn-wa:hover,
+.btn-sms:hover {
   opacity: 0.9;
   color: #fff;
+  background: #0369a1;
 }
 .slot-func {
   font-size: 10.5px;
@@ -2632,13 +2635,14 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
   flex-shrink: 0;
 }
 
-.btn-wa-tabla {
+.btn-wa-tabla,
+.btn-sms-tabla {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
   border-radius: 6px;
-  background: #25d366;
+  background: #0284c7;
   color: #ffffff !important;
   font-size: 11px;
   font-weight: 700;
@@ -2648,8 +2652,9 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
   white-space: nowrap !important;
 }
 
-.btn-wa-tabla:hover {
-  background: #1eb857;
+.btn-wa-tabla:hover,
+.btn-sms-tabla:hover {
+  background: #0369a1;
   transform: translateY(-1px);
 }
 

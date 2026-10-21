@@ -126,6 +126,7 @@ async function renderPorConfirmar() {
     $('#pc-tbody').innerHTML = filtradas.map((r) => {
       const telWa = telWaDe(r.contacto);
       const mensajeWa = mensajeWaCita(r, r.examinador, 'Por favor confírmanos si podrás asistir o si necesitas reagendar tu hora para otra fecha.');
+      const mensajeSms = mensajeSmsCita(r, r.examinador, 'Por favor confírmanos si podrás asistir o si necesitas reagendar tu hora.');
       const correoTxt = String(r.correo || '').trim();
 
       return `
@@ -140,7 +141,7 @@ async function renderPorConfirmar() {
           ${r.contacto ? `
             <span class="pc-tel">
               <a href="tel:${esc(r.contacto)}" style="text-decoration:none;font-weight:600;color:var(--azul)">📞 ${esc(fTel(r.contacto))}</a>
-              ${telWa ? `<a href="whatsapp://send?phone=${telWa}&text=${encodeURIComponent(mensajeWa)}" class="btn-wa" title="Escribir por WhatsApp a este postulante para confirmar o reagendar">💬</a>` : ''}
+              ${telWa ? `<a href="sms:+${telWa}?body=${encodeURIComponent(mensajeSms)}" class="btn-sms" title="Enviar mensaje de texto SMS para confirmar o reagendar"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:middle;margin-right:2px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> SMS</a>` : ''}
             </span>
           ` : '<span class="muted">Sin teléfono</span>'}
         </td>
