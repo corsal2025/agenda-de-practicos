@@ -13,26 +13,36 @@ async function renderAgenda() {
     filtAgenda.examinador_id = estadoAgenda.examinador_id || '';
     filtAgenda.esRango = false;
   }
+  const plegado = agendaLeerPlegado();
   view.innerHTML = `
     <div class="panel no-print panel-fijo agenda-toolbar">
-      <div class="fila" style="justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap">
-        <!-- Grupo Búsqueda y Navegación de Cupos (FOTO 1 integrada en FOTO 2) -->
-        <div style="display:flex;align-items:flex-end;gap:6px;flex-wrap:wrap">
+      <div class="disp-filtros-cab" style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:.75rem">
+          <button type="button" class="btn-plegar" id="a-plegar" aria-expanded="${!plegado}" aria-controls="a-campos" style="font-size:13px;font-weight:800;color:var(--azul-900,#172b4d);letter-spacing:0.04em">
+            FILTROS <span aria-hidden="true" id="a-plegar-flecha">${plegado ? '▸' : '▾'}</span>
+          </button>
+          <span class="muted disp-resumen" id="a-resumen" aria-live="polite" style="font-size:13px;font-weight:600;color:var(--muted)"></span>
+        </div>
+      </div>
+
+      <!-- Fila 1 Desplegable: Búsqueda y Rango de Fechas -->
+      <div id="a-campos" ${plegado ? 'hidden' : ''} style="margin-bottom:10px">
+        <div class="fila" style="align-items:flex-end;gap:6px;flex-wrap:wrap">
           <button class="btn sec" id="dia-prev" style="padding:.45rem .65rem;height:38px" title="Día anterior">&#8592;</button>
           <div class="campo">
-            <label for="a-fecha">Fecha / Desde</label>
+            <label for="a-fecha" style="font-weight:700;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:var(--muted)">FECHA / DESDE</label>
             <input type="date" id="a-fecha" value="${esc(estadoAgenda.fecha)}">
           </div>
           <button class="btn sec" id="dia-next" style="padding:.45rem .65rem;height:38px" title="Día siguiente">&#8594;</button>
           <button class="btn sec" id="a-hoy" style="height:38px" title="Ir al día actual o primer día con agenda">Hoy</button>
 
           <div class="campo">
-            <label for="a-hasta">Hasta</label>
+            <label for="a-hasta" style="font-weight:700;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:var(--muted)">HASTA</label>
             <input type="date" id="a-hasta" value="${esc(filtAgenda.hasta || estadoAgenda.fecha)}">
           </div>
 
           <div class="campo">
-            <label for="a-clase">Clase</label>
+            <label for="a-clase" style="font-weight:700;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:var(--muted)">CLASE</label>
             <select id="a-clase">
               <option value="">--</option>
               ${opt(META.catalogos.clase, filtAgenda.clase)}
@@ -40,58 +50,92 @@ async function renderAgenda() {
           </div>
 
           <div class="campo">
-            <label for="a-exam">Examinador</label>
+            <label for="a-exam" style="font-weight:700;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:var(--muted)">EXAMINADOR</label>
             <select id="a-exam">
               <option value="">Todos</option>
               ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}" ${String(e.id) === String(estadoAgenda.examinador_id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}
             </select>
           </div>
 
-          <button class="btn" id="a-buscar" style="height:38px;padding:0 16px" title="Ver agenda completa de cupos y citas en el rango seleccionado">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" style="vertical-align:middle;margin-right:3px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <button class="btn" id="a-buscar" style="height:38px;padding:0 18px;border-radius:20px;font-weight:700" title="Ver agenda completa de cupos y citas en el rango seleccionado">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" style="vertical-align:middle;margin-right:4px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             Buscar
           </button>
 
           <span class="muted" id="a-regla" style="font-size:12px;font-weight:600;align-self:center;margin-left:6px;line-height:1.2"></span>
         </div>
+      </div>
 
-        <!-- Grupo Acciones de Agenda (Fila inferior dentro del panel de opciones) -->
-        <div style="width:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,0,0,0.06)">
-          <span class="pastilla" id="a-libres" data-tooltip="Total de horas disponibles para agendar en la fecha seleccionada">— bloques libres</span>
-          <div class="vista-selector" title="Elegir modalidad de visualización de la Agenda">
-            <button type="button" class="btn-vista ${(estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'tabla') === 'tabla' ? 'activo' : ''}" id="btn-vista-tabla" title="Vista en tabla con columnas (distribución corporativa en columnas)">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm1 2v2h14V4H1zm0 3v2h14V7H1zm0 3v2h14v-2H1zm0 3v1a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1H1z"/></svg>
-              <span>Tabla</span>
-            </button>
-            <button type="button" class="btn-vista ${(estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'tabla') === 'vertical' ? 'activo' : ''}" id="btn-vista-vertical" title="Vista vertical por examinador">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2zm7 0a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V2z"/></svg>
-              <span>Vertical</span>
-            </button>
-            <button type="button" class="btn-vista ${(estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'tabla') === 'horizontal' ? 'activo' : ''}" id="btn-vista-horizontal" title="Vista horizontal continua (Línea de tiempo hacia el lado)">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3zm0 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-3z"/></svg>
-              <span>Horizontal</span>
-            </button>
-          </div>
-          
-          <button class="btn btn-bloq-accion" id="a-bloqdia" data-tooltip="Inhabilita franjas horarias por licencias, feriados, capacitaciones o terreno (envía citas a Reagendar)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            Bloquear
+      <!-- Fila 2: Acciones permanentes de la Agenda (Vistas, Bloqueos, Imprimir y Buscador de RUT) -->
+      <div style="width:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:10px;border-top:1px solid rgba(0,0,0,0.06)">
+        <span class="pastilla" id="a-libres" data-tooltip="Total de horas disponibles para agendar en la fecha seleccionada">— bloques libres</span>
+        <div class="vista-selector" title="Elegir modalidad de visualización de la Agenda">
+          <button type="button" class="btn-vista ${(estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'tabla') === 'tabla' ? 'activo' : ''}" id="btn-vista-tabla" title="Vista en tabla con columnas (distribución corporativa en columnas)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm1 2v2h14V4H1zm0 3v2h14V7H1zm0 3v2h14v-2H1zm0 3v1a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1H1z"/></svg>
+            <span>Tabla</span>
           </button>
-          <button class="btn btn-desbloq-accion" id="a-desbloqdia" data-tooltip="Libera y reactiva bloques previamente bloqueados para volver a citar">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
-            Desbloquear
+          <button type="button" class="btn-vista ${(estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'tabla') === 'vertical' ? 'activo' : ''}" id="btn-vista-vertical" title="Vista vertical por examinador">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2zm7 0a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V2z"/></svg>
+            <span>Vertical</span>
           </button>
-          <span class="agenda-acciones-dia" id="a-acciones-dia" style="display:inline-flex;gap:6px;flex-wrap:wrap">
-            <button class="btn sec" id="a-imprimir" type="button" data-tooltip="Imprime la agenda de la fecha y examinador seleccionados, ordenada por hora">🖨 Imprimir día</button>
-          </span>
-          <div class="tabla-busc-wrap" style="flex:1;max-width:320px;margin-left:auto">
-            <svg class="tabla-busc-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5l4.5 4.5"/></svg>
-            <input type="search" id="tabla-busc-input" class="tabla-busc-input" placeholder="Buscar RUT o nombre" autocomplete="off" style="height:36px">
-          </div>
+          <button type="button" class="btn-vista ${(estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'tabla') === 'horizontal' ? 'activo' : ''}" id="btn-vista-horizontal" title="Vista horizontal continua (Línea de tiempo hacia el lado)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3zm0 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-3z"/></svg>
+            <span>Horizontal</span>
+          </button>
+        </div>
+        
+        <button class="btn btn-bloq-accion" id="a-bloqdia" data-tooltip="Inhabilita franjas horarias por licencias, feriados, capacitaciones o terreno (envía citas a Reagendar)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Bloquear
+        </button>
+        <button class="btn btn-desbloq-accion" id="a-desbloqdia" data-tooltip="Libera y reactiva bloques previamente bloqueados para volver a citar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+          Desbloquear
+        </button>
+        <span class="agenda-acciones-dia" id="a-acciones-dia" style="display:inline-flex;gap:6px;flex-wrap:wrap">
+          <button class="btn sec" id="a-imprimir" type="button" data-tooltip="Imprime la agenda de la fecha y examinador seleccionados, ordenada por hora">🖨 Imprimir día</button>
+        </span>
+        <div class="tabla-busc-wrap" style="flex:1;max-width:320px;margin-left:auto">
+          <svg class="tabla-busc-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5l4.5 4.5"/></svg>
+          <input type="search" id="tabla-busc-input" class="tabla-busc-input" placeholder="Buscar RUT o nombre" autocomplete="off" style="height:36px">
         </div>
       </div>
     </div>
     <div class="panel"><div id="a-grid">Cargando...</div></div>`;
+
+  const resumenAgenda = () => {
+    const ex = META.examinadores.find((e) => String(e.id) === String(estadoAgenda.examinador_id));
+    const rEl = $('#a-resumen');
+    if (rEl) {
+      const periodo = filtAgenda.esRango && filtAgenda.desde && filtAgenda.hasta && filtAgenda.desde !== filtAgenda.hasta
+        ? `${fFecha(filtAgenda.desde)} – ${fFecha(filtAgenda.hasta)}`
+        : fFecha(estadoAgenda.fecha);
+      rEl.textContent = [
+        `📅 ${periodo}`,
+        filtAgenda.clase ? `Clase ${filtAgenda.clase}` : '',
+        ex ? ex.nombre : 'Todos los examinadores',
+      ].filter(Boolean).join(' · ');
+    }
+  };
+
+  const plegarAgenda = (v) => {
+    const campos = $('#a-campos');
+    if (campos) campos.hidden = v;
+    const b = $('#a-plegar');
+    if (b) {
+      b.setAttribute('aria-expanded', String(!v));
+      const f = $('#a-plegar-flecha');
+      if (f) f.textContent = v ? '▸' : '▾';
+    }
+    const rEl = $('#a-resumen');
+    if (rEl) rEl.hidden = !v;
+    agendaGuardarPlegado(v);
+    setTimeout(ajustarOffsetsFijos, 0);
+  };
+
+  if ($('#a-plegar')) $('#a-plegar').onclick = () => plegarAgenda(!$('#a-campos').hidden);
+  if ($('#a-resumen')) $('#a-resumen').hidden = !plegado;
+  resumenAgenda();
 
   let totalLibresRango = null;
   const actualizarConteoRango = async () => {
