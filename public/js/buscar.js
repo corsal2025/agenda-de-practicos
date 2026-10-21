@@ -138,7 +138,15 @@ async function renderErrores() {
   <div class="panel tabla-scroll">
     <table class="tabla-errores-planilla">
       <thead><tr>
-        <th class="c">Sev</th><th>Tipo</th><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th>RUT</th><th>Nombre</th><th>Detalle</th><th class="c" style="min-width:220px">Acciones en planilla</th>
+        <th class="c th-err-sev">Sev</th>
+        <th class="th-err-tipo">Tipo</th>
+        <th class="c th-err-fecha">Fecha</th>
+        <th class="c th-err-hora">Hora</th>
+        <th class="th-err-examinador">Examinador</th>
+        <th class="th-err-rut">RUT</th>
+        <th class="th-err-nombre">Nombre</th>
+        <th class="th-err-detalle">Detalle</th>
+        <th class="c th-err-acciones">Acciones en planilla</th>
       </tr></thead>
       <tbody id="e-body"><tr><td colspan="9">Cargando...</td></tr></tbody>
     </table>
@@ -209,15 +217,15 @@ async function renderErrores() {
       }
 
       return `<tr data-row-id="${x.agenda_id || ''}">
-        <td class="c"><span class="sev ${x.severidad}">${x.severidad}</span></td>
-        <td><strong>${esc(ETIQUETA[x.tipo] || x.tipo)}</strong></td>
-        <td class="c">${esc(fFecha(x.fecha))}</td>
-        <td class="c">${esc(x.hora)}</td>
-        <td>${esc(x.examinador)}</td>
-        <td>${esc(x.rut || '—')}</td>
-        <td>${esc(nom(x.nombre) || '—')}</td>
-        <td>${esc(x.mensaje)}</td>
-        <td class="c">${acciones}</td>
+        <td class="c td-err-sev"><span class="sev ${x.severidad}">${x.severidad}</span></td>
+        <td class="td-err-tipo"><strong>${esc(ETIQUETA[x.tipo] || x.tipo)}</strong></td>
+        <td class="c td-err-fecha">${esc(fFecha(x.fecha))}</td>
+        <td class="c td-err-hora">${esc(x.hora)}</td>
+        <td class="td-err-examinador">${esc(x.examinador)}</td>
+        <td class="num td-err-rut">${esc(x.rut || '—')}</td>
+        <td class="td-err-nombre">${esc(nom(x.nombre) || '—')}</td>
+        <td class="td-err-detalle">${esc(x.mensaje)}</td>
+        <td class="c td-err-acciones">${acciones}</td>
       </tr>`;
     }).join('');
 

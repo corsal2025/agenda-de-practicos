@@ -3022,4 +3022,89 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
   flex-wrap: wrap;
 }
 
+/* Tabla de Reporte de Errores - Ajuste lineal y auto-adaptable */
+.tabla-errores-planilla {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto;
+}
+
+.tabla-errores-planilla th,
+.tabla-errores-planilla td {
+  vertical-align: middle;
+  padding: .55rem .75rem;
+}
+
+/* Columnas ajustadas automáticamente al contenido */
+.tabla-errores-planilla th.th-err-sev,
+.tabla-errores-planilla td.td-err-sev {
+  width: 1%;
+  white-space: nowrap !important;
+  text-align: center;
+}
+
+.tabla-errores-planilla th.th-err-tipo,
+.tabla-errores-planilla td.td-err-tipo {
+  white-space: nowrap !important;
+}
+
+.tabla-errores-planilla th.th-err-fecha,
+.tabla-errores-planilla td.td-err-fecha,
+.tabla-errores-planilla th.th-err-hora,
+.tabla-errores-planilla td.td-err-hora {
+  width: 1%;
+  white-space: nowrap !important;
+  text-align: center;
+}
+
+.tabla-errores-planilla th.th-err-examinador,
+.tabla-errores-planilla td.td-err-examinador {
+  white-space: nowrap !important;
+}
+
+.tabla-errores-planilla th.th-err-rut,
+.tabla-errores-planilla td.td-err-rut {
+  width: 1%;
+  white-space: nowrap !important;
+}
+
+.tabla-errores-planilla th.th-err-nombre,
+.tabla-errores-planilla td.td-err-nombre {
+  min-width: 140px;
+}
+
+.tabla-errores-planilla th.th-err-detalle,
+.tabla-errores-planilla td.td-err-detalle {
+  min-width: 180px;
+}
+
+.tabla-errores-planilla th.th-err-acciones,
+.tabla-errores-planilla td.td-err-acciones {
+  width: 1%;
+  white-space: nowrap !important;
+  text-align: center;
+}
+
+/* Contenedor de acciones lineal: sin botones montados */
+.acciones-error-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+}
+
+.acciones-error-wrap .btn {
+  white-space: nowrap !important;
+  margin: 0;
+  padding: .3rem .55rem;
+  font-size: 11.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
 
