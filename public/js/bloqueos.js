@@ -97,7 +97,7 @@ function dialogoBloquearDia() {
       ${motivos.map((m) => `<option value="${esc(m)}">${esc(ETQ_MOTIVO[m] || m.charAt(0) + m.slice(1).toLowerCase())}</option>`).join('')}
       <option value="__otro">Otro...</option></select></div>
     <div class="campo ancho" id="bd-otro-c" hidden><label>Otro motivo</label><input id="bd-otro" placeholder="Escribe el motivo"></div>
-    <div class="campo ancho" id="bd-ocupados-c"><label><input type="checkbox" id="bd-ocupados" checked> Incluir bloques que ya tienen cita (se enviarán a Reagendar)</label></div>
+    <div class="campo ancho campo-checkbox" id="bd-ocupados-c"><label class="chk-lineal"><input type="checkbox" id="bd-ocupados" checked> <span>Incluir bloques que ya tienen cita (se enviarán a Reagendar)</span></label></div>
     <div class="ancho aviso" id="bd-resumen" hidden></div>
   `, `
     <button class="btn sec" id="bd-cancel">Cancelar</button>

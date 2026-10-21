@@ -235,19 +235,58 @@ main { padding: .75rem 24px 2.5rem; max-width: none; width: 100%; box-sizing: bo
   font-size: 11px; font-weight: 700; letter-spacing: .06em;
   text-transform: uppercase; color: var(--tinta-3);
 }
+.campo.campo-checkbox {
+  flex-direction: row;
+  align-items: center;
+}
+.campo label:has(input[type="checkbox"]),
+.campo-checkbox label,
+.chk-lineal {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: .55rem !important;
+  cursor: pointer;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: .06em !important;
+  text-transform: uppercase !important;
+  color: var(--tinta-3) !important;
+  user-select: none;
+  line-height: 1.25;
+}
+.campo label:has(input[type="checkbox"]) input[type="checkbox"],
+.campo-checkbox label input[type="checkbox"],
+.chk-lineal input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  flex-shrink: 0;
+  cursor: pointer;
+}
 .chk-clases { display: flex; flex-wrap: wrap; gap: .4rem .9rem; padding: .5rem .1rem; }
 .chk-clase { display: inline-flex; align-items: center; gap: .35rem; font-weight: 600; font-size: 13.5px; color: var(--tinta); cursor: pointer; text-transform: none; letter-spacing: normal; }
 .chk-clase input { width: auto; height: auto; }
 
-input, select, textarea {
+input:not([type="checkbox"]):not([type="radio"]), select, textarea {
   font: inherit; padding: .5rem .6rem; height: 38px;
   border: 1px solid var(--linea); border-radius: var(--r-sm);
   background: var(--papel); color: var(--tinta);
   transition: border-color .12s, box-shadow .12s;
 }
+input[type="checkbox"], input[type="radio"] {
+  width: 17px; height: 17px; min-width: 17px; min-height: 17px;
+  padding: 0; margin: 0;
+  accent-color: var(--azul);
+  cursor: pointer;
+  vertical-align: middle;
+}
 textarea { height: auto; }
-input:hover, select:hover, textarea:hover { border-color: var(--tinta-3); }
-input:focus, select:focus, textarea:focus {
+input:not([type="checkbox"]):not([type="radio"]):hover, select:hover, textarea:hover { border-color: var(--tinta-3); }
+input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:focus {
   outline: none; border-color: var(--azul); box-shadow: 0 0 0 3px var(--ring);
 }
 .muted { color: var(--tinta-2); }
