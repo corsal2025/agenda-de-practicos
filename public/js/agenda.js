@@ -95,9 +95,9 @@ async function renderAgenda() {
         <span class="agenda-acciones-dia" id="a-acciones-dia" style="display:inline-flex;gap:6px;flex-wrap:wrap">
           <button class="btn sec" id="a-imprimir" type="button" data-tooltip="Imprime la agenda de la fecha y examinador seleccionados, ordenada por hora">🖨 Imprimir día</button>
         </span>
-        <div class="tabla-busc-wrap" style="flex:1;max-width:320px;margin-left:auto">
+        <div class="tabla-busc-wrap" style="flex:1 1 360px;min-width:280px;max-width:560px;margin-left:auto">
           <svg class="tabla-busc-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5l4.5 4.5"/></svg>
-          <input type="search" id="tabla-busc-input" class="tabla-busc-input" placeholder="Buscar RUT o nombre" autocomplete="off" style="height:36px">
+          <input type="search" id="tabla-busc-input" class="tabla-busc-input" placeholder="Buscar RUT o nombre" autocomplete="off" style="height:38px">
         </div>
       </div>
     </div>
