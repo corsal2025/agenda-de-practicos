@@ -305,7 +305,12 @@ function pintarGrilla(cont, filas, fecha) {
     porKey[`${f.hora}|${f.examinador_id}`] = f;
     if (f.rut || f.nombre) cuenta[f.examinador_id] = (cuenta[f.examinador_id] || 0) + 1;
   });
-  const modo = estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'vertical';
+  const modo = estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'tabla';
+
+  if (modo === 'tabla') {
+    pintarTablaAgenda(cont, filas, fecha, exs);
+    return;
+  }
 
   if (modo === 'horizontal') {
     cont.className = 'grilla-horizontal-wrap';
@@ -423,4 +428,387 @@ function pintarGrilla(cont, filas, fecha) {
 // el resto de sus datos. Compartido entre la grilla y el check-in del dia.
 async function marcarResultado(id, resultado) {
   await api(`/agenda/${id}/resultado`, { method: 'POST', body: { resultado } });
+}
+
+function pintarTablaAgenda(cont, filas, fecha, exs) {
+  cont.className = 'tabla-agenda-wrap';
+  cont.style.gridTemplateColumns = '';
+
+  // Ordenar filas por hora ascendente y luego examinador
+  const ordenadas = [...filas].sort((a, b) => {
+    if (a.hora !== b.hora) return a.hora.localeCompare(b.hora);
+    return Number(a.examinador_id || 0) - Number(b.examinador_id || 0);
+  });
+
+  const totalCitas = ordenadas.filter((f) => f.rut || f.nombre).length;
+  const totalLibres = ordenadas.filter((f) => !f.rut && !f.nombre && !f.bloqueado).length;
+  const totalConfirmadas = ordenadas.filter((f) => f.confirmo_asistencia === 1).length;
+
+  let html = `
+    <div class="tabla-agenda-toolbar-exterior">
+      <div class="tabla-busc-wrap">
+        <svg class="tabla-busc-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5l4.5 4.5"/></svg>
+        <input type="search" id="tabla-busc-input" class="tabla-busc-input" placeholder="Buscar RUT o nombre" autocomplete="off">
+      </div>
+      <div class="tabla-filtros-rapidos">
+        <button type="button" class="btn-filtro-pill activo" data-filtro="todos">Todas (${ordenadas.length})</button>
+        <button type="button" class="btn-filtro-pill" data-filtro="ocupadas">Citas (${totalCitas})</button>
+        <button type="button" class="btn-filtro-pill" data-filtro="libres">Libres (${totalLibres})</button>
+        ${totalConfirmadas ? `<button type="button" class="btn-filtro-pill" data-filtro="confirmadas">✓ Confirmadas (${totalConfirmadas})</button>` : ''}
+      </div>
+    </div>
+    <div class="tabla-agenda-card">
+      <div class="tabla-agenda-scroll">
+        <table class="tabla-agenda-elegante" id="tabla-agenda-main">
+          <thead>
+            <tr>
+              <th class="th-hora">HORA</th>
+              <th class="th-nombre">NOMBRE DE CONTRIBUYENTE</th>
+              <th class="th-rut">RUT</th>
+              <th class="th-sede">SEDE</th>
+              <th class="th-tramite">TRÁMITE AGENDA</th>
+              <th class="th-fecha">FECHA ÚLT.<br>CARPETA</th>
+              <th class="th-clase">CLASE *</th>
+              <th class="th-contacto">CONTACTO</th>
+              <th class="th-avisos">AVISADO</th>
+              <th class="th-confirmar">CONFIRMAR</th>
+              <th class="th-resultado">RESULTADO</th>
+            </tr>
+          </thead>
+          <tbody>
+  `;
+
+  for (const b of ordenadas) {
+    const ocupada = Boolean(b.rut || b.nombre);
+    const bloqueada = Boolean(b.bloqueado);
+    const examObj = META.examinadores.find((e) => e.id === b.examinador_id);
+    const examNombre = b.examinador || (examObj ? examObj.nombre : 'AV. ARGENTINA');
+    const pesada = b.hora === META.hora_d_a5;
+    const esConfirmado = b.confirmo_asistencia === 1;
+    const telWa = telWaDe(b.contacto);
+    const mensajeWa = mensajeWaCita(b, examNombre);
+    const problema = problemaDatos(b);
+    const noAsiste = b.resultado === 'NO ASISTIO' || b.resultado === 'REPROBADO INASISTENCIA';
+    const avisadoSet = new Set(String(b.avisado_por || '').split(',').filter(Boolean));
+
+    if (bloqueada) {
+      html += `
+        <tr class="fila-agenda-tabla fila-bloqueada" data-id="${b.id}" data-tipo="bloqueada" data-examinador="${b.examinador_id}">
+          <td class="td-hora">
+            <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
+              ${esc(b.hora)}
+              ${pesada ? '<span class="et-d">D·A5</span>' : ''}
+            </span>
+          </td>
+          <td class="td-nombre">
+            <span class="bloqueado-label">🔒 ${esc(b.bloqueo_motivo || 'BLOQUEADO')}</span>
+          </td>
+          <td class="td-rut text-muted">—</td>
+          <td class="td-sede"><span class="sede-pill-badge">${esc(examNombre)}</span></td>
+          <td class="td-tramite text-muted">—</td>
+          <td class="td-fecha text-muted">—</td>
+          <td class="td-clase text-muted">—</td>
+          <td class="td-contacto text-muted">—</td>
+          <td class="td-avisos text-muted">—</td>
+          <td class="td-confirmar text-muted">—</td>
+          <td class="td-resultado"><span class="badge-bloq-tag">No disponible</span></td>
+        </tr>
+      `;
+    } else if (!ocupada) {
+      html += `
+        <tr class="fila-agenda-tabla fila-libre" data-id="${b.id}" data-tipo="libre" data-examinador="${b.examinador_id}">
+          <td class="td-hora">
+            <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
+              ${esc(b.hora)}
+              ${pesada ? '<span class="et-d">D·A5</span>' : ''}
+            </span>
+          </td>
+          <td class="td-nombre">
+            <span class="libre-label"><span class="punto-verde"></span> Disponible para agendar</span>
+          </td>
+          <td class="td-rut text-muted">—</td>
+          <td class="td-sede"><span class="sede-pill-badge">${esc(examNombre)}</span></td>
+          <td class="td-tramite text-muted">—</td>
+          <td class="td-fecha text-muted">—</td>
+          <td class="td-clase">${pesada ? '<span class="badge dpesada">D y A5</span>' : '<span class="text-muted">—</span>'}</td>
+          <td class="td-contacto text-muted">—</td>
+          <td class="td-avisos text-muted">—</td>
+          <td class="td-confirmar text-muted">—</td>
+          <td class="td-resultado">
+            <button type="button" class="btn-agendar-tabla" data-id="${b.id}" title="Agendar cita en este bloque">+ Agendar cita</button>
+          </td>
+        </tr>
+      `;
+    } else {
+      // Cita ocupada
+      const int = String(b.intento || '').toUpperCase();
+      const tipo = String(b.tipo_cita || '').toUpperCase();
+      let tramiteTexto = '1° VEZ / EXTENSIÓN';
+      let tramiteCss = 'pill-primera';
+
+      if (b.pendiente_reagendar || tipo.includes('REAGENDAD')) {
+        tramiteTexto = 'REAGENDADA';
+        tramiteCss = 'pill-reagendado';
+      } else if (int.includes('2') || int.includes('SEGUNDA') || tipo.includes('RENOVACION') || tipo.includes('RENOVACIÓN')) {
+        tramiteTexto = 'RENOVACIÓN';
+        tramiteCss = 'pill-renovacion';
+      } else if (int.includes('1') || int.includes('PRIMERA') || tipo.includes('PRIMERA') || tipo.includes('EXTENSION') || tipo.includes('EXTENSIÓN')) {
+        tramiteTexto = '1° VEZ / EXTENSIÓN';
+        tramiteCss = 'pill-primera';
+      } else if (b.intento || b.tipo_cita) {
+        tramiteTexto = esc(b.intento || b.tipo_cita);
+        tramiteCss = 'pill-renovacion';
+      }
+
+      const resCls = b.resultado === 'APROBADO' ? 'res-aprob' : (b.resultado === 'REPROBADO' || noAsiste) ? 'res-reprob' : '';
+
+      // Cuenta regresiva / plazo trámite
+      const plazoHtml = b.dias_restantes_tramite != null
+        ? cuentaRegresivaHtml(b.dias_restantes_tramite, b.fecha_vencimiento_tramite)
+        : '';
+
+      // Avisos compactos
+      const chkTel = `<label class="chk-aviso-mini ${b.contacto ? '' : 'sin'}" title="${b.contacto ? 'Avisado por Teléfono' : 'Sin teléfono'}"><input type="checkbox" data-aviso="telefono" ${avisadoSet.has('telefono') ? 'checked' : ''} ${b.contacto ? '' : 'disabled'}>Tel</label>`;
+      const chkWa = `<label class="chk-aviso-mini ${b.contacto ? '' : 'sin'}" title="${b.contacto ? 'Avisado por WhatsApp' : 'Sin teléfono'}"><input type="checkbox" data-aviso="whatsapp" ${avisadoSet.has('whatsapp') ? 'checked' : ''} ${b.contacto ? '' : 'disabled'}>WA</label>`;
+      const chkMail = `<label class="chk-aviso-mini ${b.correo ? '' : 'sin'}" title="${b.correo ? 'Avisado por Correo' : 'Sin correo'}"><input type="checkbox" data-aviso="correo" ${avisadoSet.has('correo') ? 'checked' : ''} ${b.correo ? '' : 'disabled'}>Mail</label>`;
+
+      // Formatear RUT y Teléfono sin posibilidad de salto de línea
+      const rutFmt = b.rut ? esc(b.rut).replace(/-/g, '&#8209;') : 'sin RUT';
+      const telFmt = b.contacto ? esc(fTel(b.contacto)).replace(/ /g, '&nbsp;') : '';
+
+      html += `
+        <tr class="fila-agenda-tabla fila-ocupada ${resCls}" data-id="${b.id}" data-tipo="ocupada" data-examinador="${b.examinador_id}">
+          <td class="td-hora">
+            <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
+              ${esc(b.hora)}
+              ${pesada ? '<span class="et-d">D·A5</span>' : ''}
+            </span>
+          </td>
+          <td class="td-nombre">
+            <div class="nombre-cell-box">
+              <div class="nombre-cell-top">
+                ${problema ? `<span class="alerta-dato" title="${esc(problema)}">⚠</span>` : ''}
+                <span class="nombre-contribuyente">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
+              </div>
+              <div class="nombre-cell-sub">
+                ${plazoHtml ? `<span class="plazo-badge-wrap">${plazoHtml}</span>` : ''}
+                ${(b.alerts || []).length ? `<span class="slot-alertas-mini">${alertasHtml(b)}</span>` : ''}
+                ${b.funcionario ? `<span class="slot-func" title="Atendido por ${esc(b.funcionario)}"><svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/></svg> ${esc(b.funcionario)}</span>` : ''}
+              </div>
+            </div>
+          </td>
+          <td class="td-rut">
+            <div class="rut-cell-box">
+              <button type="button" class="btn-lapiz-editar" data-id="${b.id}" title="Editar ficha completa / Historial">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+              </button>
+              <span class="rut-txt num">${rutFmt}</span>
+            </div>
+          </td>
+          <td class="td-sede">
+            <span class="sede-pill-badge">${esc(examNombre)}</span>
+          </td>
+          <td class="td-tramite">
+            <span class="tramite-pill-badge ${tramiteCss}">${esc(tramiteTexto)}</span>
+          </td>
+          <td class="td-fecha">
+            <div class="fecha-box-inline ${b.fecha_inicio_tramite ? '' : 'fecha-vacia'}" data-id="${b.id}" title="${b.fecha_inicio_tramite ? 'Inicio de trámite: ' + fFecha(b.fecha_inicio_tramite) : 'Sin fecha de inicio registrada'}">
+              <span>${b.fecha_inicio_tramite ? esc(fFecha(b.fecha_inicio_tramite)) : 'dd/mm/aaaa'}</span>
+              <span class="cal-ico">📅</span>
+            </div>
+          </td>
+          <td class="td-clase">
+            <button type="button" class="btn-clase-pill" data-id="${b.id}" title="Clase de licencia (Clic para abrir ficha)">
+              <span>${esc(b.clase || 'Clase')}</span>
+              <span class="flechita-down">▾</span>
+            </button>
+          </td>
+          <td class="td-contacto">
+            <div class="contacto-col-wrap">
+              ${telFmt ? `<span class="tel-txt num">${telFmt}</span>` : '<span class="sin-tel text-muted">—</span>'}
+              ${telWa ? `<a href="whatsapp://send?phone=${telWa}&text=${encodeURIComponent(mensajeWa)}" class="btn-wa-tabla" onclick="event.stopPropagation()" title="Escribir por WhatsApp">💬 WhatsApp</a>` : ''}
+            </div>
+          </td>
+          <td class="td-avisos">
+            <div class="slot-avisos-tabla" data-id="${b.id}" onclick="event.stopPropagation()">
+              ${chkTel}
+              ${chkWa}
+              ${chkMail}
+            </div>
+          </td>
+          <td class="td-confirmar">
+            <button type="button" class="btn-confirmar-tabla ${esConfirmado ? 'es-confirmado' : ''}" data-act="confirmar" data-id="${b.id}" title="${esConfirmado ? 'Asistencia confirmada. Clic para desmarcar' : 'Confirmar asistencia del postulante'}">
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
+              <span>${esConfirmado ? 'Confirmado' : 'Confirmar'}</span>
+            </button>
+          </td>
+          <td class="td-resultado">
+            <div class="resultado-celda-wrap">
+              <div class="slot-res tabla-slot-res" data-id="${b.id}">
+                <span class="sr sr-a ${b.resultado === 'APROBADO' ? 'on' : ''}" role="button" tabindex="0" data-r="APROBADO" title="Marcar Aprobado">Aprobó</span>
+                <span class="sr sr-r ${b.resultado === 'REPROBADO' ? 'on' : ''}" role="button" tabindex="0" data-r="REPROBADO" title="Marcar Reprobado">Reprobó</span>
+                <span class="sr sr-n ${noAsiste ? 'on' : ''}" role="button" tabindex="0" data-r="NO ASISTIO" title="Marcar No asistió">No asistió</span>
+              </div>
+              <button type="button" class="btn-tabla-reagendar" data-id="${b.id}" title="Derivar directamente a Reagendar">
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+  }
+
+  html += `
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  cont.innerHTML = html;
+
+  const scrollEl = cont.querySelector('.tabla-agenda-scroll');
+  if (scrollEl) scrollEl.scrollLeft = 0;
+
+  // 1. Filtro rápido de búsqueda en tiempo real
+  const inpBusc = cont.querySelector('#tabla-busc-input');
+  if (inpBusc) {
+    inpBusc.oninput = (e) => {
+      const q = e.target.value.toLowerCase().trim();
+      cont.querySelectorAll('.fila-agenda-tabla').forEach((tr) => {
+        if (!q) {
+          tr.style.display = '';
+          return;
+        }
+        const str = (tr.textContent || '').toLowerCase();
+        tr.style.display = str.includes(q) ? '' : 'none';
+      });
+    };
+  }
+
+  // 2. Filtros de píldoras
+  cont.querySelectorAll('.btn-filtro-pill').forEach((btn) => {
+    btn.onclick = () => {
+      cont.querySelectorAll('.btn-filtro-pill').forEach((b) => b.classList.remove('activo'));
+      btn.classList.add('activo');
+      const filtro = btn.dataset.filtro;
+      cont.querySelectorAll('.fila-agenda-tabla').forEach((tr) => {
+        if (filtro === 'todos') tr.style.display = '';
+        else if (filtro === 'ocupadas') tr.style.display = tr.dataset.tipo === 'ocupada' ? '' : 'none';
+        else if (filtro === 'libres') tr.style.display = tr.dataset.tipo === 'libre' ? '' : 'none';
+        else if (filtro === 'confirmadas') tr.style.display = tr.querySelector('.btn-confirmar-tabla.es-confirmado') ? '' : 'none';
+      });
+    };
+  });
+
+  // 3. Clic en fila o en botón lápiz para abrir ficha
+  cont.querySelectorAll('.fila-agenda-tabla').forEach((tr) => {
+    tr.onclick = (e) => {
+      if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.sr') || e.target.closest('input') || e.target.closest('label')) return;
+      const id = Number(tr.dataset.id);
+      if (tr.classList.contains('fila-bloqueada')) {
+        dialogoDesbloquearDia();
+        return;
+      }
+      cont.querySelectorAll('.fila-agenda-tabla').forEach((r) => r.classList.remove('row-activa'));
+      tr.classList.add('row-activa');
+      abrirSlotPorId(id, () => { if ($('#a-grid')) renderAgenda(); }).catch((err) => toast(err.message, 'err'));
+    };
+  });
+
+  cont.querySelectorAll('.btn-lapiz-editar, .btn-clase-pill, .fecha-box-inline, .btn-agendar-tabla').forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const id = Number(btn.dataset.id);
+      abrirSlotPorId(id, () => { if ($('#a-grid')) renderAgenda(); }).catch((err) => toast(err.message, 'err'));
+    };
+  });
+
+  // 4. Marcado de resultados interactivo
+  cont.querySelectorAll('.tabla-slot-res .sr').forEach((el) => {
+    el.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); el.click(); } };
+    el.onclick = async (ev) => {
+      ev.stopPropagation();
+      const box = el.closest('.tabla-slot-res');
+      const tr = el.closest('tr');
+      const id = Number(box.dataset.id);
+      const quitar = el.classList.contains('on');
+      const antes = { on: [...box.querySelectorAll('.sr.on')], cls: tr.className };
+      box.querySelectorAll('.sr').forEach((s) => s.classList.remove('on'));
+      tr.classList.remove('res-aprob', 'res-reprob');
+      if (!quitar) {
+        el.classList.add('on');
+        tr.classList.add(el.dataset.r === 'APROBADO' ? 'res-aprob' : 'res-reprob');
+      }
+      try {
+        await marcarResultado(id, quitar ? null : el.dataset.r);
+        if (!quitar && el.dataset.r === 'APROBADO') licoConfeti(el);
+        toast(quitar ? 'Resultado borrado' : `Marcado: ${el.dataset.r === 'NO ASISTIO' ? 'No asistió' : el.dataset.r === 'APROBADO' ? 'Aprobó' : 'Reprobó'}`);
+      } catch (e) {
+        box.querySelectorAll('.sr').forEach((s) => s.classList.remove('on'));
+        antes.on.forEach((s) => s.classList.add('on'));
+        tr.className = antes.cls;
+        toast(e.message, 'err');
+      }
+    };
+  });
+
+  // 5. Botones de confirmar asistencia
+  cont.querySelectorAll('.btn-confirmar-tabla').forEach((btn) => {
+    btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      const id = Number(btn.dataset.id);
+      const yaConfirmado = btn.classList.contains('es-confirmado');
+      if (yaConfirmado) {
+        if (!confirm('Esta cita ya figura con asistencia confirmada.\n\n¿Deseas volver a marcarla como pendiente?')) return;
+      }
+      try {
+        await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: yaConfirmado ? 0 : 1 } });
+        toast(yaConfirmado ? 'Cita marcada como pendiente' : 'Asistencia confirmada exitosamente', 'ok');
+        actualizarBadgePorConfirmar();
+        renderAgenda();
+      } catch (e) { toast(e.message, 'err'); }
+    };
+  });
+
+  // 6. Checkboxes de avisos compactos
+  cont.querySelectorAll('.slot-avisos-tabla input[data-aviso]').forEach((chk) => {
+    chk.onchange = async (ev) => {
+      ev.stopPropagation();
+      const box = chk.closest('.slot-avisos-tabla');
+      const id = Number(box.dataset.id);
+      const medio = chk.dataset.aviso;
+      const marcar = chk.checked;
+      try {
+        const res = await api(`/agenda/${id}/aviso`, { method: 'POST', body: { medio, avisado: marcar } });
+        const lista = res.avisado_por || [];
+        box.querySelectorAll('input[data-aviso]').forEach((i) => {
+          i.checked = lista.includes(i.dataset.aviso);
+        });
+        toast(`Aviso por ${medio === 'telefono' ? 'teléfono' : medio} ${marcar ? 'marcado' : 'desmarcado'}`);
+      } catch (e) {
+        chk.checked = !marcar;
+        toast(e.message, 'err');
+      }
+    };
+  });
+
+  // 7. Botón de reagendar directo desde la fila
+  cont.querySelectorAll('.btn-tabla-reagendar').forEach((btn) => {
+    btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      const id = Number(btn.dataset.id);
+      if (!confirm('¿Deseas derivar a este postulante a la lista de Reagendamiento?')) return;
+      try {
+        await api(`/agenda/${id}/reagendar`, { method: 'POST', body: { motivo: 'POSTULANTE SOLICITA CAMBIO' } });
+        toast('Postulante enviado a la lista de Reagendamiento', 'ok');
+        actualizarBadgeReagendar();
+        irA('reagendar');
+        setTimeout(() => {
+          if (typeof detalleReagendar === 'function') detalleReagendar(id);
+        }, 120);
+      } catch (e) { toast(e.message, 'err'); }
+    };
+  });
 }
