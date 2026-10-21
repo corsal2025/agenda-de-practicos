@@ -30,7 +30,7 @@ test('elegirConsejo devuelve null sin pendientes o con datos faltantes', () => {
 test('consejosDesde usa singular y plural', () => {
   const ids = L.consejosDesde({ sinTramiteHoy: 1, reagendar: 1 });
   assert.equal(ids[0].texto, 'Hoy hay 1 cita sin fecha de inicio de trámite.');
-  assert.equal(ids[1].texto, '1 persona espera nueva hora en Reagendar.');
+  assert.equal(ids[1].texto, '1 persona espera nueva hora en Lista de espera.');
 });
 
 test('resumenDiario respeta la hora', () => {

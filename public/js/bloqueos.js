@@ -336,13 +336,13 @@ function dialogoBloquearDia() {
       cerrarModal();
       if (!r.bloqueados) return toast('No había bloques disponibles en ese horario para bloquear', 'err');
       let msg = `${r.bloqueados} ${r.bloqueados === 1 ? 'bloque bloqueado' : 'bloques bloqueados'}`;
-      if (r.a_reagendar) msg += ` · ${r.a_reagendar} citas movidas a Reagendar`;
+      if (r.a_reagendar) msg += ` · ${r.a_reagendar} citas movidas a Lista de Espera`;
       toast(msg, 'ok');
       actualizarBadgeReagendar();
       estadoAgenda.fecha = d.desde;
       await renderAgenda();
-      if (r.a_reagendar && confirm(`Se bloquearon los bloques y ${r.a_reagendar} postulante(s) fueron enviados a Reagendar.\n\n¿Deseas ir a la pestaña Reagendar ahora para asignarles cupo?`)) {
-        irA('reagendar');
+      if (r.a_reagendar && confirm(`Se bloquearon los bloques y ${r.a_reagendar} postulante(s) fueron enviados a la Lista de Espera con máxima prioridad por bloqueo.\n\n¿Deseas ir a la Lista de Espera ahora para asignarles cupo?`)) {
+        irA('espera');
       }
     } catch (e) {
       $('#bd-ok').disabled = false;

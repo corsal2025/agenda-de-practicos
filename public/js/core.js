@@ -387,7 +387,7 @@ if (typeof ResizeObserver === 'function') {
   else observarOffsets();
 }
 // Pestañas eliminadas que redirigen a otra (enlaces o marcadores antiguos).
-const ALIAS_TABS = { dia: 'agenda' };
+const ALIAS_TABS = { dia: 'agenda', reagendar: 'espera' };
 function ruta() {
   cerrarModal();
   const tab = (location.hash.slice(1) || 'disponibles').split('?')[0];

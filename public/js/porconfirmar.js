@@ -180,11 +180,9 @@ async function renderPorConfirmar() {
           pintarLista();
           actualizarBadgePorConfirmar();
           actualizarBadgeReagendar();
-          toast('Postulante derivado a Reagendamiento', 'ok');
-          irA('reagendar');
-          setTimeout(() => {
-            if (typeof detalleReagendar === 'function') detalleReagendar(id);
-          }, 120);
+          toast('Postulante derivado a Lista de Espera con alta prioridad', 'ok');
+          sessionStorage.setItem('le_destacado', String(id));
+          irA('espera');
         } catch (e) {
           toast(e.message, 'err');
         }

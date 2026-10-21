@@ -87,24 +87,49 @@ const ListaEspera = (() => {
     } catch (_) { pintarBadge('badge-espera', 0); return null; }
   }
 
-  const origenBadge = (p) => {
-    if (p.origen === 'reagendar') return '<span class="badge reag">Reagendar</span>';
-    if (p.origen === 'cambio') return '<span class="badge reag">Solicita cambio</span>';
-    return '<span class="badge intento-1">Quiere adelantar</span>';
+  const prioridadBadge = (p, prio) => {
+    if (p.origen === 'reagendar') {
+      return `<span class="badge-prio badge-prio-urgente" title="Máxima prioridad: Sin cupo por bloqueo municipal">#${prio} · 🚨 URGENTE</span>`;
+    }
+    if (p.origen === 'cambio') {
+      return `<span class="badge-prio badge-prio-alta" title="Alta prioridad: Postulante solicitó cambio/reagendamiento">#${prio} · 🔄 ALTA</span>`;
+    }
+    return `<span class="badge-prio badge-prio-normal" title="Prioridad normal: Postulante con cita que desea adelantar fecha">#${prio} · ⏳ NORMAL</span>`;
   };
-  const tramiteHtml = (p) => (p.dias_restantes_tramite == null
-    ? SIN_INICIO_HTML : cuentaRegresivaHtml(p.dias_restantes_tramite, p.tramite_vence));
+
+  const origenBadge = (p) => {
+    if (p.origen === 'reagendar') {
+      return `<span class="badge" style="background:#fee2e2;color:#b91c1c;border:1px solid #f87171;font-weight:700">🚨 Por Reagendar</span><div class="muted" style="font-size:.74rem;margin-top:2px">Bloqueo municipal</div>`;
+    }
+    if (p.origen === 'cambio') {
+      return `<span class="badge" style="background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc;font-weight:700">🔄 Solicita Cambio</span><div class="muted" style="font-size:.74rem;margin-top:2px">Reagendamiento</div>`;
+    }
+    return `<span class="badge intento-1">⏳ Adelanto</span><div class="muted" style="font-size:.74rem;margin-top:2px">Tiene cita</div>`;
+  };
+
+  const tramiteHtml = (p) => {
+    if (p.dias_restantes_tramite == null) return SIN_INICIO_HTML;
+    const base = cuentaRegresivaHtml(p.dias_restantes_tramite, p.tramite_vence);
+    if (p.dias_restantes_tramite <= 15) {
+      return `${base}<div style="margin-top:2px"><span class="badge" style="background:#dc2626;color:#fff;font-size:.7rem;font-weight:700;padding:1px 5px">⚠️ Vence pronto</span></div>`;
+    }
+    return base;
+  };
+
   const citaActual = (p) => (p.origen !== 'reagendar'
-    ? `${esc(fFecha(p.fecha))} ${esc(p.hora || '')}${p.examinador ? `<div class="muted" style="font-size:.78rem">${esc(p.examinador)}</div>` : ''}`
-    : `<span class="muted">Sin cita</span>${p.motivo ? `<div class="muted" style="font-size:.78rem">${esc(p.motivo)}</div>` : ''}`);
+    ? `<b>${esc(fFecha(p.fecha))}</b> <span style="font-family:monospace;font-weight:700">${esc(p.hora || '')}</span>${p.examinador ? `<div class="muted" style="font-size:.78rem">${esc(p.examinador)}</div>` : ''}`
+    : `<span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:700">Sin cita</span>${p.motivo ? `<div class="muted" style="font-size:.76rem;margin-top:2px">${esc(p.motivo)}</div>` : ''}`);
+
   const clasesDe = (p) => String(p.clase || '').toUpperCase().split(',').map((s) => s.trim()).filter(Boolean);
 
   function filtrar() {
     const q = filtros.q.trim().toUpperCase();
     return personas.map((p, i) => ({ p, prio: i + 1 })).filter(({ p }) => {
-      if (filtros.origen === 'reagendar' && p.origen !== 'reagendar') return false;
-      if (filtros.origen === 'adelantar' && p.origen !== 'lista_espera') return false;
+      if (filtros.origen === 'reagendar' && p.origen !== 'reagendar' && p.origen !== 'cambio') return false;
+      if (filtros.origen === 'bloqueo' && p.origen !== 'reagendar') return false;
       if (filtros.origen === 'cambio' && p.origen !== 'cambio') return false;
+      if (filtros.origen === 'adelantar' && p.origen !== 'lista_espera') return false;
+      if (filtros.origen === 'vencer' && (p.dias_restantes_tramite == null || p.dias_restantes_tramite > 30)) return false;
       if (filtros.clase && !clasesDe(p).includes(filtros.clase)) return false;
       if (q && !`${p.nombre || ''} ${p.rut || ''} ${p.correo || ''}`.toUpperCase().includes(q)) return false;
       return true;
@@ -114,18 +139,29 @@ const ListaEspera = (() => {
   function pintar() {
     const filas = filtrar();
     $('#le-total').textContent = `${filas.length} de ${personas.length} en espera`;
-    $('#le-body').innerHTML = filas.length ? filas.map(({ p, prio }) => `<tr>
-      <td class="c num">${prio}</td>
-      <td><b>${esc(nom(p.nombre) || '—')}</b></td>
-      <td class="num">${esc(p.rut || '—')}</td>
-      <td class="c">${esc(p.clase || '—')}</td>
-      <td class="c">${origenBadge(p)}</td>
-      <td class="c num">${p.dias_esperando == null ? '—' : esc(p.dias_esperando)}</td>
-      <td class="c">${tramiteHtml(p)}</td>
-      <td class="c">${citaActual(p)}</td>
-      <td class="c num">${esc(p.cupos_compatibles)}</td>
-      <td class="c"><button class="btn chico" data-le="${esc(p.origen)}:${esc(p.id)}" ${p.cupos_compatibles ? '' : 'disabled'}>Buscar cupo</button></td>
-    </tr>`).join('') : '<tr><td colspan="10" class="muted">No hay personas en espera con estos filtros.</td></tr>';
+    $('#le-body').innerHTML = filas.length ? filas.map(({ p, prio }) => `
+      <tr data-id="${esc(p.id)}" data-origen="${esc(p.origen)}">
+        <td class="c">${prioridadBadge(p, prio)}</td>
+        <td><b>${esc(nom(p.nombre) || '—')}</b></td>
+        <td class="num">${esc(p.rut || '—')}</td>
+        <td class="c"><b>${esc(p.clase || '—')}</b></td>
+        <td class="c">${origenBadge(p)}</td>
+        <td class="c num">${p.dias_esperando == null ? '—' : esc(p.dias_esperando)}</td>
+        <td class="c">${tramiteHtml(p)}</td>
+        <td class="c">${citaActual(p)}</td>
+        <td class="c num">${esc(p.cupos_compatibles)}</td>
+        <td class="c"><button class="btn chico" style="font-weight:700" data-le="${esc(p.origen)}:${esc(p.id)}" ${p.cupos_compatibles ? '' : 'disabled'}>${p.cupos_compatibles ? '🔍 Asignar cupo' : 'Sin cupos'}</button></td>
+      </tr>`).join('') : '<tr><td colspan="10" class="muted c" style="padding:1.5rem">No hay personas en espera con los filtros seleccionados.</td></tr>';
+
+    const destacado = sessionStorage.getItem('le_destacado');
+    if (destacado) {
+      sessionStorage.removeItem('le_destacado');
+      const fila = $('#le-body').querySelector(`[data-id="${destacado}"]`);
+      if (fila) {
+        fila.classList.add('fila-destacada-reagendar');
+        fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
   }
 
   function asignar(p, cupo) {
@@ -170,29 +206,52 @@ const ListaEspera = (() => {
   async function render() {
     view.innerHTML = `
       <div class="panel">
-        <div class="fila" style="align-items:center">
-          <h2 style="margin:0;flex:1">Lista de espera</h2>
-          <span class="pastilla" id="le-total">Cargando...</span>
+        <div class="fila" style="align-items:center;flex-wrap:wrap;gap:8px">
+          <div style="flex:1">
+            <h2 style="margin:0">Lista de espera unificada</h2>
+            <p class="muted" style="margin:4px 0 0;font-size:13px">Ordenada por prioridad estricta: <b>1° Urgentes</b> por bloqueo municipal (sin cupo), <b>2° Solicitudes de cambio</b> / reagendamiento, y <b>3° Adelanto de fecha</b>. Desempata la fecha de vencimiento del trámite.</p>
+          </div>
+          <span class="pastilla" id="le-total" style="font-weight:700">Cargando...</span>
         </div>
-        <p class="muted">Todas las personas que esperan un cupo: la <b>cola de reagendar</b> quienes <b>solicitan cambio</b> de su cita y quienes tienen cita pero
-          <b>quieren adelantarla</b>. El orden es la prioridad: cola (más antigua primero), luego solicitudes de cambio (cita más cercana primero), luego lista de espera
-          (cita más lejana primero); desempata el trámite más cerca de vencer.</p>
-        <div class="fila" id="le-filtros" style="flex-wrap:wrap;gap:8px">
-          <select id="le-origen"><option value="todos">Todos</option><option value="reagendar">Reagendar</option><option value="cambio">Solicita cambio</option><option value="adelantar">Quiere adelantar</option></select>
+        <div class="fila" id="le-filtros" style="flex-wrap:wrap;gap:8px;margin-top:.85rem">
+          <select id="le-origen" style="font-weight:600">
+            <option value="todos">Todas las prioridades</option>
+            <option value="reagendar">🔄 Todo Reagendamiento (Urgentes + Solicitudes)</option>
+            <option value="bloqueo">🚨 Solo Bloqueo Municipal (Urgente sin cupo)</option>
+            <option value="cambio">🔄 Solo Solicitudes de Cambio (Alta)</option>
+            <option value="adelantar">⏳ Solo Adelanto de Cita (Normal)</option>
+            <option value="vencer">⚠️ Trámites por vencer (≤30 días)</option>
+          </select>
           <select id="le-clase"><option value="">Todas las clases</option></select>
           <input id="le-q" type="search" placeholder="Buscar nombre, RUT o correo" style="flex:1;min-width:180px">
         </div>
-        <div class="tabla-scroll" id="le-tabla"><table class="thead-fijo"><thead><tr>
-          <th class="c">#</th><th>Nombre</th><th>RUT</th><th class="c">Clase</th><th class="c">Origen</th>
-          <th class="c">Esperando (días)</th><th class="c">Trámite</th><th class="c">Cita actual</th>
-          <th class="c">Cupos disponibles</th><th class="c">Acción</th>
-        </tr></thead><tbody id="le-body"><tr><td colspan="10">Cargando...</td></tr></tbody></table></div>
+        <div class="tabla-scroll" id="le-tabla" style="margin-top:.75rem">
+          <table class="thead-fijo">
+            <thead>
+              <tr>
+                <th class="c" style="width:145px">Prioridad</th>
+                <th>Nombre Postulante</th>
+                <th class="c" style="width:125px">RUT</th>
+                <th class="c" style="width:65px">Clase</th>
+                <th class="c" style="width:145px">Estado / Origen</th>
+                <th class="c" style="width:100px">Esperando</th>
+                <th class="c" style="width:130px">Trámite</th>
+                <th class="c" style="width:150px">Cita actual</th>
+                <th class="c" style="width:90px">Cupos</th>
+                <th class="c" style="width:130px">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="le-body"><tr><td colspan="10" class="c muted" style="padding:1.5rem">Cargando lista de espera...</td></tr></tbody>
+          </table>
+        </div>
       </div>`;
+
     $('#le-origen').value = filtros.origen;
     $('#le-q').value = filtros.q;
     $('#le-origen').onchange = (e) => { filtros.origen = e.target.value; pintar(); };
     $('#le-clase').onchange = (e) => { filtros.clase = e.target.value; pintar(); };
     $('#le-q').oninput = (e) => { filtros.q = e.target.value; pintar(); };
+
     async function cargar() {
       const lista = await badge();
       if (!$('#le-body')) return;
@@ -209,6 +268,7 @@ const ListaEspera = (() => {
       $('#le-clase').value = filtros.clase;
       pintar();
     }
+
     $('#le-body').onclick = (e) => {
       const btn = e.target.closest('button[data-le]');
       if (!btn) return;
@@ -216,6 +276,7 @@ const ListaEspera = (() => {
       const p = personas.find((x) => x.origen === origen && String(x.id) === id);
       if (p) buscarCupo(p, cargar);
     };
+
     await cargar();
   }
 

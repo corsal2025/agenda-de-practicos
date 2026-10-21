@@ -218,6 +218,7 @@ async function actualizarBadgeReagendar() {
     ]);
     pintarBadge('badge-reagendar', (cola.length || 0) + (pend.length || 0));
   } catch (_) { pintarBadge('badge-reagendar', 0); }
+  if (window.ListaEspera) window.ListaEspera.badge();
 }
 
 async function actualizarBadgePapelera() {

@@ -283,12 +283,10 @@ function formularioCita(b, alGuardar) {
       try {
         await api(`/agenda/${b.id}/reagendar`, { method: 'POST', body: { motivo: 'POSTULANTE SOLICITA CAMBIO' } });
         cerrarModal(); alGuardar && alGuardar();
+        sessionStorage.setItem('le_destacado', String(b.id));
         actualizarBadgeReagendar();
-        toast('Postulante enviado a la lista de Reagendamiento', 'ok');
-        irA('reagendar');
-        setTimeout(() => {
-          if (typeof detalleReagendar === 'function') detalleReagendar(b.id);
-        }, 120);
+        toast('Postulante enviado a Lista de Espera con alta prioridad', 'ok');
+        irA('espera');
       } catch (e) { toast(e.message, 'err'); }
     };
   }

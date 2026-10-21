@@ -1,5 +1,5 @@
 const tabs = {
-  agenda: renderAgenda, disponibles: renderDisponibles, reagendar: renderReagendar, espera: () => renderListaEspera(),
+  agenda: renderAgenda, disponibles: renderDisponibles, reagendar: () => irA('espera'), espera: () => renderListaEspera(),
   porconfirmar: renderPorConfirmar,
   buscar: renderBuscar, errores: renderErrores, analitica: renderAnalitica,
   papelera: renderPapelera, datos: renderDatos, vencimientos: renderVencimientos,
@@ -28,6 +28,7 @@ async function init({ forzarAgenda = false } = {}) {
     actualizarBadgePapelera();
     actualizarBadgeErrores();
     actualizarBadgePorConfirmar();
+    if (window.ListaEspera) ListaEspera.badge();
   } catch (e) {
     view.innerHTML = `<div class="panel"><h2>No se pudo conectar</h2><p>${esc(e.message)}</p></div>`;
   }

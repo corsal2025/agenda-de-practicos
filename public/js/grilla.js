@@ -413,12 +413,10 @@ function pintarGrilla(cont, filas, fecha) {
       } else if (act === 'reagendar') {
         try {
           await api(`/agenda/${id}/reagendar`, { method: 'POST', body: { motivo: 'POSTULANTE SOLICITA CAMBIO' } });
-          toast('Postulante enviado a la lista de Reagendamiento', 'ok');
+          toast('Postulante enviado a Lista de Espera con alta prioridad', 'ok');
+          sessionStorage.setItem('le_destacado', String(id));
           actualizarBadgeReagendar();
-          irA('reagendar');
-          setTimeout(() => {
-            if (typeof detalleReagendar === 'function') detalleReagendar(id);
-          }, 120);
+          irA('espera');
         } catch (e) { toast(e.message, 'err'); }
       }
     };
@@ -799,15 +797,13 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     btn.onclick = async (ev) => {
       ev.stopPropagation();
       const id = Number(btn.dataset.id);
-      if (!confirm('¿Deseas derivar a este postulante a la lista de Reagendamiento?')) return;
+      if (!confirm('¿Deseas derivar a este postulante a la Lista de Espera para reagendarle un nuevo cupo?')) return;
       try {
         await api(`/agenda/${id}/reagendar`, { method: 'POST', body: { motivo: 'POSTULANTE SOLICITA CAMBIO' } });
-        toast('Postulante enviado a la lista de Reagendamiento', 'ok');
+        toast('Postulante enviado a Lista de Espera con alta prioridad', 'ok');
+        sessionStorage.setItem('le_destacado', String(id));
         actualizarBadgeReagendar();
-        irA('reagendar');
-        setTimeout(() => {
-          if (typeof detalleReagendar === 'function') detalleReagendar(id);
-        }, 120);
+        irA('espera');
       } catch (e) { toast(e.message, 'err'); }
     };
   });

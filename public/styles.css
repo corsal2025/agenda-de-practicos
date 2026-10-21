@@ -2845,3 +2845,58 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
   font-weight: 700;
 }
 
+/* ================= Estilos de Prioridad para Lista de Espera ================= */
+.badge-prio {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.badge-prio-urgente {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #f87171;
+  box-shadow: 0 1px 2px rgba(220, 38, 38, 0.1);
+}
+.badge-prio-alta {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #7dd3fc;
+  box-shadow: 0 1px 2px rgba(3, 105, 161, 0.1);
+}
+.badge-prio-normal {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+:root[data-tema="oscuro"] .badge-prio-urgente {
+  background: rgba(185, 28, 28, 0.25);
+  color: #fca5a5;
+  border-color: #ef4444;
+}
+:root[data-tema="oscuro"] .badge-prio-alta {
+  background: rgba(3, 105, 161, 0.25);
+  color: #7dd3fc;
+  border-color: #38bdf8;
+}
+:root[data-tema="oscuro"] .badge-prio-normal {
+  background: rgba(71, 85, 105, 0.25);
+  color: #cbd5e1;
+  border-color: #64748b;
+}
+.fila-destacada-reagendar {
+  animation: pulsoDestacado 2.5s ease-out;
+  background-color: #ecfdf5 !important;
+}
+@keyframes pulsoDestacado {
+  0% { background-color: #a7f3d0; box-shadow: 0 0 12px rgba(16, 185, 129, 0.4); }
+  50% { background-color: #d1fae5; }
+  100% { background-color: #ecfdf5; }
+}
+

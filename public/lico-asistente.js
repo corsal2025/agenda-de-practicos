@@ -60,7 +60,7 @@
     add('porconfirmar', pc, 'Tienes ' + plural(pc, 'cita', 'citas') + ' por confirmar en los próximos 7 días.', 'porconfirmar', 'Ir a Por confirmar');
     add('vencer', ve, (ve === 1 ? '1 trámite vence' : ve + ' trámites vencen') + ' en ' + DIAS_POR_VENCER + ' días o menos.', 'vencimientos', 'Ir a Por vencer');
     add('sintramite', st, 'Hoy hay ' + plural(st, 'cita', 'citas') + ' sin fecha de inicio de trámite.', 'agenda', 'Ir a Agenda');
-    add('reagendar', re, plural(re, 'persona espera', 'personas esperan') + ' nueva hora en Reagendar.', 'reagendar', 'Ir a Reagendar');
+    add('reagendar', re, plural(re, 'persona espera', 'personas esperan') + ' nueva hora en Lista de espera.', 'espera', 'Ir a Lista de espera');
     var rc = num(c.respuestasRevisar);
     add('respuestas', rc, 'Hay ' + plural(rc, 'respuesta', 'respuestas') + ' por correo por revisar.', 'porconfirmar', 'Ir a Por confirmar');
     add('errores', er, 'El Reporte de errores tiene ' + plural(er, 'hallazgo', 'hallazgos') + ' por revisar.', 'errores', 'Ir a Reporte de errores');
