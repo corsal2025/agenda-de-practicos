@@ -444,11 +444,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
   const totalConfirmadas = ordenadas.filter((f) => f.confirmo_asistencia === 1).length;
 
   let html = `
-    <div class="tabla-agenda-toolbar-exterior">
-      <div class="tabla-busc-wrap">
-        <svg class="tabla-busc-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5l4.5 4.5"/></svg>
-        <input type="search" id="tabla-busc-input" class="tabla-busc-input" placeholder="Buscar RUT o nombre" autocomplete="off">
-      </div>
+    <div class="tabla-agenda-toolbar-exterior" style="justify-content:flex-end">
       <div class="tabla-filtros-rapidos">
         <button type="button" class="btn-filtro-pill activo" data-filtro="todos">Todas (${ordenadas.length})</button>
         <button type="button" class="btn-filtro-pill" data-filtro="ocupadas">Citas (${totalCitas})</button>
@@ -829,10 +825,10 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
   };
 
   // 1. Filtro rápido de búsqueda en tiempo real
-  const inpBusc = cont.querySelector('#tabla-busc-input');
+  const inpBusc = document.querySelector('#tabla-busc-input');
   if (inpBusc) {
-    inpBusc.oninput = (e) => {
-      const q = e.target.value.toLowerCase().trim();
+    const filtrarBuscador = () => {
+      const q = inpBusc.value.toLowerCase().trim();
       cont.querySelectorAll('.fila-agenda-tabla').forEach((tr) => {
         if (!q) {
           tr.style.display = '';
@@ -843,6 +839,8 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
       });
       sincronizarVisibilidadEditores();
     };
+    inpBusc.oninput = filtrarBuscador;
+    if (inpBusc.value) filtrarBuscador();
   }
 
   // 2. Filtros de píldoras

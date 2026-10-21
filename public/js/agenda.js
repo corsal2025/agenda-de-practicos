@@ -54,8 +54,8 @@ async function renderAgenda() {
           <span class="muted" id="a-regla" style="font-size:12px;font-weight:600;align-self:center;margin-left:6px;line-height:1.2"></span>
         </div>
 
-        <!-- Grupo Acciones de Agenda (Derecha) -->
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <!-- Grupo Acciones de Agenda (Fila inferior dentro del panel de opciones) -->
+        <div style="width:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,0,0,0.06)">
           <span class="pastilla" id="a-libres" data-tooltip="Total de horas disponibles para agendar en la fecha seleccionada">— bloques libres</span>
           <div class="vista-selector" title="Elegir modalidad de visualización de la Agenda">
             <button type="button" class="btn-vista ${(estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'tabla') === 'tabla' ? 'activo' : ''}" id="btn-vista-tabla" title="Vista en tabla con columnas (distribución corporativa en columnas)">
@@ -83,6 +83,10 @@ async function renderAgenda() {
           <span class="agenda-acciones-dia" id="a-acciones-dia" style="display:inline-flex;gap:6px;flex-wrap:wrap">
             <button class="btn sec" id="a-imprimir" type="button" data-tooltip="Imprime la agenda de la fecha y examinador seleccionados, ordenada por hora">🖨 Imprimir día</button>
           </span>
+          <div class="tabla-busc-wrap" style="flex:1;max-width:320px;margin-left:auto">
+            <svg class="tabla-busc-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5l4.5 4.5"/></svg>
+            <input type="search" id="tabla-busc-input" class="tabla-busc-input" placeholder="Buscar RUT o nombre" autocomplete="off" style="height:36px">
+          </div>
         </div>
       </div>
     </div>
