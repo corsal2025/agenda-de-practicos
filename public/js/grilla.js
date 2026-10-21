@@ -574,9 +574,6 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           </td>
           <td class="td-rut">
             <div class="rut-cell-box">
-              <button type="button" class="btn-lapiz-editar" data-id="${b.id}" title="Editar ficha completa / Historial">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-              </button>
               <span class="rut-txt num">${rutFmt}</span>
             </div>
           </td>
@@ -584,10 +581,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
             <span class="sede-pill-badge">${esc(examNombre)}</span>
           </td>
           <td class="td-clase">
-            <button type="button" class="btn-clase-pill" data-id="${b.id}" title="Clase de licencia (Clic para abrir ficha)">
-              <span>${esc(b.clase || 'Clase')}</span>
-              <span class="flechita-down">▾</span>
-            </button>
+            <span class="clase-badge-tabla">${esc(b.clase || '—')}</span>
           </td>
           <td class="td-contacto">
             <div class="contacto-col-wrap">
@@ -668,22 +662,20 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     };
   });
 
-  // 3. Clic en fila o en botón lápiz para abrir ficha
+  // 3. Selección de fila en la tabla
   cont.querySelectorAll('.fila-agenda-tabla').forEach((tr) => {
     tr.onclick = (e) => {
       if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.sr') || e.target.closest('input') || e.target.closest('label')) return;
-      const id = Number(tr.dataset.id);
       if (tr.classList.contains('fila-bloqueada')) {
         dialogoDesbloquearDia();
         return;
       }
       cont.querySelectorAll('.fila-agenda-tabla').forEach((r) => r.classList.remove('row-activa'));
       tr.classList.add('row-activa');
-      abrirSlotPorId(id, () => { if ($('#a-grid')) renderAgenda(); }).catch((err) => toast(err.message, 'err'));
     };
   });
 
-  cont.querySelectorAll('.btn-lapiz-editar, .btn-clase-pill, .fecha-box-inline, .btn-agendar-tabla').forEach((btn) => {
+  cont.querySelectorAll('.btn-agendar-tabla').forEach((btn) => {
     btn.onclick = (e) => {
       e.stopPropagation();
       const id = Number(btn.dataset.id);

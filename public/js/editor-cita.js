@@ -60,9 +60,13 @@ function formularioCita(b, alGuardar) {
   const clasesIniciales = clasesDe(b.clase);
   const esPesada = clasesIniciales.some((cl) => META.clases_pesadas.includes(cl));
   const tieneCita = Boolean(b && (b.rut || b.nombre));
+  if (tieneCita) {
+    // Ficha de cita modal eliminada por solicitud del usuario para trabajar otro método
+    return;
+  }
 
   modal(
-    `${tieneCita ? 'Ficha de cita' : 'Agendar nueva cita'} · ${fFecha(b.fecha)} · ${b.hora} hrs · Examinador/a: ${esc(b.examinador)}`,
+    `Agendar nueva cita · ${fFecha(b.fecha)} · ${b.hora} hrs · Examinador/a: ${esc(b.examinador)}`,
     `
     <div class="campo"><label>Nombre completo <b class="req" style="color:var(--alerta)">*</b></label>
       <input id="f-nombre" value="${esc(nom(b.nombre))}" required placeholder="NOMBRES Y APELLIDOS" style="text-transform:uppercase;font-weight:600">

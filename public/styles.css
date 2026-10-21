@@ -2626,6 +2626,25 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
   color: var(--tinta-2);
 }
 
+.clase-badge-tabla {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+  white-space: nowrap;
+}
+:root[data-tema="oscuro"] .clase-badge-tabla {
+  background: var(--elev);
+  border-color: var(--linea);
+  color: var(--tinta);
+}
+
 .btn-clase-pill {
   display: inline-flex;
   align-items: center;
