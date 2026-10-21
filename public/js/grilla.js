@@ -574,6 +574,9 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           </td>
           <td class="td-rut">
             <div class="rut-cell-box">
+              <button type="button" class="btn-lapiz-editar" data-id="${b.id}" title="Modificar datos personales en esta planilla">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+              </button>
               <span class="rut-txt num">${rutFmt}</span>
             </div>
           </td>
@@ -631,6 +634,200 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
   const scrollEl = cont.querySelector('.tabla-agenda-scroll');
   if (scrollEl) scrollEl.scrollLeft = 0;
 
+  const mapaSlots = new Map(ordenadas.map((item) => [item.id, item]));
+
+  function abrirEditorInlineAgenda(tr, b, examNombre) {
+    const next = tr.nextElementSibling;
+    if (next && next.classList.contains('fila-inline-editor-agenda')) {
+      next.remove();
+      tr.classList.remove('row-activa');
+      return;
+    }
+
+    // Cerrar otros editores abiertos en la tabla
+    cont.querySelectorAll('.fila-inline-editor-agenda').forEach((el) => el.remove());
+    cont.querySelectorAll('.fila-agenda-tabla').forEach((r) => r.classList.remove('row-activa'));
+    tr.classList.add('row-activa');
+
+    const editTr = document.createElement('tr');
+    editTr.className = 'fila-inline-editor fila-inline-editor-agenda';
+    editTr.dataset.editorId = String(b.id);
+    editTr.innerHTML = `
+      <td colspan="9">
+        <div class="inline-editor-card">
+          <div class="inline-editor-encabezado">
+            <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+              <strong style="color:var(--azul);font-size:13.5px">✏️ Modificar datos personales en la planilla</strong>
+              <span class="muted" style="font-size:12px">· Cita: ${esc(fFecha(b.fecha))} a las ${esc(b.hora)} hrs · Examinador: ${esc(examNombre)}</span>
+            </div>
+            <button type="button" class="btn chico sec btn-iea-cerrar" title="Cerrar editor">✖ Cerrar</button>
+          </div>
+          <div class="inline-editor-form">
+            <div class="inline-campo" style="max-width:150px">
+              <label>RUT *</label>
+              <input type="text" id="iea-rut-${b.id}" value="${esc(b.rut || '')}" placeholder="12.345.678-9" autocomplete="off" />
+            </div>
+            <div class="inline-campo" style="flex:2;min-width:210px">
+              <label>Nombre completo *</label>
+              <input type="text" id="iea-nom-${b.id}" value="${esc(nom(b.nombre) || '')}" placeholder="NOMBRES Y APELLIDOS" style="text-transform:uppercase;font-weight:600" autocomplete="off" />
+            </div>
+            <div class="inline-campo" style="max-width:160px">
+              <label>Teléfono celular</label>
+              <input type="text" id="iea-tel-${b.id}" value="${esc(b.contacto || '')}" placeholder="+56 9 XXXX XXXX" inputmode="tel" autocomplete="off" />
+            </div>
+            <div class="inline-campo" style="flex:1.5;min-width:190px">
+              <label>Correo Electrónico</label>
+              <input type="email" id="iea-mail-${b.id}" value="${esc(b.correo || '')}" placeholder="nombre@correo.com" autocomplete="off" />
+            </div>
+            <div class="inline-campo" style="max-width:120px">
+              <label>Clase *</label>
+              <input type="text" id="iea-clase-${b.id}" value="${esc(b.clase || 'B')}" placeholder="B, C, A2..." style="text-transform:uppercase;font-weight:700" autocomplete="off" />
+            </div>
+            <div class="inline-campo" style="flex:2;min-width:200px">
+              <label>Observaciones</label>
+              <input type="text" id="iea-obs-${b.id}" value="${esc(b.comentarios || '')}" placeholder="Notas o detalles adicionales" autocomplete="off" />
+            </div>
+          </div>
+          <div class="inline-editor-footer">
+            <button type="button" class="btn chico" id="iea-save-${b.id}" style="background:var(--azul);color:#fff;font-weight:700">💾 Guardar cambios en planilla</button>
+            <button type="button" class="btn chico sec" id="iea-cancel-${b.id}">✖ Cancelar</button>
+            <span style="border-left:1px solid var(--linea);height:20px;margin:0 .3rem;display:inline-block"></span>
+            <button type="button" class="btn chico sec" id="iea-reagendar-${b.id}" title="Reagendar postulante">🔄 Reagendar</button>
+            <button type="button" class="btn chico peligro" id="iea-liberar-${b.id}" title="Liberar este cupo">🗑️ Liberar cupo</button>
+          </div>
+        </div>
+      </td>
+    `;
+    tr.after(editTr);
+
+    const rutInp = editTr.querySelector(`#iea-rut-${b.id}`);
+    const nomInp = editTr.querySelector(`#iea-nom-${b.id}`);
+    const telInp = editTr.querySelector(`#iea-tel-${b.id}`);
+    const mailInp = editTr.querySelector(`#iea-mail-${b.id}`);
+    const claseInp = editTr.querySelector(`#iea-clase-${b.id}`);
+    const obsInp = editTr.querySelector(`#iea-obs-${b.id}`);
+    const btnSave = editTr.querySelector(`#iea-save-${b.id}`);
+    const btnCancel = editTr.querySelector(`#iea-cancel-${b.id}`);
+    const btnCerrar = editTr.querySelector('.btn-iea-cerrar');
+    const btnReagendar = editTr.querySelector(`#iea-reagendar-${b.id}`);
+    const btnLiberar = editTr.querySelector(`#iea-liberar-${b.id}`);
+
+    if (rutInp && window.autoformatoRut) autoformatoRut(rutInp);
+    if (rutInp && window.rutEnVivo) rutEnVivo(rutInp);
+
+    const cerrar = () => { editTr.remove(); tr.classList.remove('row-activa'); };
+    btnCancel.onclick = cerrar;
+    btnCerrar.onclick = cerrar;
+
+    editTr.querySelectorAll('input').forEach((inp) => {
+      inp.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); btnSave.click(); }
+        if (ev.key === 'Escape') { ev.preventDefault(); cerrar(); }
+      });
+    });
+
+    if (nomInp) nomInp.focus();
+
+    if (btnLiberar) {
+      btnLiberar.onclick = async () => {
+        const desc = `${nom(b.nombre) || b.rut || 'cita'} (${fFecha(b.fecha)} ${b.hora})`;
+        if (!confirm(`¿Estás seguro de liberar este cupo de "${desc}"?\n\nEl cupo quedará libre y disponible para ser citado nuevamente.`)) return;
+        try {
+          await api(`/agenda/${b.id}/liberar`, { method: 'POST', body: { motivo: 'Liberado desde edición rápida en planilla' } });
+          toast('Cupo liberado exitosamente', 'ok');
+          if (window.renderAgenda) renderAgenda();
+        } catch (e) { toast(e.message, 'err'); }
+      };
+    }
+
+    if (btnReagendar) {
+      btnReagendar.onclick = async () => {
+        if (!confirm('¿Deseas derivar a este postulante a la Lista de Espera para reagendarle un nuevo cupo?')) return;
+        try {
+          await api(`/agenda/${b.id}/reagendar`, { method: 'POST', body: { motivo: 'POSTULANTE SOLICITA CAMBIO' } });
+          toast('Postulante enviado a Lista de Espera con alta prioridad', 'ok');
+          sessionStorage.setItem('le_destacado', String(b.id));
+          actualizarBadgeReagendar();
+          irA('espera');
+        } catch (e) { toast(e.message, 'err'); }
+      };
+    }
+
+    btnSave.onclick = async () => {
+      const nombreVal = nomInp.value.trim().toUpperCase();
+      const rutVal = rutInp.value.trim();
+      const telVal = telInp.value.trim();
+      const mailVal = mailInp.value.trim().toLowerCase();
+      const claseVal = claseInp.value.trim().toUpperCase() || 'B';
+      const obsVal = obsInp.value.trim();
+
+      if (!nombreVal) {
+        toast('El nombre completo es obligatorio', 'err');
+        nomInp.focus();
+        return;
+      }
+
+      btnSave.disabled = true;
+      btnSave.textContent = 'Guardando...';
+
+      try {
+        let slotData = b;
+        try {
+          slotData = await api(`/agenda/${b.id}`);
+        } catch (_) {}
+
+        const bodyPayload = {
+          ...(slotData || {}),
+          rut: rutVal,
+          nombre: nombreVal,
+          contacto: telVal,
+          correo: mailVal,
+          clase: claseVal,
+          comentarios: obsVal || null,
+        };
+
+        let r;
+        try {
+          r = await api(`/agenda/${b.id}`, { method: 'PUT', body: bodyPayload });
+        } catch (err) {
+          if (err.status === 409 && err.data && err.data.codigo === 'TERCER_INTENTO') {
+            const motivo = await pedirAutorizacionTercerIntento(err.data);
+            if (!motivo) {
+              btnSave.disabled = false;
+              btnSave.textContent = '💾 Guardar cambios en planilla';
+              return;
+            }
+            r = await api(`/agenda/${b.id}`, {
+              method: 'PUT',
+              body: { ...bodyPayload, autorizar_tercer_intento: { motivo } },
+            });
+          } else {
+            throw err;
+          }
+        }
+
+        (r.avisos || []).forEach((a) => toast(a, 'err'));
+        toast('Datos personales actualizados exitosamente en la planilla', 'ok');
+        if (window.renderAgenda) renderAgenda();
+      } catch (e) {
+        btnSave.disabled = false;
+        btnSave.textContent = '💾 Guardar cambios en planilla';
+        toast(e.message, 'err');
+      }
+    };
+  }
+
+  const sincronizarVisibilidadEditores = () => {
+    cont.querySelectorAll('.fila-inline-editor-agenda').forEach((ed) => {
+      const parent = cont.querySelector(`.fila-agenda-tabla[data-id="${ed.dataset.editorId}"]`);
+      if (parent && parent.style.display === 'none') {
+        ed.style.display = 'none';
+      } else {
+        ed.style.display = '';
+      }
+    });
+  };
+
   // 1. Filtro rápido de búsqueda en tiempo real
   const inpBusc = cont.querySelector('#tabla-busc-input');
   if (inpBusc) {
@@ -644,6 +841,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         const str = (tr.textContent || '').toLowerCase();
         tr.style.display = str.includes(q) ? '' : 'none';
       });
+      sincronizarVisibilidadEditores();
     };
   }
 
@@ -659,10 +857,20 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         else if (filtro === 'libres') tr.style.display = tr.dataset.tipo === 'libre' ? '' : 'none';
         else if (filtro === 'confirmadas') tr.style.display = tr.querySelector('.btn-confirmar-tabla.es-confirmado') ? '' : 'none';
       });
+      sincronizarVisibilidadEditores();
     };
   });
 
-  // 3. Selección de fila en la tabla
+  // 3. Selección y edición inline de fila en la tabla
+  const toggleFilaEditor = (tr) => {
+    const id = Number(tr.dataset.id);
+    const b = mapaSlots.get(id);
+    if (!b || (!b.rut && !b.nombre)) return;
+    const examObj = META.examinadores.find((e) => e.id === b.examinador_id);
+    const examNombre = b.examinador || (examObj ? examObj.nombre : 'AV. ARGENTINA');
+    abrirEditorInlineAgenda(tr, b, examNombre);
+  };
+
   cont.querySelectorAll('.fila-agenda-tabla').forEach((tr) => {
     tr.onclick = (e) => {
       if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.sr') || e.target.closest('input') || e.target.closest('label')) return;
@@ -670,8 +878,20 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         dialogoDesbloquearDia();
         return;
       }
+      if (tr.classList.contains('fila-ocupada')) {
+        toggleFilaEditor(tr);
+        return;
+      }
       cont.querySelectorAll('.fila-agenda-tabla').forEach((r) => r.classList.remove('row-activa'));
       tr.classList.add('row-activa');
+    };
+  });
+
+  cont.querySelectorAll('.btn-lapiz-editar').forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const tr = btn.closest('.fila-agenda-tabla');
+      if (tr) toggleFilaEditor(tr);
     };
   });
 
