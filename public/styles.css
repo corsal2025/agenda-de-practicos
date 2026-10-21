@@ -1990,7 +1990,7 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
 
 /* ---------- Citas disponibles: filtros plegables ---------- */
 .disp-filtros-cab { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
-.disp-filtros #d-campos { margin-top: .6rem; }
+.disp-filtros #d-campos, .disp-filtros #af-campos { margin-top: .6rem; }
 .btn-plegar {
   background: none; border: 0; padding: .2rem .1rem; cursor: pointer; color: var(--azul-900);
   font: inherit; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: .05em;

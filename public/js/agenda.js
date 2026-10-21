@@ -1,10 +1,41 @@
 /* ================= tab: AGENDA ================= */
 let estadoAgenda = { fecha: null, examinador_id: '', filtro: '' };
+let filtAgenda = { desde: null, hasta: null, clase: '', examinador_id: '', buscandoRango: false };
+const AGENDA_KEY_PLEGADO = 'agenda-filtros-plegado';
+function agendaLeerPlegado() { try { return localStorage.getItem(AGENDA_KEY_PLEGADO) === '1'; } catch { return false; } }
+function agendaGuardarPlegado(v) { try { localStorage.setItem(AGENDA_KEY_PLEGADO, v ? '1' : '0'); } catch { /* sin almacenamiento */ } }
+
 async function renderAgenda() {
   if (!estadoAgenda.fecha) estadoAgenda.fecha = await fechaInicialAgenda();
+  if (!filtAgenda.desde) {
+    filtAgenda.desde = estadoAgenda.fecha;
+    filtAgenda.hasta = sumarDias(estadoAgenda.fecha, 60);
+    filtAgenda.examinador_id = estadoAgenda.examinador_id || '';
+  }
+  const plegado = agendaLeerPlegado();
+
   view.innerHTML = `
-    <div class="panel no-print panel-fijo">
-      <div class="fila" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <div class="panel no-print panel-fijo disp-filtros agenda-filtros">
+      <div class="disp-filtros-cab">
+        <button type="button" class="btn-plegar" id="af-plegar" aria-expanded="${!plegado}" aria-controls="af-campos">
+          Filtros <span aria-hidden="true">${plegado ? '▸' : '▾'}</span>
+        </button>
+        <span class="muted disp-resumen" id="af-resumen" aria-live="polite"></span>
+      </div>
+      <div id="af-campos" class="disp-campos" ${plegado ? 'hidden' : ''}>
+        <div class="fila" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
+          <div class="campo"><label for="af-desde">Desde</label><input type="date" id="af-desde" value="${esc(filtAgenda.desde)}"></div>
+          <div class="campo"><label for="af-hasta">Hasta</label><input type="date" id="af-hasta" value="${esc(filtAgenda.hasta)}"></div>
+          <div class="campo"><label for="af-clase">Clase</label><select id="af-clase"><option value="">--</option>${opt(META.catalogos.clase, filtAgenda.clase)}</select></div>
+          <div class="campo"><label for="af-exam">Examinador</label><select id="af-exam"><option value="">Todos</option>
+            ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}" ${String(e.id) === String(filtAgenda.examinador_id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}</select>
+          </div>
+          <button class="btn" id="af-buscar">Buscar</button>
+        </div>
+        <p class="muted" id="af-regla" style="margin:.4rem 0 0 0"></p>
+      </div>
+
+      <div class="fila" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--linea)">
         <div style="display:flex;align-items:flex-end;gap:6px">
           <button class="btn sec" id="dia-prev" style="padding:.45rem .65rem" title="Día anterior">&#8592;</button>
           <div class="campo"><label>Fecha</label><input type="date" id="a-fecha" value="${estadoAgenda.fecha}"></div>
@@ -48,15 +79,126 @@ async function renderAgenda() {
     </div>
     <div class="panel"><div id="a-grid">Cargando...</div></div>`;
 
-  $('#a-fecha').onchange = (e) => { estadoAgenda.fecha = e.target.value; renderAgenda(); };
-  $('#a-exam').onchange = (e) => { estadoAgenda.examinador_id = e.target.value; renderAgenda(); };
-  $('#dia-prev').onclick = async () => { estadoAgenda.fecha = await proximoDiaConAgenda(estadoAgenda.fecha, -1); renderAgenda(); };
-  $('#dia-next').onclick = async () => { estadoAgenda.fecha = await proximoDiaConAgenda(estadoAgenda.fecha, 1); renderAgenda(); };
-  $('#a-hoy').onclick = async () => { estadoAgenda.fecha = await fechaInicialAgenda(); renderAgenda(); };
+  let totalLibresRango = null;
+  const resumen = () => {
+    const ex = META.examinadores.find((e) => String(e.id) === String(filtAgenda.examinador_id));
+    const resEl = $('#af-resumen');
+    if (resEl) {
+      resEl.textContent = [
+        `${fFecha(filtAgenda.desde)} – ${fFecha(filtAgenda.hasta)}`,
+        filtAgenda.clase ? `Clase ${filtAgenda.clase}` : 'Todas las clases',
+        ex ? ex.nombre : 'Todos los examinadores',
+        totalLibresRango == null ? '' : `${totalLibresRango} libres`,
+      ].filter(Boolean).join(' · ');
+    }
+  };
+
+  const plegar = (v) => {
+    $('#af-campos').hidden = v;
+    const b = $('#af-plegar');
+    b.setAttribute('aria-expanded', String(!v));
+    b.querySelector('span').textContent = v ? '▸' : '▾';
+    $('#af-resumen').hidden = !v;
+    agendaGuardarPlegado(v);
+    setTimeout(ajustarOffsetsFijos, 0);
+  };
+  $('#af-plegar').onclick = () => plegar(!$('#af-campos').hidden);
+  $('#af-resumen').hidden = !plegado;
+
+  const actualizarConteoRango = async () => {
+    try {
+      const qDisp = new URLSearchParams(Object.fromEntries(Object.entries({
+        desde: filtAgenda.desde,
+        hasta: filtAgenda.hasta,
+        clase: filtAgenda.clase,
+        examinador_id: filtAgenda.examinador_id,
+      }).filter(([, v]) => v)));
+      const rows = await apiReciente(`/disponibles?${qDisp}`, 15e3);
+      if (Array.isArray(rows)) {
+        totalLibresRango = rows.length;
+        resumen();
+        const pesada = META.clases_pesadas.includes(filtAgenda.clase);
+        const reglaPesada = pesada ? `Clase ${filtAgenda.clase}: solo bloques de las ${META.hora_d_a5}.` : '';
+        const reglaEl = $('#af-regla');
+        if (reglaEl) {
+          reglaEl.textContent = rows.length
+            ? `${reglaPesada ? reglaPesada + ' · ' : ''}${rows.length} bloque(s) libre(s) en el rango.`
+            : (reglaPesada ? reglaPesada + ' · Sin bloques libres en el rango.' : 'Sin bloques libres en el rango.');
+        }
+      }
+    } catch (_) {}
+  };
+  actualizarConteoRango();
+
+  $('#af-buscar').onclick = async () => {
+    filtAgenda.desde = $('#af-desde').value;
+    filtAgenda.hasta = $('#af-hasta').value;
+    filtAgenda.clase = $('#af-clase').value;
+    filtAgenda.examinador_id = $('#af-exam').value;
+    estadoAgenda.examinador_id = filtAgenda.examinador_id;
+    if ($('#a-exam')) $('#a-exam').value = filtAgenda.examinador_id;
+
+    if (filtAgenda.desde === filtAgenda.hasta) {
+      filtAgenda.buscandoRango = false;
+      estadoAgenda.fecha = filtAgenda.desde;
+      renderAgenda();
+      return;
+    }
+
+    filtAgenda.buscandoRango = true;
+    const qDisp = new URLSearchParams(Object.fromEntries(Object.entries({
+      desde: filtAgenda.desde,
+      hasta: filtAgenda.hasta,
+      clase: filtAgenda.clase,
+      examinador_id: filtAgenda.examinador_id,
+    }).filter(([, v]) => v)));
+
+    await cargarVista('agenda_rango', `/disponibles?${qDisp}`, (rows) => {
+      totalLibresRango = rows.length;
+      resumen();
+      const pesada = META.clases_pesadas.includes(filtAgenda.clase);
+      const reglaPesada = pesada ? `Clase ${filtAgenda.clase}: solo bloques de las ${META.hora_d_a5}.` : '';
+      if ($('#af-regla')) {
+        $('#af-regla').textContent = rows.length
+          ? `${reglaPesada ? reglaPesada + ' · ' : ''}${rows.length} bloque(s) libre(s) en el rango.`
+          : (reglaPesada ? reglaPesada + ' · Sin bloques libres en el rango.' : 'Sin bloques libres en el rango.');
+      }
+      pintarResultadosRangoEnAgenda(rows);
+    });
+  };
+
+  $('#a-fecha').onchange = (e) => {
+    estadoAgenda.fecha = e.target.value;
+    filtAgenda.buscandoRango = false;
+    renderAgenda();
+  };
+  $('#a-exam').onchange = (e) => {
+    estadoAgenda.examinador_id = e.target.value;
+    filtAgenda.examinador_id = e.target.value;
+    if ($('#af-exam')) $('#af-exam').value = e.target.value;
+    filtAgenda.buscandoRango = false;
+    renderAgenda();
+  };
+  $('#dia-prev').onclick = async () => {
+    estadoAgenda.fecha = await proximoDiaConAgenda(estadoAgenda.fecha, -1);
+    filtAgenda.buscandoRango = false;
+    renderAgenda();
+  };
+  $('#dia-next').onclick = async () => {
+    estadoAgenda.fecha = await proximoDiaConAgenda(estadoAgenda.fecha, 1);
+    filtAgenda.buscandoRango = false;
+    renderAgenda();
+  };
+  $('#a-hoy').onclick = async () => {
+    estadoAgenda.fecha = await fechaInicialAgenda();
+    filtAgenda.buscandoRango = false;
+    renderAgenda();
+  };
   $('#a-bloqdia').onclick = () => dialogoBloquearDia();
   $('#a-desbloqdia').onclick = () => dialogoDesbloquearDia();
   $('#a-imprimir').onclick = () => dialogoImprimirDia(estadoAgenda.fecha, estadoAgenda.examinador_id);
   if ($('#a-porconfirmar')) $('#a-porconfirmar').onclick = () => irA('porconfirmar');
+
   const btnT = $('#btn-vista-tabla');
   const btnV = $('#btn-vista-vertical');
   const btnH = $('#btn-vista-horizontal');
@@ -82,17 +224,19 @@ async function renderAgenda() {
     };
   }
 
+  if (!filtAgenda.buscandoRango) {
+    const q = new URLSearchParams({ fecha: estadoAgenda.fecha });
+    if (estadoAgenda.examinador_id) q.set('examinador_id', estadoAgenda.examinador_id);
+    const fecha = estadoAgenda.fecha;
+    await cargarVista('agenda', `/agenda?${q}`, (filas) => {
+      const libres = filas.filter((f) => !f.rut && !f.nombre && !f.bloqueado).length;
+      $('#a-libres').textContent = `${libres} ${libres === 1 ? 'bloque libre' : 'bloques libres'}`;
+      pintarGrilla($('#a-grid'), filas, fecha);
+      restaurarScroll();
+      setTimeout(ajustarOffsetsFijos, 0);
+    });
+  }
 
-  const q = new URLSearchParams({ fecha: estadoAgenda.fecha });
-  if (estadoAgenda.examinador_id) q.set('examinador_id', estadoAgenda.examinador_id);
-  const fecha = estadoAgenda.fecha;
-  await cargarVista('agenda', `/agenda?${q}`, (filas) => {
-    const libres = filas.filter((f) => !f.rut && !f.nombre && !f.bloqueado).length;
-    $('#a-libres').textContent = `${libres} ${libres === 1 ? 'bloque libre' : 'bloques libres'}`;
-    pintarGrilla($('#a-grid'), filas, fecha);
-    restaurarScroll();
-    setTimeout(ajustarOffsetsFijos, 0);
-  });
   actualizarBadgePapelera();
   if (window.ListaEspera) window.ListaEspera.badge();
   actualizarBadgeErrores();
@@ -100,39 +244,70 @@ async function renderAgenda() {
   actualizarBadgePorConfirmar();
 }
 
-async function dialogoPorConfirmar() { irA('porconfirmar'); return;
+function pintarResultadosRangoEnAgenda(rows) {
+  const cont = $('#a-grid');
+  if (!cont) return;
 
-  const hasta = sumarDias(hoy(), 7);
-  const rows = (await api('/agenda?estado=porconfirmar'))
-    .filter((r) => r.fecha <= hasta);
-  modal('Citas por confirmar (proximos 7 dias)', `
-    <div class="ancho tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Nombre</th><th>Teléfono</th><th>Correo</th><th class="c"></th></tr></thead>
-    <tbody id="pc-body">${rows.length ? rows.map((r) => `<tr data-id="${r.id}">
-      <td class="c">${esc(fFecha(r.fecha))}</td><td class="c">${esc(r.hora)}</td><td>${esc(nom(r.nombre))}</td>
-      <td class="c num">${esc(fTel(r.contacto))}</td><td>${esc(r.correo)}</td>
-      <td><button class="btn chico" data-si="${r.id}">Confirmo</button>
-          <button class="btn chico sec" data-no="${r.id}">No</button></td></tr>`).join('')
-      : licoVacioFila(6, 'celebra', '¡Nada por confirmar!', 'Todo en orden por aquí.')}</tbody></table></div>
-  `, `<button class="btn sec" id="pc-cerrar">Cerrar</button>`);
-  $('#pc-cerrar').onclick = () => { cerrarModal(); recargar(renderAgenda)(); };
-  const marcar = async (id, val) => {
-    const b = await api(`/agenda/${id}`);
-    await api(`/agenda/${id}`, { method: 'PUT', body: {
-      visto_en: b.actualizado_en, rut: b.rut, nombre: b.nombre, clase: b.clase,
-      contacto: b.contacto, correo: b.correo, tipo_cita: b.tipo_cita,
-      motivo_reagendamiento: b.motivo_reagendamiento, lista_espera: b.lista_espera,
-      intento: b.intento, funcionario_id: b.funcionario_id, fecha_inicio_tramite: b.fecha_inicio_tramite,
-      resultado: b.resultado, comentarios: b.comentarios, confirmo_asistencia: val,
-      // El servidor los reinicia si faltan: se reenvian para no perder la marca de "pendiente de reagendar".
-      pendiente_reagendar: b.pendiente_reagendar, pendiente_nota: b.pendiente_nota,
-    } });
-    const tr = $(`#pc-body tr[data-id="${id}"]`);
-    if (tr) tr.remove();
-    toast(val ? 'Confirmada' : 'Marcada como no confirma');
+  rows.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hora.localeCompare(b.hora) || a.examinador.localeCompare(b.examinador));
+
+  cont.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;background:var(--elev);padding:10px 14px;border-radius:var(--r-sm);border:1px solid var(--linea);flex-wrap:wrap;gap:8px">
+      <div>
+        <strong style="color:var(--azul)">🔎 ${rows.length} bloque(s) libre(s) encontrados</strong>
+        <span class="muted" style="margin-left:8px">Entre ${fFecha(filtAgenda.desde)} y ${fFecha(filtAgenda.hasta)}</span>
+        ${filtAgenda.clase ? `<span class="badge ok" style="margin-left:8px">Clase ${esc(filtAgenda.clase)}</span>` : ''}
+      </div>
+      <button class="btn sec chico" id="af-btn-volver-dia">
+        📅 Ver día a día en Agenda (${fFecha(estadoAgenda.fecha)})
+      </button>
+    </div>
+    <div class="tabla-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="c">Fecha</th>
+            <th class="c">Hora</th>
+            <th class="c">Examinador</th>
+            <th class="c">Regla del bloque</th>
+            <th class="c">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="af-body-rango">
+          ${rows.length ? rows.map((r) => `
+            <tr>
+              <td class="num c"><strong>${esc(fFecha(r.fecha))}</strong></td>
+              <td class="num c">${esc(r.hora)}</td>
+              <td class="c">${esc(r.examinador)}</td>
+              <td class="c"><span class="regla ${r.apto_pesada ? 'ok' : ''}">${r.apto_pesada ? 'D · A5 permitidas' : 'B, C, A1-A4 · sin D/A5'}</span></td>
+              <td class="c" style="display:flex;gap:6px;justify-content:center">
+                <button class="btn chico" data-agendar="${Number(r.id)}">Agendar</button>
+                <button class="btn chico sec" data-ver-dia="${esc(r.fecha)}">Ver día en Agenda</button>
+              </td>
+            </tr>
+          `).join('') : licoVacioFila(5, 'explica', 'Sin bloques libres en este rango', `No hay bloques libres entre ${fFecha(filtAgenda.desde)} y ${fFecha(filtAgenda.hasta)}.`)}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  $('#af-btn-volver-dia').onclick = () => {
+    filtAgenda.buscandoRango = false;
+    renderAgenda();
   };
-  $('#pc-body').querySelectorAll('button[data-si]').forEach((el) => { el.onclick = () => marcar(Number(el.dataset.si), 1); });
-  $('#pc-body').querySelectorAll('button[data-no]').forEach((el) => { el.onclick = () => marcar(Number(el.dataset.no), 0); });
+
+  cont.querySelectorAll('button[data-agendar]').forEach((btn) => {
+    btn.onclick = () => abrirSlotPorId(Number(btn.dataset.agendar), recargar(renderAgenda));
+  });
+
+  cont.querySelectorAll('button[data-ver-dia]').forEach((btn) => {
+    btn.onclick = () => {
+      estadoAgenda.fecha = btn.dataset.verDia;
+      filtAgenda.buscandoRango = false;
+      renderAgenda();
+    };
+  });
 }
 
-// Bloquea todos los bloques de un examinador (o de todos) en un rango de fechas:
-// permisos administrativos, licencias, feriado legal, compensatorios, etc.
+async function dialogoPorConfirmar() {
+  irA('porconfirmar');
+}
