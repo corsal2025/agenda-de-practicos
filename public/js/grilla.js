@@ -464,7 +464,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
               <th class="th-hora">HORA</th>
               <th class="th-nombre">NOMBRE DE CONTRIBUYENTE</th>
               <th class="th-rut">RUT</th>
-              <th class="th-sede">SEDE</th>
+              <th class="th-sede">EXAMINADOR</th>
               <th class="th-clase">CLASE *</th>
               <th class="th-contacto">CONTACTO</th>
               <th class="th-avisos">AVISADO</th>
