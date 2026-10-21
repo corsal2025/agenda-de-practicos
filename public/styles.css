@@ -2358,6 +2358,58 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
   white-space: nowrap !important;
 }
 
+.tabla-agenda-elegante thead th.th-hora.es-rango,
+.tabla-agenda-elegante tbody td.td-hora.es-rango {
+  width: 110px !important;
+  min-width: 110px !important;
+}
+
+.fecha-slot-tabla {
+  font-size: 10px;
+  font-weight: 700;
+  color: #1e40af;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  padding: 1px 5px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-bottom: 3px;
+  white-space: nowrap;
+}
+
+:root[data-tema="oscuro"] .fecha-slot-tabla {
+  color: #93c5fd;
+  background: rgba(30, 64, 175, 0.2);
+  border-color: rgba(147, 197, 253, 0.2);
+}
+
+.fila-separador-fecha td {
+  background: #f8fafc !important;
+  padding: 8px 14px !important;
+  border-top: 2px solid #e2e8f0 !important;
+  border-bottom: 2px solid #e2e8f0 !important;
+}
+
+:root[data-tema="oscuro"] .fila-separador-fecha td {
+  background: #1e293b !important;
+  border-top-color: #334155 !important;
+  border-bottom-color: #334155 !important;
+}
+
+.separador-fecha-content {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: #1e3a8a;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+:root[data-tema="oscuro"] .separador-fecha-content {
+  color: #93c5fd;
+}
+
 .tabla-agenda-elegante thead th.th-hora {
   z-index: 15 !important;
 }

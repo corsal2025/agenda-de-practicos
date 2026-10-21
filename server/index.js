@@ -390,13 +390,22 @@ function conAlertas(row) {
 }
 
 app.get('/api/agenda', wrap((req, res) => {
-  const { fecha, desde, hasta, examinador_id, estado } = req.query;
+  const { fecha, desde, hasta, examinador_id, estado, clase } = req.query;
   const cond = [];
   const p = [];
   if (fecha) { cond.push('a.fecha = ?'); p.push(fecha); }
   if (desde) { cond.push('a.fecha >= ?'); p.push(desde); }
   if (hasta) { cond.push('a.fecha <= ?'); p.push(hasta); }
   if (examinador_id) { cond.push('a.examinador_id = ?'); p.push(Number(examinador_id)); }
+  if (clase) {
+    if (CLASES_PESADAS.includes(String(clase).toUpperCase())) {
+      cond.push("(a.clase LIKE ? OR ((a.rut IS NULL AND a.nombre IS NULL AND a.bloqueado = 0) AND a.hora = ?))");
+      p.push(`%${clase}%`, HORA_D_A5);
+    } else {
+      cond.push("(a.clase LIKE ? OR (a.rut IS NULL AND a.nombre IS NULL AND a.bloqueado = 0))");
+      p.push(`%${clase}%`);
+    }
+  }
   if (estado === 'libre') cond.push('a.rut IS NULL AND a.nombre IS NULL AND a.bloqueado = 0');
   if (estado === 'ocupada') cond.push('(a.rut IS NOT NULL OR a.nombre IS NOT NULL) AND a.bloqueado = 0');
   if (estado === 'bloqueada') cond.push('a.bloqueado = 1');

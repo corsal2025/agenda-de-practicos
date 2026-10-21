@@ -294,10 +294,17 @@ function pintarGrilla(cont, filas, fecha) {
     const sel = document.getElementById('a-exam');
     if (sel) sel.value = String(exs[0].id);
   }
+
+  const fechasSet = new Set(filas.map((f) => f.fecha).filter(Boolean));
+  const esRangoFechas = fechasSet.size > 1;
+
   if (!filas.length) {
     cont.className = '';
     cont.style.gridTemplateColumns = '';
-    cont.innerHTML = licoVacio('explica', 'Sin bloques este día', `No hay bloques para ${fFecha(fecha)}. Puede ser fin de semana o feriado, o falta generar la grilla (pestaña Datos).`);
+    const textoPeriodo = (filtAgenda && filtAgenda.esRango && filtAgenda.desde && filtAgenda.hasta && filtAgenda.desde !== filtAgenda.hasta)
+      ? `el rango ${fFecha(filtAgenda.desde)} al ${fFecha(filtAgenda.hasta)}`
+      : fFecha(fecha);
+    cont.innerHTML = licoVacio('explica', 'Sin bloques en este período', `No hay bloques para ${textoPeriodo}. Puede ser fin de semana o feriado, o falta generar la grilla (pestaña Datos).`);
     return;
   }
   const porKey = {};
@@ -306,7 +313,10 @@ function pintarGrilla(cont, filas, fecha) {
     porKey[`${f.hora}|${f.examinador_id}`] = f;
     if (f.rut || f.nombre) cuenta[f.examinador_id] = (cuenta[f.examinador_id] || 0) + 1;
   });
-  const modo = estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'tabla';
+  let modo = estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'tabla';
+  if (esRangoFechas && modo !== 'tabla') {
+    modo = 'tabla';
+  }
 
   if (modo === 'tabla') {
     pintarTablaAgenda(cont, filas, fecha, exs);
@@ -433,9 +443,13 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
   cont.className = 'tabla-agenda-wrap';
   cont.style.gridTemplateColumns = '';
 
-  // Ordenar filas por hora ascendente y luego examinador
+  const fechasSet = new Set(filas.map((f) => f.fecha).filter(Boolean));
+  const esRangoFechas = fechasSet.size > 1;
+
+  // Ordenar filas por fecha (si hay rango), hora ascendente y luego examinador
   const ordenadas = [...filas].sort((a, b) => {
-    if (a.hora !== b.hora) return a.hora.localeCompare(b.hora);
+    if (a.fecha !== b.fecha) return (a.fecha || '').localeCompare(b.fecha || '');
+    if (a.hora !== b.hora) return (a.hora || '').localeCompare(b.hora || '');
     return Number(a.examinador_id || 0) - Number(b.examinador_id || 0);
   });
 
@@ -457,7 +471,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         <table class="tabla-agenda-elegante" id="tabla-agenda-main">
           <thead>
             <tr>
-              <th class="th-hora">HORA</th>
+              <th class="th-hora ${esRangoFechas ? 'es-rango' : ''}">${esRangoFechas ? 'FECHA / HORA' : 'HORA'}</th>
               <th class="th-nombre">NOMBRE DE CONTRIBUYENTE</th>
               <th class="th-rut">RUT</th>
               <th class="th-examinador">EXAMINADOR</th>
@@ -471,7 +485,22 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           <tbody>
   `;
 
+  let fechaAnterior = null;
   for (const b of ordenadas) {
+    if (esRangoFechas && b.fecha && b.fecha !== fechaAnterior) {
+      fechaAnterior = b.fecha;
+      html += `
+        <tr class="fila-separador-fecha no-hover" data-fecha="${b.fecha}">
+          <td colspan="9">
+            <div class="separador-fecha-content">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" style="vertical-align:middle;margin-right:6px"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span>${esc(fFechaDia(b.fecha))}</span>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+
     const ocupada = Boolean(b.rut || b.nombre);
     const bloqueada = Boolean(b.bloqueado);
     const examObj = META.examinadores.find((e) => e.id === b.examinador_id);
@@ -488,7 +517,8 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     if (bloqueada) {
       html += `
         <tr class="fila-agenda-tabla fila-bloqueada" data-id="${b.id}" data-tipo="bloqueada" data-examinador="${b.examinador_id}">
-          <td class="td-hora">
+          <td class="td-hora ${esRangoFechas ? 'es-rango' : ''}">
+            ${esRangoFechas ? `<div class="fecha-slot-tabla">${esc(fFecha(b.fecha))}</div>` : ''}
             <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
               ${esc(b.hora)}
               ${pesada ? '<span class="et-d">D·A5</span>' : ''}
@@ -509,7 +539,8 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     } else if (!ocupada) {
       html += `
         <tr class="fila-agenda-tabla fila-libre" data-id="${b.id}" data-tipo="libre" data-examinador="${b.examinador_id}">
-          <td class="td-hora">
+          <td class="td-hora ${esRangoFechas ? 'es-rango' : ''}">
+            ${esRangoFechas ? `<div class="fecha-slot-tabla">${esc(fFecha(b.fecha))}</div>` : ''}
             <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
               ${esc(b.hora)}
               ${pesada ? '<span class="et-d">D·A5</span>' : ''}
@@ -549,7 +580,8 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
 
       html += `
         <tr class="fila-agenda-tabla fila-ocupada ${resCls}" data-id="${b.id}" data-tipo="ocupada" data-examinador="${b.examinador_id}">
-          <td class="td-hora">
+          <td class="td-hora ${esRangoFechas ? 'es-rango' : ''}">
+            ${esRangoFechas ? `<div class="fecha-slot-tabla">${esc(fFecha(b.fecha))}</div>` : ''}
             <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
               ${esc(b.hora)}
               ${pesada ? '<span class="et-d">D·A5</span>' : ''}
@@ -837,6 +869,22 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         const str = (tr.textContent || '').toLowerCase();
         tr.style.display = str.includes(q) ? '' : 'none';
       });
+      cont.querySelectorAll('.fila-separador-fecha').forEach((sep) => {
+        if (!q) {
+          sep.style.display = '';
+          return;
+        }
+        let next = sep.nextElementSibling;
+        let hasVisible = false;
+        while (next && !next.classList.contains('fila-separador-fecha')) {
+          if (next.classList.contains('fila-agenda-tabla') && next.style.display !== 'none') {
+            hasVisible = true;
+            break;
+          }
+          next = next.nextElementSibling;
+        }
+        sep.style.display = hasVisible ? '' : 'none';
+      });
       sincronizarVisibilidadEditores();
     };
     inpBusc.oninput = filtrarBuscador;
@@ -854,6 +902,22 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         else if (filtro === 'ocupadas') tr.style.display = tr.dataset.tipo === 'ocupada' ? '' : 'none';
         else if (filtro === 'libres') tr.style.display = tr.dataset.tipo === 'libre' ? '' : 'none';
         else if (filtro === 'confirmadas') tr.style.display = tr.querySelector('.btn-confirmar-tabla.es-confirmado') ? '' : 'none';
+      });
+      cont.querySelectorAll('.fila-separador-fecha').forEach((sep) => {
+        if (filtro === 'todos') {
+          sep.style.display = '';
+          return;
+        }
+        let next = sep.nextElementSibling;
+        let hasVisible = false;
+        while (next && !next.classList.contains('fila-separador-fecha')) {
+          if (next.classList.contains('fila-agenda-tabla') && next.style.display !== 'none') {
+            hasVisible = true;
+            break;
+          }
+          next = next.nextElementSibling;
+        }
+        sep.style.display = hasVisible ? '' : 'none';
       });
       sincronizarVisibilidadEditores();
     };

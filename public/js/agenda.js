@@ -1,6 +1,6 @@
 /* ================= tab: AGENDA ================= */
 let estadoAgenda = { fecha: null, examinador_id: '', filtro: '' };
-let filtAgenda = { desde: null, hasta: null, clase: '', examinador_id: '', buscandoRango: false };
+let filtAgenda = { desde: null, hasta: null, clase: '', examinador_id: '', esRango: false };
 const AGENDA_KEY_PLEGADO = 'agenda-filtros-plegado';
 function agendaLeerPlegado() { try { return localStorage.getItem(AGENDA_KEY_PLEGADO) === '1'; } catch { return false; } }
 function agendaGuardarPlegado(v) { try { localStorage.setItem(AGENDA_KEY_PLEGADO, v ? '1' : '0'); } catch { /* sin almacenamiento */ } }
@@ -9,8 +9,9 @@ async function renderAgenda() {
   if (!estadoAgenda.fecha) estadoAgenda.fecha = await fechaInicialAgenda();
   if (!filtAgenda.desde) {
     filtAgenda.desde = estadoAgenda.fecha;
-    filtAgenda.hasta = sumarDias(estadoAgenda.fecha, 60);
+    filtAgenda.hasta = estadoAgenda.fecha;
     filtAgenda.examinador_id = estadoAgenda.examinador_id || '';
+    filtAgenda.esRango = false;
   }
   view.innerHTML = `
     <div class="panel no-print panel-fijo agenda-toolbar">
@@ -27,7 +28,7 @@ async function renderAgenda() {
 
           <div class="campo">
             <label for="a-hasta">Hasta</label>
-            <input type="date" id="a-hasta" value="${esc(filtAgenda.hasta)}">
+            <input type="date" id="a-hasta" value="${esc(filtAgenda.hasta || estadoAgenda.fecha)}">
           </div>
 
           <div class="campo">
@@ -46,7 +47,7 @@ async function renderAgenda() {
             </select>
           </div>
 
-          <button class="btn" id="a-buscar" style="height:38px;padding:0 16px" title="Buscar cupos disponibles en el rango de fechas">
+          <button class="btn" id="a-buscar" style="height:38px;padding:0 16px" title="Ver agenda completa de cupos y citas en el rango seleccionado">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" style="vertical-align:middle;margin-right:3px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             Buscar
           </button>
@@ -130,32 +131,9 @@ async function renderAgenda() {
     filtAgenda.examinador_id = $('#a-exam').value;
     estadoAgenda.examinador_id = filtAgenda.examinador_id;
     estadoAgenda.fecha = filtAgenda.desde;
-
-    if (!filtAgenda.hasta || filtAgenda.desde === filtAgenda.hasta) {
-      filtAgenda.buscandoRango = false;
-      renderAgenda();
-      return;
-    }
-
-    filtAgenda.buscandoRango = true;
-    const qDisp = new URLSearchParams(Object.fromEntries(Object.entries({
-      desde: filtAgenda.desde,
-      hasta: filtAgenda.hasta,
-      clase: filtAgenda.clase,
-      examinador_id: filtAgenda.examinador_id,
-    }).filter(([, v]) => v)));
-
-    await cargarVista('agenda_rango', `/disponibles?${qDisp}`, (rows) => {
-      totalLibresRango = rows.length;
-      const pesada = META.clases_pesadas.includes(filtAgenda.clase);
-      const reglaPesada = pesada ? `Clase ${filtAgenda.clase}: solo bloques de las ${META.hora_d_a5}.` : '';
-      if ($('#a-regla')) {
-        $('#a-regla').textContent = rows.length
-          ? `${reglaPesada ? reglaPesada + ' · ' : ''}${rows.length} bloque(s) libre(s) en el rango.`
-          : (reglaPesada ? reglaPesada + ' · Sin bloques libres en el rango.' : 'Sin bloques libres en el rango.');
-      }
-      pintarResultadosRangoEnAgenda(rows);
-    });
+    filtAgenda.esRango = Boolean(filtAgenda.hasta && filtAgenda.desde && filtAgenda.desde !== filtAgenda.hasta);
+    actualizarConteoRango();
+    renderAgenda();
   };
 
   $('#a-fecha').onchange = (e) => {
@@ -165,7 +143,10 @@ async function renderAgenda() {
       filtAgenda.hasta = filtAgenda.desde;
       $('#a-hasta').value = filtAgenda.desde;
     }
-    filtAgenda.buscandoRango = false;
+    if (filtAgenda.desde === filtAgenda.hasta) {
+      filtAgenda.esRango = false;
+    }
+    actualizarConteoRango();
     renderAgenda();
   };
   $('#a-hasta').onchange = (e) => {
@@ -179,25 +160,27 @@ async function renderAgenda() {
   $('#a-exam').onchange = (e) => {
     estadoAgenda.examinador_id = e.target.value;
     filtAgenda.examinador_id = e.target.value;
-    filtAgenda.buscandoRango = false;
     renderAgenda();
   };
   $('#dia-prev').onclick = async () => {
     estadoAgenda.fecha = await proximoDiaConAgenda(estadoAgenda.fecha, -1);
     filtAgenda.desde = estadoAgenda.fecha;
-    filtAgenda.buscandoRango = false;
+    filtAgenda.hasta = estadoAgenda.fecha;
+    filtAgenda.esRango = false;
     renderAgenda();
   };
   $('#dia-next').onclick = async () => {
     estadoAgenda.fecha = await proximoDiaConAgenda(estadoAgenda.fecha, 1);
     filtAgenda.desde = estadoAgenda.fecha;
-    filtAgenda.buscandoRango = false;
+    filtAgenda.hasta = estadoAgenda.fecha;
+    filtAgenda.esRango = false;
     renderAgenda();
   };
   $('#a-hoy').onclick = async () => {
     estadoAgenda.fecha = await fechaInicialAgenda();
     filtAgenda.desde = estadoAgenda.fecha;
-    filtAgenda.buscandoRango = false;
+    filtAgenda.hasta = estadoAgenda.fecha;
+    filtAgenda.esRango = false;
     renderAgenda();
   };
   $('#a-bloqdia').onclick = () => dialogoBloquearDia();
@@ -230,18 +213,24 @@ async function renderAgenda() {
     };
   }
 
-  if (!filtAgenda.buscandoRango) {
-    const q = new URLSearchParams({ fecha: estadoAgenda.fecha });
-    if (estadoAgenda.examinador_id) q.set('examinador_id', estadoAgenda.examinador_id);
-    const fecha = estadoAgenda.fecha;
-    await cargarVista('agenda', `/agenda?${q}`, (filas) => {
-      const libres = filas.filter((f) => !f.rut && !f.nombre && !f.bloqueado).length;
-      $('#a-libres').textContent = `${libres} ${libres === 1 ? 'bloque libre' : 'bloques libres'}`;
-      pintarGrilla($('#a-grid'), filas, fecha);
-      restaurarScroll();
-      setTimeout(ajustarOffsetsFijos, 0);
-    });
+  const q = new URLSearchParams();
+  if (filtAgenda.esRango && filtAgenda.desde && filtAgenda.hasta && filtAgenda.desde !== filtAgenda.hasta) {
+    q.set('desde', filtAgenda.desde);
+    q.set('hasta', filtAgenda.hasta);
+  } else {
+    q.set('fecha', estadoAgenda.fecha || filtAgenda.desde);
   }
+  if (estadoAgenda.examinador_id) q.set('examinador_id', estadoAgenda.examinador_id);
+  if (filtAgenda.clase) q.set('clase', filtAgenda.clase);
+
+  const fechaRef = estadoAgenda.fecha || filtAgenda.desde;
+  await cargarVista('agenda', `/agenda?${q}`, (filas) => {
+    const libres = filas.filter((f) => !f.rut && !f.nombre && !f.bloqueado).length;
+    $('#a-libres').textContent = `${libres} ${libres === 1 ? 'bloque libre' : 'bloques libres'}`;
+    pintarGrilla($('#a-grid'), filas, fechaRef);
+    restaurarScroll();
+    setTimeout(ajustarOffsetsFijos, 0);
+  });
 
   actualizarBadgePapelera();
   if (window.ListaEspera) window.ListaEspera.badge();
