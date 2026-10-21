@@ -464,8 +464,6 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
               <th class="th-nombre">NOMBRE DE CONTRIBUYENTE</th>
               <th class="th-rut">RUT</th>
               <th class="th-sede">SEDE</th>
-              <th class="th-tramite">TRÁMITE AGENDA</th>
-              <th class="th-fecha">FECHA ÚLT.<br>CARPETA</th>
               <th class="th-clase">CLASE *</th>
               <th class="th-contacto">CONTACTO</th>
               <th class="th-avisos">AVISADO</th>
@@ -503,8 +501,6 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           </td>
           <td class="td-rut text-muted">—</td>
           <td class="td-sede"><span class="sede-pill-badge">${esc(examNombre)}</span></td>
-          <td class="td-tramite text-muted">—</td>
-          <td class="td-fecha text-muted">—</td>
           <td class="td-clase text-muted">—</td>
           <td class="td-contacto text-muted">—</td>
           <td class="td-avisos text-muted">—</td>
@@ -526,8 +522,6 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           </td>
           <td class="td-rut text-muted">—</td>
           <td class="td-sede"><span class="sede-pill-badge">${esc(examNombre)}</span></td>
-          <td class="td-tramite text-muted">—</td>
-          <td class="td-fecha text-muted">—</td>
           <td class="td-clase">${pesada ? '<span class="badge dpesada">D y A5</span>' : '<span class="text-muted">—</span>'}</td>
           <td class="td-contacto text-muted">—</td>
           <td class="td-avisos text-muted">—</td>
@@ -539,25 +533,6 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
       `;
     } else {
       // Cita ocupada
-      const int = String(b.intento || '').toUpperCase();
-      const tipo = String(b.tipo_cita || '').toUpperCase();
-      let tramiteTexto = '1° VEZ / EXTENSIÓN';
-      let tramiteCss = 'pill-primera';
-
-      if (b.pendiente_reagendar || tipo.includes('REAGENDAD')) {
-        tramiteTexto = 'REAGENDADA';
-        tramiteCss = 'pill-reagendado';
-      } else if (int.includes('2') || int.includes('SEGUNDA') || tipo.includes('RENOVACION') || tipo.includes('RENOVACIÓN')) {
-        tramiteTexto = 'RENOVACIÓN';
-        tramiteCss = 'pill-renovacion';
-      } else if (int.includes('1') || int.includes('PRIMERA') || tipo.includes('PRIMERA') || tipo.includes('EXTENSION') || tipo.includes('EXTENSIÓN')) {
-        tramiteTexto = '1° VEZ / EXTENSIÓN';
-        tramiteCss = 'pill-primera';
-      } else if (b.intento || b.tipo_cita) {
-        tramiteTexto = esc(b.intento || b.tipo_cita);
-        tramiteCss = 'pill-renovacion';
-      }
-
       const resCls = b.resultado === 'APROBADO' ? 'res-aprob' : (b.resultado === 'REPROBADO' || noAsiste) ? 'res-reprob' : '';
 
       // Cuenta regresiva / plazo trámite
@@ -605,15 +580,6 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           </td>
           <td class="td-sede">
             <span class="sede-pill-badge">${esc(examNombre)}</span>
-          </td>
-          <td class="td-tramite">
-            <span class="tramite-pill-badge ${tramiteCss}">${esc(tramiteTexto)}</span>
-          </td>
-          <td class="td-fecha">
-            <div class="fecha-box-inline ${b.fecha_inicio_tramite ? '' : 'fecha-vacia'}" data-id="${b.id}" title="${b.fecha_inicio_tramite ? 'Inicio de trámite: ' + fFecha(b.fecha_inicio_tramite) : 'Sin fecha de inicio registrada'}">
-              <span>${b.fecha_inicio_tramite ? esc(fFecha(b.fecha_inicio_tramite)) : 'dd/mm/aaaa'}</span>
-              <span class="cal-ico">📅</span>
-            </div>
           </td>
           <td class="td-clase">
             <button type="button" class="btn-clase-pill" data-id="${b.id}" title="Clase de licencia (Clic para abrir ficha)">

@@ -2182,7 +2182,7 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
 
 .tabla-agenda-elegante {
   width: 100%;
-  min-width: 1480px !important;
+  min-width: 1180px !important;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 13px;
@@ -2205,10 +2205,6 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
   position: sticky;
   top: 0;
   z-index: 10;
-}
-
-.tabla-agenda-elegante thead th.th-fecha {
-  line-height: 1.25;
 }
 
 .tabla-agenda-elegante thead th.th-nombre {
