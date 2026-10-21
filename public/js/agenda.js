@@ -23,16 +23,79 @@ async function renderAgenda() {
         <span class="muted disp-resumen" id="af-resumen" aria-live="polite"></span>
       </div>
       <div id="af-campos" class="disp-campos" ${plegado ? 'hidden' : ''}>
-        <div class="fila" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
-          <div class="campo"><label for="af-desde">Desde</label><input type="date" id="af-desde" value="${esc(filtAgenda.desde)}"></div>
-          <div class="campo"><label for="af-hasta">Hasta</label><input type="date" id="af-hasta" value="${esc(filtAgenda.hasta)}"></div>
-          <div class="campo"><label for="af-clase">Clase</label><select id="af-clase"><option value="">--</option>${opt(META.catalogos.clase, filtAgenda.clase)}</select></div>
-          <div class="campo"><label for="af-exam">Examinador</label><select id="af-exam"><option value="">Todos</option>
-            ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}" ${String(e.id) === String(filtAgenda.examinador_id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}</select>
+        <div class="af-contenedor-grid">
+          <!-- Columna 1: Consultar cupos disponibles -->
+          <div class="af-seccion af-seccion-busqueda">
+            <div class="af-seccion-titulo">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span>Consultar cupos disponibles</span>
+            </div>
+            <div class="fila" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
+              <div class="campo"><label for="af-desde">Desde</label><input type="date" id="af-desde" value="${esc(filtAgenda.desde)}"></div>
+              <div class="campo"><label for="af-hasta">Hasta</label><input type="date" id="af-hasta" value="${esc(filtAgenda.hasta)}"></div>
+              <div class="campo"><label for="af-clase">Clase</label><select id="af-clase"><option value="">--</option>${opt(META.catalogos.clase, filtAgenda.clase)}</select></div>
+              <div class="campo"><label for="af-exam">Examinador</label><select id="af-exam"><option value="">Todos</option>
+                ${META.examinadores.filter((e) => e.activo).map((e) => `<option value="${e.id}" ${String(e.id) === String(filtAgenda.examinador_id) ? 'selected' : ''}>${esc(e.nombre)}</option>`).join('')}</select>
+              </div>
+              <button class="btn" id="af-buscar">Buscar</button>
+            </div>
+            <p class="muted" id="af-regla" style="margin:.3rem 0 0 0;font-size:12px"></p>
           </div>
-          <button class="btn" id="af-buscar">Buscar</button>
+
+          <!-- Divisor visual -->
+          <div class="af-divisor" aria-hidden="true"></div>
+
+          <!-- Columna 2: Bloquear horario de examinador en pantalla -->
+          <div class="af-seccion af-seccion-bloqueo">
+            <div class="af-seccion-titulo" style="color:var(--alerta, #dc2626)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>Bloquear horario de examinador</span>
+            </div>
+            <div class="fila" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
+              <div class="campo" style="min-width:180px">
+                <label for="af-bloq-motivo">Motivo</label>
+                <select id="af-bloq-motivo">
+                  <option value="FERIADO LEGAL">Vacaciones / Feriado Legal</option>
+                  <option value="PERMISO ADMINISTRATIVO">Permiso Administrativo</option>
+                  <option value="LICENCIA MEDICA">Licencia Médica</option>
+                  <option value="COMPENSATORIO">Día Compensatorio</option>
+                  <option value="CAPACITACION">Capacitación</option>
+                  <option value="TERRENO">Examen en Terreno</option>
+                  <option value="__otro">Otro motivo...</option>
+                </select>
+              </div>
+              <div class="campo" id="af-bloq-otro-c" hidden style="min-width:140px">
+                <label for="af-bloq-otro">¿Cuál motivo?</label>
+                <input id="af-bloq-otro" placeholder="Ej: Comisión">
+              </div>
+              <div class="campo" style="min-width:170px">
+                <label for="af-bloq-horario">Horario / Franja</label>
+                <select id="af-bloq-horario">
+                  <option value="dia_completo">Todo el día</option>
+                  <option value="manana">Mañana (08:30 – 11:00)</option>
+                  <option value="tarde">Mediodía / Tarde (11:30 – 13:30)</option>
+                  <optgroup label="Bloques individuales">
+                    ${((META && META.horas) || ['08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30']).map((h) => `<option value="${h}">Solo ${h} hrs</option>`).join('')}
+                  </optgroup>
+                  <option value="__personalizado">⚙ Selección avanzada...</option>
+                </select>
+              </div>
+              <div style="display:inline-flex;gap:8px;align-items:flex-end">
+                <button class="btn btn-bloq-accion" id="af-btn-bloquear" title="Bloquea el examinador y horario seleccionado en las fechas Desde/Hasta indicadas">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" style="vertical-align:middle;margin-right:3px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  Bloquear en pantalla
+                </button>
+                <button class="btn btn-desbloq-accion" id="af-btn-desbloquear" type="button" title="Libera y desbloquea horarios previamente bloqueados">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" style="vertical-align:middle;margin-right:3px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+                  Desbloquear
+                </button>
+              </div>
+            </div>
+            <p class="muted" style="margin:.3rem 0 0 0;font-size:11px" id="af-bloq-info">
+              Aplica a las fechas <strong>Desde/Hasta</strong> y al <strong>Examinador</strong> seleccionado. Citas tomadas pasarán a Lista de Espera.
+            </p>
+          </div>
         </div>
-        <p class="muted" id="af-regla" style="margin:.4rem 0 0 0"></p>
       </div>
 
       <div class="fila" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--linea)">
@@ -166,6 +229,144 @@ async function renderAgenda() {
       pintarResultadosRangoEnAgenda(rows);
     });
   };
+
+  /* Sincronización y eventos de bloqueo directo en pantalla */
+  if ($('#af-desde')) {
+    $('#af-desde').onchange = (e) => {
+      filtAgenda.desde = e.target.value;
+      if ($('#af-hasta') && (!filtAgenda.hasta || filtAgenda.hasta < filtAgenda.desde)) {
+        filtAgenda.hasta = filtAgenda.desde;
+        $('#af-hasta').value = filtAgenda.desde;
+      }
+      actualizarConteoRango();
+    };
+  }
+  if ($('#af-hasta')) {
+    $('#af-hasta').onchange = (e) => {
+      filtAgenda.hasta = e.target.value;
+      actualizarConteoRango();
+    };
+  }
+  if ($('#af-exam')) {
+    $('#af-exam').onchange = (e) => {
+      filtAgenda.examinador_id = e.target.value;
+      actualizarConteoRango();
+    };
+  }
+  if ($('#af-clase')) {
+    $('#af-clase').onchange = (e) => {
+      filtAgenda.clase = e.target.value;
+      actualizarConteoRango();
+    };
+  }
+
+  const bloqMotivoEl = $('#af-bloq-motivo');
+  if (bloqMotivoEl) {
+    bloqMotivoEl.onchange = () => {
+      const esOtro = bloqMotivoEl.value === '__otro';
+      const cOtro = $('#af-bloq-otro-c');
+      if (cOtro) cOtro.hidden = !esOtro;
+    };
+  }
+
+  const bloqHorarioEl = $('#af-bloq-horario');
+  if (bloqHorarioEl) {
+    bloqHorarioEl.onchange = () => {
+      if (bloqHorarioEl.value === '__personalizado') {
+        bloqHorarioEl.value = 'dia_completo';
+        dialogoBloquearDia();
+      }
+    };
+  }
+
+  if ($('#af-btn-desbloquear')) {
+    $('#af-btn-desbloquear').onclick = () => dialogoDesbloquearDia();
+  }
+
+  if ($('#af-btn-bloquear')) {
+    $('#af-btn-bloquear').onclick = async () => {
+      const desde = $('#af-desde') ? $('#af-desde').value : (filtAgenda.desde || estadoAgenda.fecha);
+      const hasta = $('#af-hasta') ? $('#af-hasta').value : (filtAgenda.hasta || desde);
+      if (!desde || hasta < desde) {
+        return toast('Revisa las fechas: "Hasta" no puede ser anterior a "Desde".', 'err');
+      }
+
+      const examVal = $('#af-exam') ? $('#af-exam').value : (filtAgenda.examinador_id || '');
+      const examId = examVal ? Number(examVal) : null;
+      const examObj = examId ? META.examinadores.find((e) => String(e.id) === String(examId)) : null;
+
+      let motivo = $('#af-bloq-motivo') ? $('#af-bloq-motivo').value : 'FERIADO LEGAL';
+      if (motivo === '__otro') {
+        motivo = ($('#af-bloq-otro') ? $('#af-bloq-otro').value : '').trim().toUpperCase();
+        if (!motivo) return toast('Por favor escribe el motivo del bloqueo.', 'err');
+      }
+
+      const horVal = $('#af-bloq-horario') ? $('#af-bloq-horario').value : 'dia_completo';
+      let horas = null;
+      let labelHoras = 'todo el día';
+      if (horVal === 'manana') {
+        horas = ['08:30', '09:00', '09:30', '10:00', '10:30', '11:00'];
+        labelHoras = 'mañana (08:30 a 11:00)';
+      } else if (horVal === 'tarde') {
+        horas = ['11:30', '12:00', '12:30', '13:00', '13:30'];
+        labelHoras = 'mediodía / tarde (11:30 a 13:30)';
+      } else if (horVal !== 'dia_completo') {
+        horas = [horVal];
+        labelHoras = `a las ${horVal} hrs`;
+      }
+
+      const dicMotivo = {
+        'FERIADO LEGAL': 'Vacaciones / Feriado Legal',
+        'PERMISO ADMINISTRATIVO': 'Permiso Administrativo',
+        'LICENCIA MEDICA': 'Licencia Médica',
+        'COMPENSATORIO': 'Día Compensatorio',
+        'CAPACITACION': 'Capacitación',
+        'TERRENO': 'Examen en Terreno',
+        'BLOQUEADO': 'Bloqueo Administrativo'
+      };
+      const motivoTexto = dicMotivo[motivo] || motivo;
+      const dias = Math.round((Date.parse(hasta) - Date.parse(desde)) / 864e5) + 1;
+      const targetExaminador = examObj ? examObj.nombre : 'TODOS los examinadores';
+      const targetRango = desde === hasta ? `el día ${fFecha(desde)}` : `del ${fFecha(desde)} al ${fFecha(hasta)} (${dias} días)`;
+
+      const confirmMsg = `¿Confirmas bloquear ${labelHoras} para ${targetExaminador} ${targetRango}?\n\nMotivo: ${motivoTexto}\n\nNota: Si existen postulantes citados, se enviarán automáticamente a la Lista de Espera con alta prioridad para reagendar.`;
+      if (!confirm(confirmMsg)) return;
+
+      try {
+        $('#af-btn-bloquear').disabled = true;
+        const body = {
+          desde,
+          hasta,
+          examinador_id: examId,
+          motivo,
+          incluir_ocupados: true,
+          horas,
+        };
+        const r = await api('/bloquear-dia', { method: 'POST', body });
+        if (!r.bloqueados) {
+          toast('No había bloques disponibles en ese horario para bloquear', 'err');
+        } else {
+          let msg = `🔒 ${r.bloqueados} ${r.bloqueados === 1 ? 'bloque bloqueado' : 'bloques bloqueados'}`;
+          if (r.a_reagendar) msg += ` · ${r.a_reagendar} cita(s) enviada(s) a Lista de Espera`;
+          toast(msg, 'ok');
+          actualizarBadgeReagendar();
+          vaciarCache();
+          if (window.ListaEspera) window.ListaEspera.badge();
+          estadoAgenda.fecha = desde;
+          if (examId) estadoAgenda.examinador_id = String(examId);
+          filtAgenda.buscandoRango = false;
+          await renderAgenda();
+          if (r.a_reagendar && confirm(`Se bloquearon los cupos y ${r.a_reagendar} postulante(s) fueron enviados a la Lista de Espera.\n\n¿Deseas ir a la Lista de Espera ahora?`)) {
+            irA('espera');
+          }
+        }
+      } catch (err) {
+        toast(err.message, 'err');
+      } finally {
+        if ($('#af-btn-bloquear')) $('#af-btn-bloquear').disabled = false;
+      }
+    };
+  }
 
   $('#a-fecha').onchange = (e) => {
     estadoAgenda.fecha = e.target.value;

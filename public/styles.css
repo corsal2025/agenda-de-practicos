@@ -1998,6 +1998,49 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
 .btn-plegar:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; border-radius: 4px; }
 .disp-resumen { font-size: 13px; }
 
+/* Grid de Filtros + Bloqueos en Agenda */
+.af-contenedor-grid {
+  display: flex;
+  gap: 1.5rem;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+.af-seccion {
+  display: flex;
+  flex-direction: column;
+  gap: .45rem;
+  flex: 1;
+  min-width: 320px;
+}
+.af-seccion-busqueda {
+  flex: 1;
+  min-width: 320px;
+}
+.af-seccion-bloqueo {
+  flex: 1.35;
+  min-width: 340px;
+}
+.af-seccion-titulo {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--azul-900);
+}
+.af-divisor {
+  width: 1px;
+  background: var(--linea);
+  align-self: stretch;
+}
+@media (max-width: 960px) {
+  .af-divisor {
+    display: none;
+  }
+}
+
 /* Utilidad: encabezado de tabla fijo bajo la barra superior (escritorio) */
 .thead-fijo thead th { position: sticky; top: var(--alto-header); z-index: 4; }
 /* Bajo un panel .panel-fijo (p. ej. filtros de Citas disponibles) */
