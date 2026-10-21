@@ -2392,7 +2392,8 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
   min-width: 170px;
 }
 
-.tabla-agenda-elegante tbody td.td-sede {
+.tabla-agenda-elegante tbody td.td-sede,
+.tabla-agenda-elegante tbody td.td-examinador {
   width: 155px;
   min-width: 155px;
 }
