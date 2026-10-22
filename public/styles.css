@@ -2109,6 +2109,32 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
 .thead-fijo thead th { position: sticky; top: var(--alto-header); z-index: 4; }
 /* Bajo un panel .panel-fijo (p. ej. filtros de Citas disponibles) */
 .thead-fijo.bajo-panel thead th { top: calc(var(--alto-header) + var(--alto-panel-fijo)); }
+/* Citas disponibles: los filtros se desplazan con la pagina y la tabla tiene su propia
+   caja de scroll; el encabezado se pega arriba de esa caja (no bajo la barra). */
+.panel-fijo.disp-filtros { position: static; }
+#tabla-disponibles-main thead th { position: sticky; top: 0; z-index: 4; }
+/* Agenda en vista tabla: igual que arriba (filtros con la pagina, encabezado pegado en su caja). */
+.agenda-toolbar:has(~ .panel #a-grid.tabla-agenda-wrap) { position: static; }
+.tabla-agenda-wrap .tabla-agenda-elegante thead th { position: sticky; top: 0; z-index: 4; }
+#tabla-disponibles-main { min-width: 0 !important; table-layout: fixed; }
+#tabla-disponibles-main th:nth-child(1) { width: 34%; }
+#tabla-disponibles-main th:nth-child(2) { width: 10%; }
+#tabla-disponibles-main th:nth-child(3) { width: 22%; }
+#tabla-disponibles-main th:nth-child(4) { width: 22%; }
+#tabla-disponibles-main th:nth-child(5) { width: 12%; }
+#tabla-disponibles-main td:nth-child(1) { white-space: nowrap; }
+/* Lista de espera: el RUT no debe partirse en dos lineas. */
+#le-body td.num { white-space: nowrap; }
+/* Celular: menos relleno lateral y filtros que se acomodan en filas (no se salen de la pantalla). */
+@media (max-width: 760px) {
+  #view { padding: 10px 8px 20px; }
+  .panel-fijo .fila { flex-wrap: wrap; }
+  .panel-fijo .campo { flex: 1 1 130px; min-width: 0; }
+  .panel-fijo .campo select, .panel-fijo .campo input { width: 100%; }
+  /* Cabecera en celular: solo titulo y tema; el resto (guia, Lico, letra, estado) no entra. */
+  #btn-guia-global, .head-lico-wrap, #lico-onoff, #lico-consejos, .letra-ctrl, .top-right .estado { display: none !important; }
+}
+#tabla-disponibles-main td { overflow-wrap: anywhere; }
 @media (min-width: 1024px) {
   .tabla-scroll:has(> table.thead-fijo) { overflow: visible; }
 }

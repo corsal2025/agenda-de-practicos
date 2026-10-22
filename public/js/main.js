@@ -19,7 +19,9 @@ async function init({ forzarAgenda = false } = {}) {
     const r = META.rango_agenda || {};
     $('#estado').innerHTML = `${r.desde ? `Agenda ${fFecha(r.desde)} – ${fFecha(r.hasta)} · ` : ''}hoy ${fFecha(META.hoy)}`;
 
-    if (localStorage.getItem('agenda_sidebar_plegado') === '1') {
+    // En celular el menu se muestra plegado (solo iconos): si no, ocupa media pantalla.
+    const celular = window.matchMedia && window.matchMedia('(max-width: 760px)');
+    if (localStorage.getItem('agenda_sidebar_plegado') === '1' || (celular && celular.matches)) {
       document.documentElement.classList.add('sidebar-plegado');
       const flecha = document.getElementById('sidebar-plegar-flecha');
       if (flecha) flecha.setAttribute('d', 'M9 6l6 6-6 6');
