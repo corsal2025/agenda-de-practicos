@@ -2129,20 +2129,27 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
    Inspirado en la visualización corporativa moderna con pills y cards
    ========================================================= */
 
+.agenda-toolbar {
+  margin-bottom: 4px !important;
+  padding-bottom: 10px !important;
+}
+
 .panel:has(.tabla-agenda-card) {
   padding: 0 !important;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
 }
 
 .tabla-agenda-card {
   background: #ffffff;
   border: 2px solid #2563eb;
-  border-radius: 14px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.08);
   overflow: hidden;
-  margin-top: 4px;
+  margin-top: 0 !important;
   margin-bottom: 24px;
 }
 
@@ -2158,7 +2165,7 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 4px 2px 12px 2px;
+  padding: 0;
   background: transparent;
   flex-wrap: wrap;
 }
@@ -2166,22 +2173,6 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
 :root[data-tema="oscuro"] .tabla-agenda-toolbar-exterior,
 :root[data-tema="oscuro"] .tabla-agenda-toolbar {
   background: transparent;
-}
-
-.tabla-agenda-card {
-  background: #ffffff;
-  border: 2px solid #2563eb;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.08);
-  overflow: hidden;
-  margin-top: 0;
-  margin-bottom: 24px;
-}
-
-:root[data-tema="oscuro"] .tabla-agenda-card {
-  background: var(--papel);
-  border-color: #3b82f6;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
 }
 
 .tabla-busc-wrap {
