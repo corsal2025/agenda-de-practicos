@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap">
-  <link rel="stylesheet" href="styles.css?v=117">
+  <link rel="stylesheet" href="styles.css?v=118">
   <link rel="stylesheet" href="responsive.css?v=92">
   <script src="tamano-letra.js?v=77"></script>
 </head>
@@ -47,31 +47,33 @@
           <button id="letra-mas" class="icono-btn" type="button" title="Agrandar letra (Ctrl+Alt++)" aria-label="Agrandar letra">A+</button>
         </div>
         <button id="tema" class="icono-btn" title="Cambiar tema" aria-label="Cambiar tema">☾</button>
-        <button id="btn-layout-nav" class="icono-btn" type="button" title="Alternar menú lateral / superior (Estilo Gestión 2.0)" aria-label="Alternar menú lateral / superior">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
-        </button>
         <span class="estado" id="estado"></span>
       </div>
-      <nav id="nav">
-        <button data-tab="disponibles" class="activo"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="13" rx="1.5"/><path d="M3 8h14M7 2v4M13 2v4M10 10.5v4.5M7.75 12.75h4.5"/></svg>Citas disponibles</button>
-        <button data-tab="agenda"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="13" rx="1.5"/><path d="M3 8h14M7 2v4M13 2v4"/></svg>Agenda</button>
-        <button data-tab="espera"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2.5"/></svg>Lista de espera<span class="nav-badge" id="badge-espera" hidden></span></button>
-        <button data-tab="porconfirmar"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M6.5 10l2.5 2.5 5-5"/></svg>Por confirmar<span class="nav-badge" id="badge-porconfirmar" hidden></span></button>
-        <button data-tab="vencimientos"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 2.5h8M6 17.5h8M7 2.5c0 4 6 4.5 6 7.5s-6 3.5-6 7.5M13 2.5c0 4-6 4.5-6 7.5s6 3.5 6 7.5"/></svg>Por vencer</button>
-        <button data-tab="analitica"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17h14M5.5 17v-5M10 17V5M14.5 17V9"/></svg>Estadísticas</button>
-        <div class="nav-mas" id="nav-mas">
-          <button type="button" id="nav-mas-btn" class="nav-mas-btn" aria-haspopup="true" aria-expanded="false" aria-controls="nav-mas-menu"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="4.5" cy="10" r="1.3"/><circle cx="10" cy="10" r="1.3"/><circle cx="15.5" cy="10" r="1.3"/></svg>Más<span class="nav-badge" id="badge-mas" hidden></span><span class="nav-mas-flecha" aria-hidden="true">▾</span></button>
-          <div class="nav-mas-menu" id="nav-mas-menu" role="menu" aria-labelledby="nav-mas-btn" hidden>
-          <button type="button" role="menuitem" data-tab="jefatura" data-nav-movible="1"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="2.5" width="12" height="15" rx="1.5"/><path d="M7 13.5v-2M10 13.5v-5M13 13.5v-3.5M7 5.5h6"/></svg>Jefatura</button>
-          <button type="button" role="menuitem" data-tab="papelera" data-nav-movible="2"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h13M8 5.5V3.5h4v2M5 5.5l.8 11a1 1 0 001 1h6.4a1 1 0 001-1l.8-11M8.5 9v5M11.5 9v5"/></svg>Papelera<span class="nav-badge" id="badge-papelera" hidden></span></button>
-          <button type="button" role="menuitem" data-tab="datos" data-nav-movible="3"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><ellipse cx="10" cy="5" rx="6" ry="2.5"/><path d="M4 5v10c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V5M4 10c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5"/></svg>Datos</button>
-          <button type="button" role="menuitem" data-tab="errores" data-nav-movible="4"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3L2.5 16.5h15L10 3zM10 8.5v3.5M10 14.3v.2"/></svg>Reporte de errores<span class="nav-badge" id="badge-errores" hidden></span></button>
-          </div>
-        </div>
-        <button data-tab="examinador"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="6" y="2.5" width="8" height="15" rx="1.5"/><path d="M9 15h2"/></svg>Examinador</button>
-      </nav>
     </div>
   </header>
+
+  <aside class="sidebar-modulos" id="sidebar-modulos" aria-label="Navegación de módulos">
+    <div class="sidebar-cabecera">
+      <span class="sidebar-titulo">Módulos</span>
+      <button type="button" class="sidebar-plegar" id="sidebar-plegar-btn" title="Plegar / Expandir menú lateral" aria-label="Plegar menú">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6" id="sidebar-plegar-flecha"/></svg>
+      </button>
+    </div>
+    <nav id="nav">
+      <button data-tab="disponibles" class="activo" title="Citas disponibles"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="13" rx="1.5"/><path d="M3 8h14M7 2v4M13 2v4M10 10.5v4.5M7.75 12.75h4.5"/></svg><span class="nav-txt">Citas disponibles</span></button>
+      <button data-tab="agenda" title="Agenda"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="13" rx="1.5"/><path d="M3 8h14M7 2v4M13 2v4"/></svg><span class="nav-txt">Agenda</span></button>
+      <button data-tab="espera" title="Lista de espera"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2.5"/></svg><span class="nav-txt">Lista de espera</span><span class="nav-badge" id="badge-espera" hidden></span></button>
+      <button data-tab="porconfirmar" title="Por confirmar"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M6.5 10l2.5 2.5 5-5"/></svg><span class="nav-txt">Por confirmar</span><span class="nav-badge" id="badge-porconfirmar" hidden></span></button>
+      <button data-tab="vencimientos" title="Por vencer"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M6 2.5h8M6 17.5h8M7 2.5c0 4 6 4.5 6 7.5s-6 3.5-6 7.5M13 2.5c0 4-6 4.5-6 7.5s6 3.5 6 7.5"/></svg><span class="nav-txt">Por vencer</span></button>
+      <button data-tab="analitica" title="Estadísticas"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 17h14M5.5 17v-5M10 17V5M14.5 17V9"/></svg><span class="nav-txt">Estadísticas</span></button>
+      <button data-tab="jefatura" title="Jefatura"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="2.5" width="12" height="15" rx="1.5"/><path d="M7 13.5v-2M10 13.5v-5M13 13.5v-3.5M7 5.5h6"/></svg><span class="nav-txt">Jefatura</span></button>
+      <button data-tab="papelera" title="Papelera"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h13M8 5.5V3.5h4v2M5 5.5l.8 11a1 1 0 001 1h6.4a1 1 0 001-1l.8-11M8.5 9v5M11.5 9v5"/></svg><span class="nav-txt">Papelera</span><span class="nav-badge" id="badge-papelera" hidden></span></button>
+      <button data-tab="datos" title="Datos"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><ellipse cx="10" cy="5" rx="6" ry="2.5"/><path d="M4 5v10c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V5M4 10c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5"/></svg><span class="nav-txt">Datos</span></button>
+      <button data-tab="errores" title="Reporte de errores"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3L2.5 16.5h15L10 3zM10 8.5v3.5M10 14.3v.2"/></svg><span class="nav-txt">Reporte de errores</span><span class="nav-badge" id="badge-errores" hidden></span></button>
+      <button data-tab="examinador" title="Examinador" style="display:none"><svg class="nav-ico" viewBox="0 0 20 20" aria-hidden="true"><rect x="6" y="2.5" width="8" height="15" rx="1.5"/><path d="M9 15h2"/></svg><span class="nav-txt">Examinador</span></button>
+      <div id="nav-mas" style="display:none"><div id="nav-mas-menu"><button id="nav-mas-btn"></button></div></div>
+    </nav>
+  </aside>
 
   <main id="view"></main>
 
@@ -87,12 +89,12 @@
   <script src="lista-espera.js?v=88"></script>
   <script src="limpieza.js?v=60"></script>
   <script src="movil.js?v=62"></script>
-  <script src="js/core.js?v=96"></script>
+  <script src="js/core.js?v=97"></script>
   <script src="js/editor-cita.js?v=84"></script>
   <script src="js/porconfirmar.js?v=86"></script>
   <script src="js/agenda.js?v=107"></script>
   <script src="js/bloqueos.js?v=72"></script>
-  <script src="js/grilla.js?v=90"></script>
+  <script src="js/grilla.js?v=91"></script>
   <script src="js/reagendar.js?v=91"></script>
   <script src="js/buscar.js?v=72"></script>
   <script src="js/dia.js?v=90"></script>
@@ -101,7 +103,7 @@
   <script src="js/guia-pasos.js?v=90"></script>
   <script src="js/guia.js?v=80"></script>
   <script src="js/jefatura.js?v=76"></script>
-  <script src="js/main.js?v=95"></script>
+  <script src="js/main.js?v=99"></script>
   <script src="responsive.js?v=66"></script>
 </body>
 </html>

@@ -402,6 +402,7 @@ function asegurarBuscadorHome() {
 }
 const ALIAS_TABS = { dia: 'agenda', reagendar: 'espera' };
 function ruta() {
+  if (!META) return;
   cerrarModal();
   asegurarBuscadorHome();
   const tab = (location.hash.slice(1) || 'disponibles').split('?')[0];

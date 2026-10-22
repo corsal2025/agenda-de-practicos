@@ -937,7 +937,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     };
   });
 
-  const btnPillActivo = rootPills.querySelector('.btn-filtro-pill.activo');
+  const btnPillActivo = cont.querySelector('.btn-filtro-pill.activo');
   if (btnPillActivo && btnPillActivo.dataset.filtro !== 'todos') {
     btnPillActivo.click();
   }

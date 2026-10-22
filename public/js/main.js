@@ -19,12 +19,10 @@ async function init({ forzarAgenda = false } = {}) {
     const r = META.rango_agenda || {};
     $('#estado').innerHTML = `${r.desde ? `Agenda ${fFecha(r.desde)} – ${fFecha(r.hasta)} · ` : ''}hoy ${fFecha(META.hoy)}`;
 
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('sidebar') === '1' || localStorage.getItem('agenda_nav_layout') === 'lateral') {
-      document.documentElement.dataset.navLayout = 'lateral';
-      if (urlParams.get('plegado') === '1' || localStorage.getItem('agenda_sidebar_plegado') === '1') {
-        document.documentElement.classList.add('sidebar-plegado');
-      }
+    if (localStorage.getItem('agenda_sidebar_plegado') === '1') {
+      document.documentElement.classList.add('sidebar-plegado');
+      const flecha = document.getElementById('sidebar-plegar-flecha');
+      if (flecha) flecha.setAttribute('d', 'M9 6l6 6-6 6');
     }
 
     // Al abrir el sistema siempre parte en Agenda, aunque la
@@ -44,19 +42,13 @@ async function init({ forzarAgenda = false } = {}) {
 }
 document.querySelectorAll('#nav button[data-tab]').forEach((b) => { b.onclick = () => irA(b.dataset.tab); });
 
-const btnLayoutNav = document.getElementById('btn-layout-nav');
-if (btnLayoutNav) {
-  btnLayoutNav.onclick = () => {
-    const actual = document.documentElement.dataset.navLayout;
-    if (actual === 'lateral') {
-      delete document.documentElement.dataset.navLayout;
-      document.documentElement.classList.remove('sidebar-plegado');
-      localStorage.removeItem('agenda_nav_layout');
-      localStorage.removeItem('agenda_sidebar_plegado');
-    } else {
-      document.documentElement.dataset.navLayout = 'lateral';
-      localStorage.setItem('agenda_nav_layout', 'lateral');
-    }
+const btnPlegarSidebar = document.getElementById('sidebar-plegar-btn');
+if (btnPlegarSidebar) {
+  btnPlegarSidebar.onclick = () => {
+    const plegado = document.documentElement.classList.toggle('sidebar-plegado');
+    try { localStorage.setItem('agenda_sidebar_plegado', plegado ? '1' : '0'); } catch {}
+    const flecha = document.getElementById('sidebar-plegar-flecha');
+    if (flecha) flecha.setAttribute('d', plegado ? 'M9 6l6 6-6 6' : 'M15 18l-6-6 6-6');
     setTimeout(ajustarOffsetsFijos, 50);
   };
 }
@@ -101,7 +93,8 @@ setTimeout(acomodarNav, 0);
 (function navMas() {
   const btn = document.getElementById('nav-mas-btn');
   const menu = document.getElementById('nav-mas-menu');
-  if (!btn || !menu) return;
+  const badge = document.getElementById('badge-mas');
+  if (!btn || !menu || !badge) return;
   const items = () => [...menu.querySelectorAll('button[data-tab]')];
   const posicionar = () => {
     const r = btn.getBoundingClientRect();
@@ -151,7 +144,6 @@ setTimeout(acomodarNav, 0);
   window.addEventListener('hashchange', marcar);
   marcar();
   // Insignia del "Más" = suma de las insignias de las pestañas del menu.
-  const badge = document.getElementById('badge-mas');
   const sumar = () => {
     let n = 0;
     menu.querySelectorAll('.nav-badge').forEach((b) => {
