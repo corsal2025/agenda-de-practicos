@@ -135,20 +135,42 @@ header.top::after {
   position: relative; width: 280px; height: 38px; margin: 0;
   display: flex; align-items: center; flex: none;
 }
-.buscador input {
-  position: relative; width: 100%; height: 38px; padding: 0 16px 0 38px; font-size: 13.5px;
-  background: var(--elev); border: 1px solid var(--linea); border-radius: 999px; color: var(--tinta);
+.buscador.en-filtros {
+  flex: 1 1 300px;
+  max-width: 440px;
+  min-width: 240px;
+  margin-left: auto;
+}
+.buscador input,
+input#bq,
+.buscador input[type="search"] {
+  position: relative; width: 100%; height: 38px; padding: 0 16px 0 42px !important; font-size: 13.5px;
+  background: #ffffff; border: 1.5px solid #2563eb; border-radius: 999px; color: var(--tinta);
   transition: width .18s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
   outline: none; box-sizing: border-box;
 }
-.buscador input:focus, .buscador:focus-within input {
-  background: var(--papel); border-color: var(--azul);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, .15); width: 340px; z-index: 10;
+.buscador input:focus, .buscador:focus-within input,
+input#bq:focus {
+  background: var(--papel); border-color: #1d4ed8;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .2); width: 100%; z-index: 10;
+}
+.buscador:not(.en-filtros) input:focus,
+.buscador:not(.en-filtros):focus-within input {
+  width: 340px;
 }
 .buscador-ico {
-  position: absolute; left: 13px; top: 50%; transform: translateY(-50%); z-index: 12;
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%); z-index: 12;
   width: 16px; height: 16px; pointer-events: none;
-  fill: none; stroke: var(--tinta-3); stroke-width: 1.8; stroke-linecap: round;
+  fill: none; stroke: #2563eb; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+}
+:root[data-tema="oscuro"] .buscador input,
+:root[data-tema="oscuro"] input#bq {
+  background: var(--elev);
+  border-color: #3b82f6;
+  color: var(--tinta);
+}
+:root[data-tema="oscuro"] .buscador-ico {
+  stroke: #60a5fa;
 }
 .buscador .buscador-res {
   position: absolute; top: calc(100% + 6px); left: 0; width: 340px; z-index: 50;

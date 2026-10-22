@@ -392,9 +392,18 @@ if (typeof ResizeObserver === 'function') {
   else observarOffsets();
 }
 // Pestañas eliminadas que redirigen a otra (enlaces o marcadores antiguos).
+function asegurarBuscadorHome() {
+  const bq = document.getElementById('buscador');
+  const home = document.getElementById('top-buscador-home');
+  if (bq && home && bq.parentElement !== home) {
+    home.appendChild(bq);
+    bq.classList.remove('en-filtros');
+  }
+}
 const ALIAS_TABS = { dia: 'agenda', reagendar: 'espera' };
 function ruta() {
   cerrarModal();
+  asegurarBuscadorHome();
   const tab = (location.hash.slice(1) || 'disponibles').split('?')[0];
   if (ALIAS_TABS[tab]) { history.replaceState(null, '', `#${ALIAS_TABS[tab]}`); ruta(); return; }
   document.querySelectorAll('#nav button[data-tab]').forEach((b) => b.classList.toggle('activo', b.dataset.tab === tab));

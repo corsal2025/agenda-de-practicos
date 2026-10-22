@@ -63,6 +63,7 @@ async function renderAgenda() {
           </button>
 
           <span class="muted" id="a-regla" style="font-size:12px;font-weight:600;align-self:center;margin-left:6px;line-height:1.2"></span>
+          <div id="a-buscador-slot" style="margin-left:auto;display:flex;align-items:flex-end"></div>
         </div>
       </div>
 
@@ -136,6 +137,13 @@ async function renderAgenda() {
   if ($('#a-plegar')) $('#a-plegar').onclick = () => plegarAgenda(!$('#a-campos').hidden);
   if ($('#a-resumen')) $('#a-resumen').hidden = !plegado;
   resumenAgenda();
+
+  const slotBuscador = $('#a-buscador-slot');
+  const bqEl = $('#buscador');
+  if (slotBuscador && bqEl) {
+    slotBuscador.appendChild(bqEl);
+    bqEl.classList.add('en-filtros');
+  }
 
   let totalLibresRango = null;
   const actualizarConteoRango = async () => {

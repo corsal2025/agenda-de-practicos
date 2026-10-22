@@ -41,6 +41,7 @@ async function renderDisponibles() {
           <button class="btn" id="d-buscar" style="height:38px;padding:0 22px;border-radius:20px;font-weight:700" title="Buscar cupos disponibles en el rango de fechas">
             Buscar
           </button>
+          <div id="d-buscador-slot" style="margin-left:auto;display:flex;align-items:flex-end"></div>
         </div>
         <div style="margin-top:10px">
           <span class="muted" id="d-regla" style="font-size:13px;font-weight:600;line-height:1.4"></span>
@@ -67,6 +68,13 @@ async function renderDisponibles() {
         </div>
       </div>
     </div>`;
+
+  const slotBuscador = $('#d-buscador-slot');
+  const bqEl = $('#buscador');
+  if (slotBuscador && bqEl) {
+    slotBuscador.appendChild(bqEl);
+    bqEl.classList.add('en-filtros');
+  }
 
   if ($('#d-clase')) $('#d-clase').value = filtDisp.clase;
   if ($('#d-exam')) $('#d-exam').value = filtDisp.examinador_id;
