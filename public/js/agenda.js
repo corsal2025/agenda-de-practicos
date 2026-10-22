@@ -70,20 +70,6 @@ async function renderAgenda() {
       <!-- Fila 2: Acciones permanentes de la Agenda (Vistas, Bloqueos, Imprimir y Buscador de RUT) -->
       <div style="width:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:10px;border-top:1px solid rgba(0,0,0,0.06)">
         <span class="pastilla" id="a-libres" data-tooltip="Total de horas disponibles para agendar en la fecha seleccionada">— bloques libres</span>
-        <div class="vista-selector" title="Elegir modalidad de visualización de la Agenda">
-          <button type="button" class="btn-vista ${(estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'tabla') === 'tabla' ? 'activo' : ''}" id="btn-vista-tabla" title="Vista en tabla con columnas (distribución corporativa en columnas)">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm1 2v2h14V4H1zm0 3v2h14V7H1zm0 3v2h14v-2H1zm0 3v1a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1H1z"/></svg>
-            <span>Tabla</span>
-          </button>
-          <button type="button" class="btn-vista ${(estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'tabla') === 'vertical' ? 'activo' : ''}" id="btn-vista-vertical" title="Vista vertical por examinador">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V2zm7 0a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V2z"/></svg>
-            <span>Vertical</span>
-          </button>
-          <button type="button" class="btn-vista ${(estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'tabla') === 'horizontal' ? 'activo' : ''}" id="btn-vista-horizontal" title="Vista horizontal continua (Línea de tiempo hacia el lado)">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3zm0 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-3z"/></svg>
-            <span>Horizontal</span>
-          </button>
-        </div>
         
         <button class="btn btn-bloq-accion" id="a-bloqdia" data-tooltip="Inhabilita franjas horarias por licencias, feriados, capacitaciones o terreno (envía citas a Reagendar)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -233,30 +219,6 @@ async function renderAgenda() {
   $('#a-imprimir').onclick = () => dialogoImprimirDia(estadoAgenda.fecha, estadoAgenda.examinador_id);
   if ($('#a-porconfirmar')) $('#a-porconfirmar').onclick = () => irA('porconfirmar');
 
-  const btnT = $('#btn-vista-tabla');
-  const btnV = $('#btn-vista-vertical');
-  const btnH = $('#btn-vista-horizontal');
-  if (btnT) {
-    btnT.onclick = () => {
-      estadoAgenda.modoVista = 'tabla';
-      localStorage.setItem('agenda_modo_vista', 'tabla');
-      renderAgenda();
-    };
-  }
-  if (btnV) {
-    btnV.onclick = () => {
-      estadoAgenda.modoVista = 'vertical';
-      localStorage.setItem('agenda_modo_vista', 'vertical');
-      renderAgenda();
-    };
-  }
-  if (btnH) {
-    btnH.onclick = () => {
-      estadoAgenda.modoVista = 'horizontal';
-      localStorage.setItem('agenda_modo_vista', 'horizontal');
-      renderAgenda();
-    };
-  }
 
   const q = new URLSearchParams();
   if (filtAgenda.esRango && filtAgenda.desde && filtAgenda.hasta && filtAgenda.desde !== filtAgenda.hasta) {
