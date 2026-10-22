@@ -15,8 +15,8 @@
   },
   "dependencies": {
     "express": "^5.2.1",
-    "multer": "^2.3.0",
-    "nodemailer": "^10.0.9",
+    "multer": "^2.5.0",
+    "nodemailer": "^10.2.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }
