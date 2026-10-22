@@ -2152,10 +2152,7 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
 }
 
-.tabla-agenda-toolbar-exterior {
-  display: none !important;
-}
-
+.tabla-agenda-toolbar-exterior,
 .tabla-agenda-toolbar {
   display: flex;
   align-items: center;
@@ -2166,6 +2163,7 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
   flex-wrap: wrap;
 }
 
+:root[data-tema="oscuro"] .tabla-agenda-toolbar-exterior,
 :root[data-tema="oscuro"] .tabla-agenda-toolbar {
   background: transparent;
 }
@@ -2254,29 +2252,7 @@ input.tabla-busc-input:focus,
   color: var(--tinta);
 }
 
-#a-pills-slot {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  align-self: flex-end;
-  height: 38px;
-}
 
-#a-pills-slot .tabla-filtros-rapidos {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(0, 0, 0, 0.03);
-  padding: 3px 5px;
-  border-radius: 9999px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-:root[data-tema="oscuro"] #a-pills-slot .tabla-filtros-rapidos {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
-}
 
 .tabla-filtros-rapidos {
   display: flex;

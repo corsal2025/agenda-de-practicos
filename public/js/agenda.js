@@ -63,7 +63,6 @@ async function renderAgenda() {
           </button>
 
           <span class="muted" id="a-regla" style="font-size:12px;font-weight:600;align-self:center;margin-left:6px;line-height:1.2"></span>
-          <div id="a-pills-slot" style="margin-left:auto;display:flex;align-items:center;gap:6px;align-self:flex-end;height:38px"></div>
         </div>
       </div>
 
