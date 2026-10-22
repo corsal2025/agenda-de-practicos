@@ -7,7 +7,7 @@ const express = require('express');
 const multer = require('multer');
 
 const { db, tx, upsertFuncionario, upsertExaminador, log } = require('./db');
-const { PUERTO, RAIZ, HORAS, HORA_D_A5, CLASES_PESADAS } = require('./config');
+const { PUERTO, HOST, RAIZ, HORAS, HORA_D_A5, CLASES_PESADAS, CATALOGOS } = require('./config');
 const { generar } = require('./slots');
 const { reporte } = require('./errores');
 const { resumen } = require('./analitica');
@@ -398,12 +398,15 @@ app.get('/api/agenda', wrap((req, res) => {
   if (hasta) { cond.push('a.fecha <= ?'); p.push(hasta); }
   if (examinador_id) { cond.push('a.examinador_id = ?'); p.push(Number(examinador_id)); }
   if (clase) {
+    // Coincidencia por token exacto: 'A' no debe traer A1..A5. La clase guardada es "B,A2".
+    const token = `%,${String(clase).toUpperCase().replace(/\s/g, '')},%`;
+    const enClase = "(',' || REPLACE(COALESCE(a.clase, ''), ' ', '') || ',') LIKE ?";
     if (CLASES_PESADAS.includes(String(clase).toUpperCase())) {
-      cond.push("(a.clase LIKE ? OR ((a.rut IS NULL AND a.nombre IS NULL AND a.bloqueado = 0) AND a.hora = ?))");
-      p.push(`%${clase}%`, HORA_D_A5);
+      cond.push(`(${enClase} OR ((a.rut IS NULL AND a.nombre IS NULL AND a.bloqueado = 0) AND a.hora = ?))`);
+      p.push(token, HORA_D_A5);
     } else {
-      cond.push("(a.clase LIKE ? OR (a.rut IS NULL AND a.nombre IS NULL AND a.bloqueado = 0))");
-      p.push(`%${clase}%`);
+      cond.push(`(${enClase} OR (a.rut IS NULL AND a.nombre IS NULL AND a.bloqueado = 0))`);
+      p.push(token);
     }
   }
   if (estado === 'libre') cond.push('a.rut IS NULL AND a.nombre IS NULL AND a.bloqueado = 0');
@@ -681,15 +684,14 @@ app.post('/api/agenda/:id/liberar', wrap((req, res) => {
   const motivo = (req.body && req.body.motivo) || 'Examinador no disponible';
   const teniaPersona = Boolean(bloque.rut || bloque.nombre);
 
-  if (teniaPersona) {
-    cola.encolar(bloque, motivo, actor);
-  }
-  papelera.guardar(bloque, 'liberar', actor);
-
-  db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL} WHERE id = ?`).run(id);
-  if (pesada.esPesadaEnHoraValida(bloque) && (bloque.rut || bloque.nombre)) {
-    pesada.liberar(bloque.fecha, bloque.examinador_id);
-  }
+  tx(() => {
+    if (teniaPersona) cola.encolar(bloque, motivo, actor);
+    papelera.guardar(bloque, 'liberar', actor);
+    db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL} WHERE id = ?`).run(id);
+    if (pesada.esPesadaEnHoraValida(bloque) && teniaPersona) {
+      pesada.liberar(bloque.fecha, bloque.examinador_id);
+    }
+  });
   logReq(req, id, 'liberar', `${bloque.fecha} ${bloque.hora} ${bloque.nombre || bloque.bloqueo_motivo || ''}`);
   res.json({ ok: true, encolado: teniaPersona });
 }));
@@ -1276,6 +1278,7 @@ app.get('/api/analitica', wrap((req, res) => res.json(resumen(req.query.desde, r
 app.post('/api/catalogos', wrap((req, res) => {
   const { tipo, valor } = req.body || {};
   if (!tipo || !valor) throw bad('Indica tipo y valor');
+  if (!Object.prototype.hasOwnProperty.call(CATALOGOS, tipo)) throw bad(`Catálogo no válido: ${tipo}`);
   const orden = (db.prepare('SELECT COALESCE(MAX(orden),0)+1 n FROM catalogos WHERE tipo=?').get(tipo)).n;
   db.prepare('INSERT OR REPLACE INTO catalogos (tipo, valor, orden, activo) VALUES (?, ?, ?, 1)')
     .run(tipo, String(valor).trim().toUpperCase(), orden);
@@ -1315,6 +1318,8 @@ app.delete('/api/feriados', wrap((req, res) => {
 // ---------- EXAMINADORES / FUNCIONARIOS ----------
 // SQLITE_CONSTRAINT_UNIQUE: nombre repetido. Cualquier otro error sigue a wrap() (500 generico).
 const esDuplicado = (e) => e && e.errcode === 2067;
+// Nombre en mayusculas si llega texto; cualquier otro tipo se ignora (no revienta con 500).
+const textoOpcional = (v) => (typeof v === 'string' && v.trim() ? v.trim().toUpperCase() : null);
 app.post('/api/examinadores', wrap((req, res) => {
   try {
     const id = upsertExaminador(String((req.body || {}).nombre || '').trim().toUpperCase());
@@ -1328,7 +1333,7 @@ app.put('/api/examinadores/:id', wrap((req, res) => {
   try {
     const { nombre, activo } = req.body || {};
     db.prepare('UPDATE examinadores SET nombre = COALESCE(?, nombre), activo = COALESCE(?, activo) WHERE id = ?')
-      .run(nombre ? nombre.toUpperCase() : null, activo == null ? null : (activo ? 1 : 0), Number(req.params.id));
+      .run(textoOpcional(nombre), activo == null ? null : (activo ? 1 : 0), Number(req.params.id));
     res.json({ ok: true });
   } catch (e) {
     if (!esDuplicado(e)) throw e;
@@ -1349,7 +1354,7 @@ app.put('/api/funcionarios/:id', wrap((req, res) => {
     const id = Number(req.params.id);
     const { nombre, activo } = req.body || {};
     db.prepare('UPDATE funcionarios SET nombre = COALESCE(?, nombre), activo = COALESCE(?, activo) WHERE id = ?')
-      .run(nombre ? nombre.toUpperCase() : null, activo == null ? null : (activo ? 1 : 0), id);
+      .run(textoOpcional(nombre), activo == null ? null : (activo ? 1 : 0), id);
     res.json({ ok: true });
   } catch (e) {
     if (!esDuplicado(e)) throw e;
@@ -1498,16 +1503,6 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json(cuerpo);
 });
 
-function ipsLan() {
-  const out = [];
-  for (const list of Object.values(os.networkInterfaces())) {
-    for (const nic of list || []) {
-      if (nic.family === 'IPv4' && !nic.internal) out.push(nic.address);
-    }
-  }
-  return out;
-}
-
 function iniciar() {
   // Un rechazo no capturado se registra pero no tumba el servidor.
   const archivoLog = path.join(RAIZ, 'data', 'server.log');
@@ -1519,10 +1514,10 @@ function iniciar() {
   process.on('unhandledRejection', (motivo) => registrar('unhandledRejection', motivo));
   // Una excepcion sincrona no capturada se registra pero no tumba el servidor.
   process.on('uncaughtException', (e) => registrar('uncaughtException', e));
-  const servidor = app.listen(PUERTO, () => {
+  // Solo este PC: la app no tiene login, asi que no se expone a la red local.
+  const servidor = app.listen(PUERTO, HOST, () => {
     console.log(`\n  Agenda de Practicos`);
     console.log(`  Este PC:        http://localhost:${PUERTO}`);
-    for (const ip of ipsLan()) console.log(`  Otros PC (LAN): http://${ip}:${PUERTO}`);
     const n = db.prepare('SELECT COUNT(*) n FROM agenda').get().n;
     if (!n) console.log('  Base vacia. Importa el Excel desde "Datos" o corre: npm run migrar\n');
     backupMod.programar();

@@ -40,6 +40,8 @@ const RAIZ = path.join(__dirname, '..');
 const DB_PATH = process.env.AGENDA_DB || path.join(RAIZ, 'data', 'agenda.db');
 // 4900: puerto propio de la agenda. Se evita 4173/5173 (los usa la app de estetica / Vite).
 const PUERTO = Number(process.env.PORT) || 4900;
+// Solo loopback: la API no tiene login. Para abrirla a la red hay que decidirlo a proposito (AGENDA_HOST).
+const HOST = process.env.AGENDA_HOST || '127.0.0.1';
 
 // Correo de confirmacion (al agendar) y recordatorio (un dia antes).
 // Sin SMTP_HOST configurado, el envio de correos queda deshabilitado solo.
@@ -61,5 +63,5 @@ const URL_PUBLICA = (process.env.AGENDA_URL_PUBLICA || '').replace(/\/$/, '') ||
 module.exports = {
   HORAS, HORA_D_A5, CLASES_PESADAS,
   EXAMINADORES, FUNCIONARIOS, CATALOGOS,
-  RAIZ, DB_PATH, PUERTO, SMTP, URL_PUBLICA,
+  RAIZ, DB_PATH, PUERTO, HOST, SMTP, URL_PUBLICA,
 };
