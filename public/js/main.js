@@ -18,6 +18,15 @@ async function init({ forzarAgenda = false } = {}) {
           <span class="marca-titulo">Agenda de Prácticos</span></span>`;
     const r = META.rango_agenda || {};
     $('#estado').innerHTML = `${r.desde ? `Agenda ${fFecha(r.desde)} – ${fFecha(r.hasta)} · ` : ''}hoy ${fFecha(META.hoy)}`;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('sidebar') === '1' || localStorage.getItem('agenda_nav_layout') === 'lateral') {
+      document.documentElement.dataset.navLayout = 'lateral';
+      if (urlParams.get('plegado') === '1' || localStorage.getItem('agenda_sidebar_plegado') === '1') {
+        document.documentElement.classList.add('sidebar-plegado');
+      }
+    }
+
     // Al abrir el sistema siempre parte en Agenda, aunque la
     // URL guardada traiga otra pestaña (#datos, etc.). Solo un F5 conserva la actual.
     // replaceState no dispara hashchange, asi la vista no se dibuja dos veces.
@@ -34,6 +43,23 @@ async function init({ forzarAgenda = false } = {}) {
   }
 }
 document.querySelectorAll('#nav button[data-tab]').forEach((b) => { b.onclick = () => irA(b.dataset.tab); });
+
+const btnLayoutNav = document.getElementById('btn-layout-nav');
+if (btnLayoutNav) {
+  btnLayoutNav.onclick = () => {
+    const actual = document.documentElement.dataset.navLayout;
+    if (actual === 'lateral') {
+      delete document.documentElement.dataset.navLayout;
+      document.documentElement.classList.remove('sidebar-plegado');
+      localStorage.removeItem('agenda_nav_layout');
+      localStorage.removeItem('agenda_sidebar_plegado');
+    } else {
+      document.documentElement.dataset.navLayout = 'lateral';
+      localStorage.setItem('agenda_nav_layout', 'lateral');
+    }
+    setTimeout(ajustarOffsetsFijos, 50);
+  };
+}
 
 /* menu "Más" del nav: pestañas de uso ocasional (accesible con teclado) */
 // Pestañas "prioridad +": en escritorio, las del menú "Más" se muestran en la barra si caben;
