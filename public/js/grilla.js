@@ -645,10 +645,22 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
             </div>
           </td>
           <td class="td-confirmar">
-            <button type="button" class="btn-confirmar-tabla ${esConfirmado ? 'es-confirmado' : ''}" data-act="confirmar" data-id="${b.id}" title="${esConfirmado ? 'Asistencia confirmada. Clic para desmarcar' : 'Confirmar asistencia del postulante'}">
-              <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
-              <span>${esConfirmado ? 'Confirmado' : 'Confirmar'}</span>
-            </button>
+            ${b.confirmo_asistencia === 1 ? `
+              <button type="button" class="btn-confirmar-tabla es-confirmado" data-act="modificar-confirmacion" data-id="${b.id}" title="Hora confirmada. Clic para volver a seleccionar">
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>
+                <span>Confirma hora</span>
+              </button>
+            ` : b.confirmo_asistencia === 0 ? `
+              <button type="button" class="btn-confirmar-tabla es-sin-confirmacion" data-act="enviar-sin-confirmacion" data-id="${b.id}" title="Sin confirmación. Clic para enviar aviso o cambiar estado">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:2px"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                <span>Sin confirmación enviar</span>
+              </button>
+            ` : `
+              <div class="confirmar-pills-pair" data-id="${b.id}">
+                <button type="button" class="btn-conf-tab tab-confirmado" data-act="elegir-confirmado" data-id="${b.id}" title="Marcar como Confirmado">Confirmado</button>
+                <button type="button" class="btn-conf-tab tab-sin-confirmar" data-act="elegir-sin-confirmar" data-id="${b.id}" title="Marcar Sin confirmación">Sin confirmación</button>
+              </div>
+            `}
           </td>
           <td class="td-resultado">
             <div class="resultado-celda-wrap">
@@ -1017,21 +1029,85 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     };
   });
 
-  // 5. Botones de confirmar asistencia
-  cont.querySelectorAll('.btn-confirmar-tabla').forEach((btn) => {
+  // 5. Botones y pestañas de confirmar asistencia
+  cont.querySelectorAll('.btn-conf-tab[data-act="elegir-confirmado"]').forEach((btn) => {
     btn.onclick = async (ev) => {
       ev.stopPropagation();
       const id = Number(btn.dataset.id);
-      const yaConfirmado = btn.classList.contains('es-confirmado');
-      if (yaConfirmado) {
-        if (!confirm('Esta cita ya figura con asistencia confirmada.\n\n¿Deseas volver a marcarla como pendiente?')) return;
-      }
       try {
-        await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: yaConfirmado ? 0 : 1 } });
-        toast(yaConfirmado ? 'Cita marcada como pendiente' : 'Asistencia confirmada exitosamente', 'ok');
+        await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: 1 } });
+        toast('Hora confirmada exitosamente', 'ok');
         actualizarBadgePorConfirmar();
         renderAgenda();
       } catch (e) { toast(e.message, 'err'); }
+    };
+  });
+
+  cont.querySelectorAll('.btn-conf-tab[data-act="elegir-sin-confirmar"]').forEach((btn) => {
+    btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      const id = Number(btn.dataset.id);
+      try {
+        await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: 0 } });
+        toast('Cita marcada: Sin confirmación', 'alerta');
+        actualizarBadgePorConfirmar();
+        renderAgenda();
+      } catch (e) { toast(e.message, 'err'); }
+    };
+  });
+
+  cont.querySelectorAll('.btn-confirmar-tabla[data-act="modificar-confirmacion"]').forEach((btn) => {
+    btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      const id = Number(btn.dataset.id);
+      if (!confirm('Esta cita figura como "Confirma hora".\n\n¿Deseas volver a mostrar las opciones para cambiar su estado?')) return;
+      try {
+        await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: null } });
+        toast('Opciones de confirmación restauradas', 'ok');
+        actualizarBadgePorConfirmar();
+        renderAgenda();
+      } catch (e) { toast(e.message, 'err'); }
+    };
+  });
+
+  cont.querySelectorAll('.btn-confirmar-tabla[data-act="enviar-sin-confirmacion"]').forEach((btn) => {
+    btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      const id = Number(btn.dataset.id);
+      const b = mapaSlots.get(id);
+      const nombre = b ? (nom(b.nombre) || b.rut || 'el postulante') : 'el postulante';
+
+      if (b && b.correo) {
+        const accion = confirm(`Cita sin confirmación de ${nombre}.\n\n¿Deseas enviar un correo de solicitud de confirmación a ${b.correo}?\n\n(Pulsa Cancelar para volver a mostrar las opciones de confirmación)`);
+        if (accion) {
+          try {
+            await api('/correo/confirmacion-masiva', { method: 'POST', body: { ids: [id] } });
+            toast(`Correo de confirmación enviado a ${b.correo}`, 'ok');
+          } catch (e) {
+            toast(e.message, 'err');
+          }
+          return;
+        }
+      } else if (b && b.contacto) {
+        const accion = confirm(`Cita sin confirmación de ${nombre} (Teléfono: ${fTel(b.contacto)}).\n\n¿Deseas abrir SMS / mensaje de confirmación para este postulante?\n\n(Pulsa Cancelar para volver a mostrar las opciones de confirmación)`);
+        if (accion) {
+          const telWa = telWaDe(b.contacto);
+          const examObj = META.examinadores.find((e) => e.id === b.examinador_id);
+          const examNombre = b.examinador || (examObj ? examObj.nombre : '');
+          const msg = mensajeSmsCita(b, examNombre);
+          if (telWa) window.open(`sms:+${telWa}?body=${encodeURIComponent(msg)}`, '_blank');
+          return;
+        }
+      }
+
+      if (confirm(`¿Deseas volver a mostrar las opciones Confirmado / Sin confirmación para ${nombre}?`)) {
+        try {
+          await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: null } });
+          toast('Opciones de confirmación restauradas', 'ok');
+          actualizarBadgePorConfirmar();
+          renderAgenda();
+        } catch (e) { toast(e.message, 'err'); }
+      }
     };
   });
 

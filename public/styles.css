@@ -2554,10 +2554,12 @@ input.tabla-busc-input:focus,
   white-space: nowrap !important;
 }
 
+.tabla-agenda-elegante thead th.th-confirmar,
 .tabla-agenda-elegante tbody td.td-confirmar {
   white-space: nowrap !important;
-  width: 130px;
-  min-width: 130px;
+  width: 210px;
+  min-width: 210px;
+  text-align: center;
 }
 
 .tabla-agenda-elegante tbody td.td-resultado {
@@ -2876,17 +2878,74 @@ input.tabla-busc-input:focus,
   accent-color: #2563eb;
 }
 
+.confirmar-pills-pair {
+  display: inline-flex;
+  align-items: center;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 9999px;
+  padding: 2px;
+  gap: 2px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.btn-conf-tab {
+  border: none;
+  background: transparent;
+  padding: 4px 9px;
+  border-radius: 9999px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  color: var(--tinta-2);
+}
+
+.btn-conf-tab.tab-confirmado:hover {
+  background: #dcfce7;
+  color: #15803d;
+  box-shadow: 0 1px 3px rgba(22, 163, 74, 0.15);
+}
+
+.btn-conf-tab.tab-sin-confirmar:hover {
+  background: #fff7ed;
+  color: #c2410c;
+  box-shadow: 0 1px 3px rgba(234, 88, 12, 0.15);
+}
+
+:root[data-tema="oscuro"] .confirmar-pills-pair {
+  background: var(--elev);
+  border-color: var(--borde);
+}
+
+:root[data-tema="oscuro"] .btn-conf-tab {
+  color: var(--tinta-2);
+}
+
+:root[data-tema="oscuro"] .btn-conf-tab.tab-confirmado:hover {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+}
+
+:root[data-tema="oscuro"] .btn-conf-tab.tab-sin-confirmar:hover {
+  background: rgba(249, 115, 22, 0.2);
+  color: #fb923c;
+}
+
 .btn-confirmar-tabla {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid #cbd5e1;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  border: 1.5px solid #cbd5e1;
   background: #ffffff;
   color: var(--tinta-2);
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -2902,11 +2961,41 @@ input.tabla-busc-input:focus,
   background: #dcfce7;
   border-color: #86efac;
   color: #15803d;
+  box-shadow: 0 1px 3px rgba(22, 163, 74, 0.12);
+}
+
+.btn-confirmar-tabla.es-confirmado:hover {
+  background: #bbf7d0;
+  border-color: #4ade80;
+}
+
+.btn-confirmar-tabla.es-sin-confirmacion {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #c2410c;
+  box-shadow: 0 1px 3px rgba(234, 88, 12, 0.12);
+}
+
+.btn-confirmar-tabla.es-sin-confirmacion:hover {
+  background: #ffedd5;
+  border-color: #fb923c;
 }
 
 :root[data-tema="oscuro"] .btn-confirmar-tabla {
   background: var(--elev);
   border-color: var(--linea);
+}
+
+:root[data-tema="oscuro"] .btn-confirmar-tabla.es-confirmado {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: #22c55e;
+  color: #4ade80;
+}
+
+:root[data-tema="oscuro"] .btn-confirmar-tabla.es-sin-confirmacion {
+  background: rgba(249, 115, 22, 0.18);
+  border-color: #f97316;
+  color: #fb923c;
 }
 
 .resultado-celda-wrap {
