@@ -299,6 +299,8 @@ function pintarGrilla(cont, filas, fecha) {
   const esRangoFechas = fechasSet.size > 1;
 
   if (!filas.length) {
+    const slotPills = document.getElementById('a-pills-slot');
+    if (slotPills) slotPills.innerHTML = '';
     cont.className = '';
     cont.style.gridTemplateColumns = '';
     const textoPeriodo = (filtAgenda && filtAgenda.esRango && filtAgenda.desde && filtAgenda.hasta && filtAgenda.desde !== filtAgenda.hasta)
@@ -316,6 +318,11 @@ function pintarGrilla(cont, filas, fecha) {
   let modo = estadoAgenda.modoVista || localStorage.getItem('agenda_modo_vista') || 'tabla';
   if (esRangoFechas && modo !== 'tabla') {
     modo = 'tabla';
+  }
+
+  if (modo !== 'tabla') {
+    const slotPills = document.getElementById('a-pills-slot');
+    if (slotPills) slotPills.innerHTML = '';
   }
 
   if (modo === 'tabla') {
@@ -459,15 +466,21 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
   const totalLibres = ordenadas.filter((f) => !f.rut && !f.nombre && !f.bloqueado).length;
   const totalConfirmadas = ordenadas.filter((f) => f.confirmo_asistencia === 1).length;
 
-  let html = `
-    <div class="tabla-agenda-toolbar-exterior" style="justify-content:flex-end">
-      <div class="tabla-filtros-rapidos">
-        <button type="button" class="btn-filtro-pill activo" data-filtro="todos">Todas (${ordenadas.length})</button>
-        <button type="button" class="btn-filtro-pill" data-filtro="ocupadas">Citas (${totalCitas})</button>
-        <button type="button" class="btn-filtro-pill" data-filtro="libres">Libres (${totalLibres})</button>
-        ${totalConfirmadas ? `<button type="button" class="btn-filtro-pill" data-filtro="confirmadas">✓ Confirmadas (${totalConfirmadas})</button>` : ''}
-      </div>
+  const slotPills = document.getElementById('a-pills-slot');
+  const pillsHtml = `
+    <div class="tabla-filtros-rapidos">
+      <button type="button" class="btn-filtro-pill activo" data-filtro="todos">Todas (${ordenadas.length})</button>
+      <button type="button" class="btn-filtro-pill" data-filtro="ocupadas">Citas (${totalCitas})</button>
+      <button type="button" class="btn-filtro-pill" data-filtro="libres">Libres (${totalLibres})</button>
+      ${totalConfirmadas ? `<button type="button" class="btn-filtro-pill" data-filtro="confirmadas">✓ Confirmadas (${totalConfirmadas})</button>` : ''}
     </div>
+  `;
+  if (slotPills) {
+    slotPills.innerHTML = pillsHtml;
+  }
+
+  let html = `
+    ${!slotPills ? `<div class="tabla-agenda-toolbar-exterior" style="justify-content:flex-end">${pillsHtml}</div>` : ''}
     <div class="tabla-agenda-card">
       <div class="tabla-agenda-scroll">
         <table class="tabla-agenda-elegante" id="tabla-agenda-main">
@@ -906,9 +919,10 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
   }
 
   // 2. Filtros de píldoras
-  cont.querySelectorAll('.btn-filtro-pill').forEach((btn) => {
+  const rootPills = document.getElementById('a-pills-slot') || cont;
+  rootPills.querySelectorAll('.btn-filtro-pill').forEach((btn) => {
     btn.onclick = () => {
-      cont.querySelectorAll('.btn-filtro-pill').forEach((b) => b.classList.remove('activo'));
+      rootPills.querySelectorAll('.btn-filtro-pill').forEach((b) => b.classList.remove('activo'));
       btn.classList.add('activo');
       const filtro = btn.dataset.filtro;
       cont.querySelectorAll('.fila-agenda-tabla').forEach((tr) => {
@@ -937,7 +951,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     };
   });
 
-  const btnPillActivo = cont.querySelector('.btn-filtro-pill.activo');
+  const btnPillActivo = rootPills.querySelector('.btn-filtro-pill.activo');
   if (btnPillActivo && btnPillActivo.dataset.filtro !== 'todos') {
     btnPillActivo.click();
   }

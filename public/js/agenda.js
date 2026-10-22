@@ -23,6 +23,7 @@ async function renderAgenda() {
           </button>
           <span class="muted disp-resumen" id="a-resumen" aria-live="polite" style="font-size:13px;font-weight:600;color:var(--muted)"></span>
         </div>
+        <div id="a-pills-slot" class="tabla-filtros-rapidos-slot" style="margin-left:auto;display:flex;align-items:center;gap:6px"></div>
       </div>
 
       <!-- Fila 1 Desplegable: Búsqueda y Rango de Fechas -->
