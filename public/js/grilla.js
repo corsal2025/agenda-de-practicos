@@ -505,7 +505,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     if (esRangoFechas && b.fecha && b.fecha !== fechaAnterior) {
       fechaAnterior = b.fecha;
       html += `
-        <tr class="fila-separador-fecha no-hover" data-fecha="${b.fecha}">
+        <tr class="fila-separador-fecha no-hover" data-fecha="${esc(b.fecha)}">
           <td colspan="9">
             <div class="separador-fecha-content">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" style="vertical-align:middle;margin-right:6px"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>

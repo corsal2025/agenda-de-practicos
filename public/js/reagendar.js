@@ -493,7 +493,9 @@ function pintarPanelTopReagendar() {
   // Si hay postulante de agenda seleccionado:
   if (reagendarSeleccion.tipo === 'agenda') {
     const cita = reagendarSeleccion.cita;
-    const pesada = cita.clase && META.clases_pesadas.includes(cita.clase);
+    // Una cita puede traer varias clases ("B,D"): basta una pesada para limitar el destino.
+    const clasePesada = clasesDe(cita.clase).find((c) => META.clases_pesadas.includes(c));
+    const pesada = Boolean(clasePesada);
     cont.innerHTML = `
       <div class="panel" style="border:2px solid var(--azul);box-shadow:0 6px 20px rgba(27,58,117,.15);margin-bottom:1.25rem;background:#f8fafc">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem">
@@ -555,7 +557,7 @@ function pintarPanelTopReagendar() {
       filtReag.examinador_id = $('#rd-exam').value;
       const q = new URLSearchParams({ desde: filtReag.desde, hasta: filtReag.hasta });
       if (filtReag.examinador_id) q.set('examinador_id', filtReag.examinador_id);
-      if (pesada) q.set('clase', cita.clase);
+      if (pesada) q.set('clase', clasePesada);
       try {
         const libres = await api(`/disponibles?${q}`);
         $('#rd-body').innerHTML = libres.length ? libres.map((l) => `<tr>

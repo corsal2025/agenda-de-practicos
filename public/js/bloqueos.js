@@ -354,7 +354,8 @@ function dialogoBloquearDia() {
 async function dialogoDesbloquearDia() {
   const f = estadoAgenda.fecha || hoy();
   const examinadores = META.examinadores || [];
-  const motivos = META.catalogos.bloqueo_motivo || [];
+  // Los motivos vienen de la misma lista que usa el bloqueo (META no los envia).
+  const motivos = META.motivos_bloqueo || MOTIVOS_BLOQUEO_DEF;
   const horasDisponibles = (META && META.horas && META.horas.length) ? META.horas : [
     '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30'
   ];
