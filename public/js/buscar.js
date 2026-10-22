@@ -6,8 +6,9 @@ async function renderBuscar() {
   view.innerHTML = '<div id="bx-hist"></div>';
   if (!contribuyenteSel) {
     $('#bx-hist').innerHTML = `<div class="panel"><h2>Buscar contribuyente</h2>
-      <p class="muted">Escribe un RUT, nombre o telefono en el buscador de arriba (minimo 3 caracteres).</p></div>`;
-    $('#bq').focus();
+      <p class="muted">Escribe un RUT, nombre o teléfono en el buscador de la tabla o usa los filtros.</p></div>`;
+    const bqEl = $('#bq');
+    if (bqEl) bqEl.focus();
     return;
   }
   historial(contribuyenteSel.rut, contribuyenteSel.nombre);
@@ -17,6 +18,7 @@ async function renderBuscar() {
 (function buscadorGlobal() {
   const qi = $('#bq');
   const res = $('#bq-res');
+  if (!qi || !res) return;
   let tmr;
   let pedido = 0; // descarta respuestas viejas si el usuario sigue escribiendo
   let sel = -1;
