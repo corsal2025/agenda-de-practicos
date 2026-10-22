@@ -2409,6 +2409,7 @@ input.tabla-busc-input:focus,
   padding: 8px 14px !important;
   border-top: 2px solid #e2e8f0 !important;
   border-bottom: 2px solid #e2e8f0 !important;
+  text-align: center !important;
 }
 
 :root[data-tema="oscuro"] .fila-separador-fecha td {
@@ -2420,11 +2421,14 @@ input.tabla-busc-input:focus,
 .separador-fecha-content {
   display: flex;
   align-items: center;
+  justify-content: center;
   font-size: 12px;
   font-weight: 800;
   color: #1e3a8a;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+  margin: 0 auto;
+  text-align: center;
 }
 
 :root[data-tema="oscuro"] .separador-fecha-content {
