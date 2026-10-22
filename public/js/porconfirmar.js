@@ -290,7 +290,8 @@ async function renderPorConfirmar() {
 
   if ($('#btn-correo-prueba')) {
     $('#btn-correo-prueba').onclick = async () => {
-      const email = prompt('Indica el correo donde deseas recibir las pruebas de confirmación:', 'RAUL.SALAZAR1984@GMAIL.COM');
+      // Sin correo precargado: no se deja datos personales dentro del codigo fuente.
+      const email = prompt('Indica el correo donde deseas recibir las pruebas de confirmación:', '');
       if (!email || !email.includes('@')) return;
       try {
         toast('Enviando correos de prueba a ' + email + '...', 'info');

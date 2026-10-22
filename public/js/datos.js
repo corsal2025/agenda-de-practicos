@@ -45,17 +45,12 @@ async function renderDatos() {
       <thead><tr><th class="c">Fecha</th><th>Acción</th><th>Por</th><th>Detalle</th></tr></thead><tbody id="mov-body"></tbody></table></div></div>`;
 
   // El .xlsx se lee ACA en el navegador (via vendor/xlsx.full.min.js) y se manda
-  // ya leido al servidor, que tambien acepta el archivo crudo (campo 'archivo').
+  // ya leido al servidor (server/migrate.js, funcion aISO/aHora de server/fechas.js).
   //
   // OJO con las celdas de fecha/hora: sheet_to_json({cellDates:true}) devuelve
-  // objetos Date. JSON.stringify() los convierte solo con .toISOString() (UTC),
-  // y el servidor (worker/lib/fechas.js aISO/aHora) espera el mismo formato que
-  // devolvia el Node viejo -- que corria en horario de Chile y leia esas fechas
-  // con getFullYear()/getHours() (hora LOCAL). Si se manda la fecha ya en UTC,
-  // la hora/fecha puede correrse (el navegador del usuario SI esta en horario
-  // de Chile, asi que sus getters locales son los correctos a preservar). Por
-  // eso cada Date se pasa a texto 'YYYY-MM-DD HH:MM:SS' con getters locales
-  // ANTES de armar el JSON, en vez de dejar que JSON.stringify decida.
+  // objetos Date. JSON.stringify() los pasa a UTC (toISOString), y eso puede
+  // correr un dia o una hora. Por eso cada Date se convierte a texto
+  // 'YYYY-MM-DD HH:MM:SS' con getters LOCALES (hora de Chile) antes de armar el JSON.
   const pad2 = (n) => String(n).padStart(2, '0');
   function celdaASerializable(v) {
     if (!(v instanceof Date) || isNaN(v)) return v;

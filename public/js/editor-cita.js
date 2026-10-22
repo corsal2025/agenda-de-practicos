@@ -348,7 +348,7 @@ function formularioCita(b, alGuardar) {
         const motivo = await pedirAutorizacionTercerIntento(err.data);
         if (!motivo) {
           $('#btn-guardar').disabled = false;
-          $('#btn-guardar').textContent = 'Guardar cita';
+          $('#btn-guardar').textContent = tieneCita ? 'Guardar cambios' : 'Confirmar y agendar cita';
           return;
         }
         r = await api(`/agenda/${b.id}`, { method: 'PUT', body: { ...body, autorizar_tercer_intento: { motivo } } });
@@ -359,7 +359,7 @@ function formularioCita(b, alGuardar) {
       alGuardar && alGuardar();
     } catch (e) {
       $('#btn-guardar').disabled = false;
-      $('#btn-guardar').textContent = 'Guardar cita';
+      $('#btn-guardar').textContent = tieneCita ? 'Guardar cambios' : 'Confirmar y agendar cita';
       toast(e.message, 'err');
       if (e.status === 409 && e.data && e.data.bloque) { editorSlot(e.data.bloque, alGuardar); }
     }

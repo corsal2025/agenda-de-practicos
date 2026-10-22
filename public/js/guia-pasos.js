@@ -139,26 +139,6 @@ const PASOS_TOUR = [
   {
     seccion: 'Agenda',
     tab: 'agenda',
-    target: '#a-grid .btn-hist',
-    fallback: '#a-grid',
-    listo: TOUR_GRILLA_LISTA,
-    titulo: 'Botón Historial: ficha lateral',
-    icono: '📋',
-    descripcion: 'Abre la <b>ficha lateral</b> del postulante, donde puedes editar sus datos, registrar la <b>Fecha de inicio de trámite</b> (obligatoria, con su cuenta regresiva), la <b>Escuela</b> de conductores (solo clases D y A5) y el <b>Tipo de reagendamiento</b>.'
-  },
-  {
-    seccion: 'Agenda',
-    tab: 'agenda',
-    target: '#a-grid .btn-hist',
-    fallback: '#a-grid',
-    listo: TOUR_GRILLA_LISTA,
-    titulo: 'Ficha lateral: seguimiento e historial',
-    icono: '🗃️',
-    descripcion: 'En la misma ficha registras <b>Confirmó asistencia</b>, el <b>Resultado</b> y los <b>Comentarios</b>. Más abajo verás el <b>historial del solicitante</b> con el <b>inicio y término del trámite</b>; si la persona va por su <b>3er intento</b>, el sistema lo advierte. Con <b>Imprimir ficha</b> obtienes una copia en papel.'
-  },
-  {
-    seccion: 'Agenda',
-    tab: 'agenda',
     target: '#a-grid .btn-wa',
     fallback: '#a-grid',
     listo: TOUR_GRILLA_LISTA,

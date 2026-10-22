@@ -168,16 +168,6 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.querySelector('#modal-root .modal.lateral')) cerrarModal();
 });
 
-// Boton "Historial" en las tarjetas de la cuadricula: abre la ficha editable en el panel lateral.
-document.addEventListener('click', (e) => {
-  const btn = e.target.closest('.btn-hist');
-  if (!btn) return;
-  e.preventDefault();
-  e.stopPropagation();
-  abrirSlotPorId(Number(btn.dataset.id), () => { if ($('#a-grid')) renderAgenda(); })
-    .catch((err) => toast(err.message, 'err'));
-}, true);
-
 function slotCard(b) {
   if (!b) return '<div class="slot libre">—</div>';
   if (b.bloqueado) {
@@ -232,7 +222,6 @@ function slotCard(b) {
     <div class="slot-top">${b.dias_restantes_tramite != null ? cuentaRegresivaHtml(b.dias_restantes_tramite, b.fecha_vencimiento_tramite) : SIN_INICIO_HTML}</div>
     ${(b.alerts || []).length ? `<div class="slot-alertas">${alertasHtml(b)}</div>` : ''}
     <span class="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
-    <button type="button" class="btn-hist" data-id="${b.id}" title="Ver ficha e historial del postulante">📋 Historial</button>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
       <span class="sub" style="margin:0">
         ${clasesTagsHtml(b.clase)}
