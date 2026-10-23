@@ -558,8 +558,8 @@ main { padding: .75rem 24px 2.5rem; max-width: none; width: 100%; box-sizing: bo
 :root[data-tema="oscuro"] .cita-resumen-c b { color: #e0f2fe; }
 
 /* Modal Agendar cita (maqueta C): panel de resumen a la izquierda y formulario a la derecha */
-.modal.lateral.cita-c { width: min(840px, calc(100vw - 40px)); }
-.modal.lateral.cita-c .cuerpo { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 0 1.1rem; align-items: start; }
+.modal.lateral.cita-c { width: min(640px, calc(100vw - 40px)); }
+.modal.lateral.cita-c .cuerpo { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 0 1rem; align-items: start; }
 .modal.lateral.cita-c .cuerpo > :not(.cita-resumen-c) { grid-column: 2; margin-bottom: .8rem; }
 .modal.lateral.cita-c .cita-resumen-c {
   grid-column: 1;
@@ -608,7 +608,7 @@ body.tabla-max-activa { overflow: hidden; }
   margin: 0 !important;
   padding: 0 !important;
   border: 2px solid #2563eb !important;
-  border-radius: 14px !important;
+  border-radius: 12px !important;
   background: #ffffff !important;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12) !important;
   box-sizing: border-box;
@@ -631,6 +631,18 @@ body.tabla-max-activa { overflow: hidden; }
   font-weight: 800;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1) !important;
 }
+/* Pastillas de estado y prioridad en una sola linea dentro de las tablas */
+#view table td .badge-prio,
+#view table td .badge {
+  white-space: nowrap !important;
+}
+
+/* Formularios (agendar, editar) siempre por encima de la tabla maximizada */
+#modal-root {
+  position: relative;
+  z-index: 9800;
+}
+
 /* Nombre del modulo en la barra superior de la vista maximizada */
 .tabla-max-titulo {
   position: fixed;
@@ -1282,6 +1294,44 @@ tbody tr:first-child td { border-top: 0; }
 [data-tema="oscuro"] .btn-desbloq-accion:hover {
   background: rgba(34, 197, 94, 0.28);
   border-color: #4ade80;
+}
+
+/* RUT o telefono con formato incorrecto en la grilla de la agenda: rojo hasta corregirlo */
+.dato-invalido {
+  color: #b91c1c !important;
+  background: #fee2e2;
+  border: 1px solid #dc2626;
+  border-radius: 6px;
+  padding: 0 6px;
+}
+:root[data-tema="oscuro"] .dato-invalido { background: rgba(220, 38, 38, 0.2); color: #fecaca !important; }
+
+/* Citas disponibles: el resumen no se estira, asi Maximizar queda pegado a "· N libres" */
+#d-resumen { flex: 0 1 auto; min-width: 0; }
+.disp-filtros .disp-filtros-cab { flex-wrap: nowrap; }
+#d-plegar { flex: none; white-space: nowrap; }
+
+/* Maximizar: mismo tamano y forma en todos los modulos (igual que la barra de la Agenda) */
+.btn.btn-max-tabla {
+  height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+}
+
+/* Barra de acciones de la Agenda: pastilla, Bloquear, Desbloquear, Imprimir y Maximizar con la misma altura y forma */
+#a-libres, #a-bloqdia, #a-desbloqdia, #a-imprimir, #a-acciones-dia .btn-max-tabla {
+  height: 38px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  font-size: 13px;
+  border-radius: var(--r-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  white-space: nowrap;
 }
 
 .btn-guia-accion {
@@ -3830,6 +3880,34 @@ body:has(#a-grid.tabla-agenda-wrap) {
 }
 
 :root[data-tema="oscuro"] .btn-tabla-reagendar {
+  background: var(--elev);
+  border-color: var(--linea);
+  color: var(--tinta-2);
+}
+
+.btn-tabla-persona {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.btn-tabla-persona:hover {
+  border-color: #059669;
+  background: #d1fae5;
+  color: #047857;
+}
+
+:root[data-tema="oscuro"] .btn-tabla-persona {
   background: var(--elev);
   border-color: var(--linea);
   color: var(--tinta-2);

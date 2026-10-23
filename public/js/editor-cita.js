@@ -51,7 +51,6 @@ function funcionarioActual() {
 
 function formularioCita(b, alGuardar) {
   const c = META.catalogos;
-  const funcs = META.funcionarios.filter((f) => f.activo);
   const actual = funcionarioActual();
   const fAsignado = (b.funcionario_id && (META.funcionarios || []).find((f) => f.id === b.funcionario_id))
     || actual
@@ -73,45 +72,28 @@ function formularioCita(b, alGuardar) {
       <div><span>Hora</span><b>${esc(b.hora)} hrs</b></div>
       <div><span>Examinador/a</span><b>${esc(b.examinador)}</b></div>
     </div>
-    <div class="campo"><label>Nombre completo <b class="req" style="color:var(--alerta)">*</b></label>
+    <div class="campo"><label>Nombre completo</label>
       <input id="f-nombre" value="${esc(nom(b.nombre))}" required placeholder="NOMBRES Y APELLIDOS" style="text-transform:uppercase;font-weight:600">
     </div>
     
-    <div class="campo"><label>RUT (con puntos y guión) <b class="req" style="color:var(--alerta)">*</b></label>
-      <input id="f-rut" value="${esc(b.rut)}" required placeholder="12.345.678-9" style="font-weight:600">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+      <div class="campo"><label>RUT</label>
+        <input id="f-rut" value="${esc(b.rut)}" required placeholder="12.345.678-9" style="font-weight:600">
+      </div>
+
+      <div class="campo"><label>Celular</label>
+        <input id="f-contacto" value="${esc(fTel(b.contacto))}" required placeholder="+56 9 1234 5678" inputmode="tel">
+      </div>
     </div>
 
-    <div class="campo"><label>Celular (contacto) <b class="req" style="color:var(--alerta)">*</b></label>
-      <input id="f-contacto" value="${esc(fTel(b.contacto))}" required placeholder="+56 9 1234 5678" inputmode="tel">
-    </div>
-
-    <div class="campo ancho"><label>Clase de Licencia que está sacando <b class="req" style="color:var(--alerta)">*</b> (puedes marcar más de una)</label>
+    <div class="campo ancho"><label>Licencias (puedes marcar varias)</label>
       <div class="chk-clases" id="f-clase">${c.clase.map((cl) => `
         <label class="chk-clase"><input type="checkbox" value="${esc(cl)}" ${clasesIniciales.includes(cl) ? 'checked' : ''}> ${esc(cl)}</label>
       `).join('')}</div>
     </div>
 
-    <div class="campo"><label>Correo electrónico <b class="req" style="color:var(--alerta)">*</b></label>
+    <div class="campo"><label>Correo</label>
       <input id="f-correo" type="email" required placeholder="nombre@correo.com" value="${esc(b.correo)}">
-    </div>
-
-    <div class="campo" id="wrap-f-func">
-      <label>Funcionario/a que agenda</label>
-      <div id="disp-f-func" style="display:flex;align-items:center;gap:.6rem;padding:.45rem .75rem;background:var(--elev);border:1px solid var(--linea);border-radius:6px;min-height:38px;box-sizing:border-box">
-        <span style="font-size:14px">👤</span>
-        <span id="txt-f-func" style="font-weight:700;color:var(--tinta);font-size:13px">${esc(fAsignado.nombre)}</span>
-        <span class="badge" style="margin-left:auto;font-size:10px;background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;padding:2px 7px;font-weight:600">
-          ${b.funcionario_id ? 'Asignado' : 'Por defecto'}
-        </span>
-        <button type="button" class="btn chico sec" id="btn-cambiar-func" style="padding:1px 6px;font-size:11px;margin-left:6px" title="Cambiar funcionario">Cambiar</button>
-      </div>
-      <div id="sel-f-func-cont" hidden style="margin-top:4px">
-        <select id="f-func-sel" style="width:100%">
-          ${funcs.map((f) => `<option value="${f.id}" ${f.id === (fAsignado.id || b.funcionario_id) ? 'selected' : ''}>${esc(f.nombre)}</option>`).join('')}
-          <option value="__nuevo">+ Nuevo...</option>
-        </select>
-      </div>
-      <input type="hidden" id="f-func" value="${fAsignado.id || ''}">
     </div>
 
     <div class="campo ancho" id="zona-forzar" ${esPesada ? '' : 'hidden'}>
@@ -129,13 +111,6 @@ function formularioCita(b, alGuardar) {
       <select id="f-escuela" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
         <option value="">-- Sin escuela --</option>
         ${c.escuela_conductores ? c.escuela_conductores.map((e) => `<option value="${esc(e)}" ${b.escuela_conductores === e ? 'selected' : ''}>${esc(e)}</option>`).join('') : ''}
-      </select>
-    </div>
-    <div class="campo">
-      <label for="f-tipo-reagendamiento">Tipo de Reagendamiento</label>
-      <select id="f-tipo-reagendamiento" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
-        <option value="">-- Sin tipo --</option>
-        ${c.tipo_reagendamiento ? c.tipo_reagendamiento.map((tipo) => `<option value="${esc(tipo)}" ${b.tipo_reagendamiento === tipo ? 'selected' : ''}>${esc(tipo)}</option>`).join('') : ''}
       </select>
     </div>
     ${tieneCita ? `<div class="campo">
@@ -216,37 +191,6 @@ function formularioCita(b, alGuardar) {
         if (completo) toast('Datos autocompletados de una cita anterior', 'ok');
       } catch (_) {}
     });
-  }
-
-  if ($('#btn-cambiar-func')) {
-    $('#btn-cambiar-func').onclick = () => {
-      $('#sel-f-func-cont').hidden = false;
-      $('#btn-cambiar-func').style.display = 'none';
-      $('#f-func-sel').focus();
-    };
-  }
-  if ($('#f-func-sel')) {
-    $('#f-func-sel').onchange = async (e) => {
-      if (e.target.value === '__nuevo') {
-        const nombre = prompt('Nombre del nuevo funcionario/a:');
-        if (!nombre || !nombre.trim()) { e.target.value = $('#f-func').value; return; }
-        try {
-          const r = await api('/funcionarios', { method: 'POST', body: { nombre } });
-          META = await api('/meta');
-          const optEl = document.createElement('option');
-          optEl.value = r.id; optEl.textContent = r.nombre; optEl.selected = true;
-          $('#f-func-sel').insertBefore(optEl, $('#f-func-sel').lastElementChild);
-          $('#f-func').value = r.id;
-          $('#txt-f-func').textContent = r.nombre;
-        } catch (err) {
-          toast(err.message, 'err');
-        }
-        return;
-      }
-      $('#f-func').value = e.target.value;
-      const fn = funcs.find((f) => String(f.id) === String(e.target.value));
-      $('#txt-f-func').textContent = fn ? fn.nombre : '';
-    };
   }
 
   const clasesMarcadas = () => Array.from(document.querySelectorAll('#f-clase input:checked')).map((i) => i.value);
@@ -336,7 +280,7 @@ function formularioCita(b, alGuardar) {
         motivo_reagendamiento: b.motivo_reagendamiento || null,
         lista_espera: 'NO',
         intento: b.intento || '1° VEZ',
-        funcionario_id: $('#f-func').value && $('#f-func').value !== '__nuevo' ? Number($('#f-func').value) : null,
+        funcionario_id: fAsignado.id || null,
         fecha_inicio_tramite: $('#f-fecha-inicio') ? ($('#f-fecha-inicio').value || null) : (b.fecha_inicio_tramite || null),
         escuela_conductores: esClaseTramite(clasesMarcadas().join(',')) ? ($('#f-escuela').value || null) : null,
         tipo_reagendamiento: $('#f-tipo-reagendamiento') ? $('#f-tipo-reagendamiento').value || null : (b.tipo_reagendamiento || null),

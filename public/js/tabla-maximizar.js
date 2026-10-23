@@ -24,8 +24,19 @@
     if (!activo) return;
     const titulo = document.createElement('span');
     titulo.className = 'tabla-max-titulo';
-    titulo.textContent = activo.textContent.trim();
+    // Solo el nombre del modulo (sin el contador del menu, p. ej. "78")
+    titulo.textContent = (activo.querySelector('.nav-txt') || activo).textContent.trim();
     document.body.appendChild(titulo);
+  }
+
+  // Identifica la tabla maximizada para reconocerla si la vista se vuelve a dibujar (modulo + id de la tabla)
+  let claveMax = null;
+  let salida = null;
+  function claveDe(contenedor) {
+    const tabla = contenedor.querySelector('table');
+    if (tabla && tabla.id) return `${location.hash}|#${tabla.id}`;
+    const todas = [...document.querySelectorAll('#view .tabla-scroll, #view .tabla-agenda-card')];
+    return `${location.hash}|n${todas.indexOf(contenedor)}`;
   }
 
   function alternar(contenedor) {
@@ -36,17 +47,48 @@
     btn.textContent = activar ? TEXTO.on : TEXTO.off;
     document.body.classList.toggle('tabla-max-activa', activar);
     ponerTitulo(activar);
+    claveMax = activar ? claveDe(contenedor) : null;
   }
 
-  // Fila con buscador justo encima de la tabla: el boton se pone a la derecha del buscador.
-  function filaConBuscador(contenedor) {
-    const prev = contenedor.previousElementSibling;
-    if (!prev || !prev.querySelector('input[type="search"]')) return null;
-    return getComputedStyle(prev).display === 'flex' ? prev : null;
+  // Si la vista se dibuja de nuevo con una tabla maximizada (p. ej. al agendar desde la vista ampliada),
+  // la tabla nueva queda maximizada otra vez. Si no aparece una igual, se sale de pantalla completa
+  // para no dejar la app tapada por el fondo.
+  function restaurarMaximizada(view) {
+    if (!document.body.classList.contains('tabla-max-activa') || view.querySelector(`.${CLASE_TABLA}`)) return;
+    const nueva = [...view.querySelectorAll('.tabla-scroll, .tabla-agenda-card')]
+      .find((c) => c._btnMax && claveDe(c) === claveMax);
+    clearTimeout(salida);
+    if (nueva) { alternar(nueva); return; }
+    salida = setTimeout(() => {
+      if (document.querySelector(`.${CLASE_TABLA}`)) return;
+      document.body.classList.remove('tabla-max-activa');
+      ponerTitulo(false);
+      claveMax = null;
+    }, 1200);
   }
 
-  // Citas disponibles: el boton va en la fila de filtros, a la derecha del resumen "N libres".
-  // Agenda: el boton va junto a "Imprimir dia" en la barra de acciones.
+  // Buscador (input type="search") que queda antes de la tabla, dentro de su misma seccion.
+  // Cada buscador sirve a una sola tabla: la primera que le sigue.
+  function buscadorDe(contenedor) {
+    const previos = [...document.querySelectorAll('#view input[type="search"]')]
+      .filter((i) => !contenedor.contains(i) && (i.compareDocumentPosition(contenedor) & Node.DOCUMENT_POSITION_FOLLOWING));
+    const buscador = previos[previos.length - 1];
+    if (!buscador || buscador._btnMax) return null;
+    return buscador;
+  }
+
+  // Hijo directo de la fila (.fila) que contiene al buscador: el boton se pone justo antes de el
+  function hijoDeFila(buscador) {
+    let hijo = buscador;
+    while (hijo.parentElement && hijo.parentElement.id !== 'view') {
+      if (hijo.parentElement.classList.contains('fila')) return hijo;
+      hijo = hijo.parentElement;
+    }
+    return null;
+  }
+
+  // Citas disponibles: el boton va en la fila de filtros, pegado al resumen "· N libres".
+  // Agenda: el boton va junto a "Imprimir dia", en la fila pegada a la tabla.
   function filaDeResumen(contenedor) {
     if (contenedor.querySelector('#tabla-disponibles-main')) return document.querySelector('#view .disp-filtros-cab');
     if (contenedor.querySelector('#tabla-agenda-main')) return document.querySelector('#view #a-acciones-dia');
@@ -58,12 +100,26 @@
       if (c._btnMax || !c.querySelector('table') || !c.parentNode) return;
       const btn = crearBoton(c);
       c._btnMax = btn;
-      const fila = filaConBuscador(c) || filaDeResumen(c);
+      const fila = filaDeResumen(c);
       if (fila) {
         btn.classList.add('tabla-btn-en-fila');
         fila.appendChild(btn);
         return;
       }
+      const buscador = buscadorDe(c);
+      const hijo = buscador && hijoDeFila(buscador);
+      // Solo si la fila del buscador queda pegada a la tabla; si hay otros bloques entre ambos, va la barra
+      if (hijo && hijo.parentElement.nextElementSibling === c) {
+        // Buscador y boton en su propia linea: el boton queda a la izquierda del buscador
+        const linea = document.createElement('div');
+        linea.style.cssText = 'display:flex;align-items:center;gap:8px;flex:1 1 100%;min-width:0';
+        buscador._btnMax = btn;
+        btn.classList.add('tabla-btn-en-fila');
+        hijo.parentNode.insertBefore(linea, hijo);
+        linea.append(btn, hijo);
+        return;
+      }
+      // Sin buscador: barra propia pegada a la tabla, con el boton a la derecha
       const barra = document.createElement('div');
       barra.className = CLASE_BARRA;
       barra.appendChild(btn);
@@ -71,11 +127,13 @@
     });
   }
 
+  // Escape sale de la vista maximizada, salvo que haya un formulario abierto (ese lo cierra Escape)
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
+    if (document.querySelector('#modal-root .modal')) return;
     const activa = document.querySelector(`.${CLASE_TABLA}`);
     if (activa) alternar(activa);
-  });
+  }, true);
 
   // Un solo scroll vertical: cada tabla ocupa el alto libre de la pantalla (desde donde empieza hasta
   // el borde inferior). Si tiene mas filas, se desplaza dentro de su marco y la pagina casi no se mueve.
@@ -107,7 +165,7 @@
       clearTimeout(pendiente);
       pendiente = setTimeout(() => ajustarAlturas(view), 120);
     };
-    new MutationObserver(() => { agregarBotones(view); programarAjuste(); }).observe(view, { childList: true, subtree: true });
+    new MutationObserver(() => { agregarBotones(view); restaurarMaximizada(view); programarAjuste(); }).observe(view, { childList: true, subtree: true });
     window.addEventListener('resize', programarAjuste);
     MOVIL.addEventListener('change', programarAjuste);
     agregarBotones(view);

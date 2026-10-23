@@ -362,6 +362,17 @@ async function liberarCupoCita(b) {
 }
 
 // Una sola barra de scroll lateral: la del pie del marco; sincronizada con la tabla
+// Crea un cupo extra en la misma hora (p. ej. una hora que alcanza para dos personas) y abre su formulario.
+async function agregarOtraPersona(id) {
+  try {
+    const { bloque } = await api(`/agenda/${id}/persona`, { method: 'POST' });
+    if ($('#a-grid')) renderAgenda();
+    await abrirSlotPorId(bloque.id, () => { if ($('#a-grid')) renderAgenda(); });
+  } catch (e) {
+    toast(e.message, 'err');
+  }
+}
+
 function crearBarraLateralTabla(scrollEl) {
   const barra = document.createElement('div');
   barra.className = 'tabla-agenda-barra-lateral';
@@ -389,7 +400,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
   const ordenadas = [...filas].sort((a, b) => {
     if (a.fecha !== b.fecha) return (a.fecha || '').localeCompare(b.fecha || '');
     if (a.hora !== b.hora) return (a.hora || '').localeCompare(b.hora || '');
-    return Number(a.examinador_id || 0) - Number(b.examinador_id || 0);
+    return (Number(a.examinador_id || 0) - Number(b.examinador_id || 0)) || (Number(a.cupo || 1) - Number(b.cupo || 1));
   });
 
   let html = `
@@ -496,6 +507,9 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
       // Formatear RUT y Teléfono sin posibilidad de salto de línea
       const rutFmt = b.rut ? esc(b.rut).replace(/-/g, '&#8209;') : 'sin RUT';
       const telFmt = b.contacto ? esc(fTel(b.contacto)).replace(/ /g, '&nbsp;') : '';
+      // RUT o telefono con formato incorrecto: se marcan en rojo hasta corregirlos
+      const errRut = errorDato('rut', b.rut);
+      const errTel = errorDato('contacto', b.contacto);
 
       html += `
         <tr class="fila-agenda-tabla fila-ocupada ${resCls}" data-id="${b.id}" data-tipo="ocupada" data-examinador="${b.examinador_id}">
@@ -520,7 +534,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           </td>
           <td class="td-rut">
             <div class="rut-cell-box">
-              <span class="rut-txt num" data-valor="rut">${rutFmt}</span>
+              <span class="rut-txt num ${errRut ? 'dato-invalido' : ''}" data-valor="rut" title="${esc(errRut || '')}">${rutFmt}</span>
             </div>
           </td>
           <td class="td-sede">
@@ -531,7 +545,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           </td>
           <td class="td-contacto">
             <div class="contacto-col-wrap">
-              ${telFmt ? `<span class="tel-txt num" data-valor="contacto">${telFmt}</span>` : '<span class="sin-tel text-muted" data-valor="contacto">—</span>'}
+              ${telFmt ? `<span class="tel-txt num ${errTel ? 'dato-invalido' : ''}" data-valor="contacto" title="${esc(errTel || '')}">${telFmt}</span>` : '<span class="sin-tel text-muted" data-valor="contacto">—</span>'}
               ${telWa ? `<a href="sms:+${telWa}?body=${encodeURIComponent(mensajeSms)}" class="btn-sms-tabla" onclick="event.stopPropagation()" title="Enviar mensaje de texto (SMS) a este postulante"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:middle;margin-right:3px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Mensaje de texto</a>` : ''}
             </div>
           </td>
@@ -581,6 +595,9 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
               </button>
               <button type="button" class="btn-tabla-reagendar" data-id="${b.id}" title="Derivar directamente a Reagendar" aria-label="Derivar directamente a Reagendar">
                 <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+              </button>
+              <button type="button" class="btn-tabla-persona" data-id="${b.id}" title="Agregar otra persona a esta hora" aria-label="Agregar otra persona a esta hora">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5"/><path d="M19 8v6M16 11h6"/></svg>
               </button>
             </div>
           </td>
@@ -648,6 +665,13 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           return;
         }
         toast(`${cfg.label} es obligatorio`, 'err');
+        inp.focus();
+        return;
+      }
+      // Con formato incorrecto no se guarda ni se sale: se queda editando hasta corregirlo (Esc cancela)
+      const errorFormato = errorDato(campo, valor);
+      if (errorFormato) {
+        toast(errorFormato, 'err');
         inp.focus();
         return;
       }
@@ -742,6 +766,12 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     if (liberar) {
       e.stopPropagation();
       liberarCupoCita(mapaSlots.get(Number(liberar.dataset.id)));
+      return;
+    }
+    const persona = e.target.closest('.btn-tabla-persona');
+    if (persona) {
+      e.stopPropagation();
+      agregarOtraPersona(Number(persona.dataset.id));
       return;
     }
     const dato = e.target.closest('.fila-ocupada [data-valor]');
