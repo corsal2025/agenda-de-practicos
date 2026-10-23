@@ -2331,11 +2331,16 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
 .agenda-toolbar:has(~ .panel #a-grid.tabla-agenda-wrap) { position: static; }
 .tabla-agenda-wrap .tabla-agenda-elegante thead th { position: sticky; top: 0; z-index: 4; }
 #tabla-disponibles-main { min-width: 0 !important; table-layout: fixed; }
-#tabla-disponibles-main th:nth-child(1) { width: 34%; }
-#tabla-disponibles-main th:nth-child(2) { width: 10%; }
-#tabla-disponibles-main th:nth-child(3) { width: 22%; }
-#tabla-disponibles-main th:nth-child(4) { width: 22%; }
-#tabla-disponibles-main th:nth-child(5) { width: 12%; }
+/* La regla general "#view table" usa width: max-content; aqui la tabla debe ocupar todo el marco */
+#view #tabla-disponibles-main { width: 100%; }
+/* Anchos fijos por columna (!important: vencen el width:auto de la regla general y el inline de reagendar.js) */
+#view #tabla-disponibles-main th:nth-child(1) { width: 20% !important; }
+#view #tabla-disponibles-main th:nth-child(2) { width: 11% !important; }
+#view #tabla-disponibles-main th:nth-child(3) { width: 22% !important; }
+#view #tabla-disponibles-main th:nth-child(4) { width: 27% !important; }
+#view #tabla-disponibles-main th:nth-child(5) { width: 20% !important; }
+#view #tabla-disponibles-main th,
+#view #tabla-disponibles-main td { text-align: center !important; vertical-align: middle; }
 #tabla-disponibles-main td:nth-child(1) { white-space: nowrap; }
 /* Lista de espera: el RUT no debe partirse en dos lineas. */
 #le-body td.num { white-space: nowrap; }
