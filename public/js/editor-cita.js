@@ -166,7 +166,7 @@ function formularioCita(b, alGuardar) {
     <button class="btn sec" id="btn-cancel">Cancelar</button>
     <button class="btn" id="btn-guardar" style="background:#1d4ed8;font-weight:700">${tieneCita ? "Guardar cambios" : "Confirmar y agendar cita"}</button>
     `,
-    'lateral'
+    'lateral cita-c'
   );
   if (tieneCita) cargarHistorialCita(b, alGuardar);
 
