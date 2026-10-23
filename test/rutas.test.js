@@ -542,6 +542,20 @@ test('una cita con tipo de cita antiguo fuera del catalogo se puede editar sin c
   assert.equal(r.status, 200, r.texto);
 });
 
+test('un RUT con digito verificador incorrecto se rechaza al cambiarlo', async () => {
+  const b = ocupado(diaNuevo(), '13:30', { correo: 'juan@x.cl' });
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '11.111.111-2', nombre: 'JUAN PEREZ', clase: 'B', correo: 'juan@x.cl' });
+  assert.equal(r.status, 400);
+  assert.match(r.datos.error, /RUT inválido/);
+});
+
+test('un telefono que no es celular chileno se rechaza al cambiarlo', async () => {
+  const b = ocupado(diaNuevo(), '14:00', { correo: 'juan@x.cl' });
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '11.111.111-1', nombre: 'JUAN PEREZ', clase: 'B', contacto: '+56 2 2222 2222', correo: 'juan@x.cl' });
+  assert.equal(r.status, 400);
+  assert.match(r.datos.error, /Teléfono inválido/);
+});
+
 test('una cita antigua sin correo se puede seguir editando', async () => {
   const b = ocupado(diaNuevo(), '09:00', { correo: null });
   const r = await api('PUT', `/agenda/${b.id}`, { rut: '11.111.111-1', nombre: 'JUAN PEREZ', clase: 'B', comentarios: 'nota' });

@@ -4,7 +4,9 @@ const { db, tx } = require('./db');
 const telefono = require('./telefono');
 const rut = require('./rut');
 
-const CORREO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const validar = require('./validar');
+
+const CORREO_RE = validar.CORREO_FORMATO;
 const MAX_FILAS = 500;
 
 const correoInvalido = (c) => Boolean(String(c || '').trim()) && !CORREO_RE.test(String(c).trim());
@@ -45,7 +47,7 @@ function validarContacto(body) {
   }
   if ('contacto' in body) {
     const tel = telefono.normalizar(body.contacto);
-    if (!tel.vacio && !tel.valido) throw err('Teléfono incompleto. Un número chileno tiene 9 dígitos (celular: 9 XXXX XXXX).');
+    if (!tel.vacio) validar.exigirTelefono(body.contacto);
     cambios.contacto = tel.valor;
   }
   if ('nombre' in body) {

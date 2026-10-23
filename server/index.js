@@ -17,6 +17,7 @@ const { importar } = require('./migrate');
 const backupMod = require('./backup');
 const { hoyISO, sumarDias, ahoraTS } = require('./fechas');
 const feriados = require('./feriados');
+const validar = require('./validar');
 const papelera = require('./papelera');
 const cola = require('./cola');
 const bloqueo = require('./bloqueo');
@@ -311,7 +312,7 @@ function bad(msg, status = 400) { const e = new Error(msg); e.status = status; r
 
 // Regla principal: no se da hora a una persona sin correo valido (lo exigen la
 // confirmacion y el recordatorio automatico).
-const CORREO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CORREO_RE = validar.CORREO_FORMATO;
 function correoValido(c) { return CORREO_RE.test(String(c || '').trim()); }
 function exigirCorreo(c) {
   if (!String(c || '').trim()) throw bad('Falta el correo: no se puede dar hora a una persona sin correo electrónico.');
@@ -467,7 +468,8 @@ function validarBloque(body, bloque) {
   let rutFmt = null;
   if (body.rut && String(body.rut).trim()) {
     rutFmt = rut.formatear(body.rut);
-    if (!rut.esValido(body.rut)) avisos.push(`RUT ${rutFmt} tiene digito verificador invalido.`);
+    // Solo se revalida si el RUT cambia: un RUT antiguo fuera de formato no bloquea otras ediciones
+    if (rut.limpiar(rutFmt) !== rut.limpiar(bloque.rut)) validar.exigirRut(rutFmt);
   }
   if (body.tipo_cita === 'REAGENDADO' && !body.motivo_reagendamiento) {
     avisos.push('Cita marcada como REAGENDADO sin motivo de reagendamiento.');
@@ -547,9 +549,8 @@ app.put('/api/agenda/:id', wrap((req, res) => {
   const autorizacion = verificarTercerIntento(body, bloque, rutFmt, clase);
 
   const tel = telefono.normalizar(body.contacto);
-  if (!tel.vacio && !tel.valido) {
-    throw bad('Teléfono incompleto. Un número chileno tiene 9 dígitos (celular: 9 XXXX XXXX). Se guarda como +56.');
-  }
+  // Solo se revalida si el telefono cambia: un telefono antiguo fuera de formato no bloquea otras ediciones
+  if (!tel.vacio && tel.valor !== (bloque.contacto || null)) validar.exigirTelefono(body.contacto);
 
   let funcionario_id = body.funcionario_id ? Number(body.funcionario_id) : null;
   if (!funcionario_id && body.funcionario_nombre) funcionario_id = upsertFuncionario(String(body.funcionario_nombre).trim().toUpperCase());
