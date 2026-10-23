@@ -2981,6 +2981,55 @@ body:has(#a-grid.tabla-agenda-wrap) {
   min-width: 220px;
 }
 
+/* Formulario de agendar (opcion A): licencias como chips y campos mas claros */
+#modal-root .chk-clases {
+  gap: 8px;
+  padding: 6px 0 2px;
+}
+
+#modal-root .chk-clase {
+  position: relative;
+  height: 38px;
+  min-width: 52px;
+  justify-content: center;
+  padding: 0 14px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 700;
+  transition: background-color .12s, border-color .12s, color .12s;
+}
+
+#modal-root .chk-clase input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  pointer-events: none;
+}
+
+#modal-root .chk-clase:has(input:checked) {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+#modal-root .chk-clase:has(input:focus-visible) {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
+
+#modal-root .campo > input:not([type="checkbox"]):not([type="radio"]),
+#modal-root .campo > select {
+  height: 44px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
 /* Sugerencias de dominio en los campos de correo */
 .correo-dominios {
   position: fixed;
