@@ -3017,6 +3017,17 @@ body:has(#a-grid.tabla-agenda-wrap) {
   color: #ffffff;
 }
 
+#modal-root .chk-clase.marcada {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+#modal-root .chk-clase.marcada::before {
+  content: '✓';
+  font-weight: 800;
+}
+
 #modal-root .chk-clase:has(input:focus-visible) {
   outline: 2px solid #1d4ed8;
   outline-offset: 2px;
