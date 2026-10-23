@@ -273,6 +273,21 @@ input#bq:focus {
   z-index: 5;
 }
 
+/* Separadores del encabezado iguales en todas las columnas y tablas */
+#view table thead th {
+  border-right: 1px solid rgba(255, 255, 255, 0.22) !important;
+}
+
+#view table thead th:last-child {
+  border-right: 0;
+}
+
+/* Hora y etiqueta D·A5 en una sola linea: las filas conservan la misma altura */
+#view table .hora-badge {
+  flex-direction: row;
+  gap: 6px;
+}
+
 /* Barra de desplazamiento delgada y uniforme en todas las tablas */
 #view .tabla-scroll,
 #view .tabla-agenda-scroll {
