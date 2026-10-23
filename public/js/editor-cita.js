@@ -68,6 +68,11 @@ function formularioCita(b, alGuardar) {
   modal(
     `Agendar nueva cita · ${fFecha(b.fecha)} · ${b.hora} hrs · Examinador/a: ${esc(b.examinador)}`,
     `
+    <div class="cita-resumen-c" aria-label="Resumen de la cita">
+      <div><span>Fecha</span><b>${esc(fFecha(b.fecha))}</b></div>
+      <div><span>Hora</span><b>${esc(b.hora)} hrs</b></div>
+      <div><span>Examinador/a</span><b>${esc(b.examinador)}</b></div>
+    </div>
     <div class="campo"><label>Nombre completo <b class="req" style="color:var(--alerta)">*</b></label>
       <input id="f-nombre" value="${esc(nom(b.nombre))}" required placeholder="NOMBRES Y APELLIDOS" style="text-transform:uppercase;font-weight:600">
     </div>

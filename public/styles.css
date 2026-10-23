@@ -501,6 +501,46 @@ main { padding: .75rem 24px 2.5rem; max-width: none; width: 100%; box-sizing: bo
   cursor: pointer;
 }
 .chk-clases { display: flex; flex-wrap: wrap; gap: .4rem .9rem; padding: .5rem .1rem; }
+
+/* Resumen de la cita en el modal Agendar: fecha, hora y examinador en un panel azul claro */
+.cita-resumen-c {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: #dbeafe;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+}
+.cita-resumen-c > div { background: #eff6ff; padding: .6rem .75rem; display: flex; flex-direction: column; gap: 2px; min-width: 0; height: auto; }
+.cita-resumen-c > div:first-child { border-radius: 10px 0 0 10px; }
+.cita-resumen-c > div:last-child { border-radius: 0 10px 10px 0; }
+.cita-resumen-c span { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: #1e40af; }
+.cita-resumen-c b { font-size: 14px; font-weight: 600; color: #1e3a8a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root[data-tema="oscuro"] .cita-resumen-c { background: #1e293b; border-color: #334155; }
+:root[data-tema="oscuro"] .cita-resumen-c > div { background: #1e293b; }
+:root[data-tema="oscuro"] .cita-resumen-c span { color: #93c5fd; }
+:root[data-tema="oscuro"] .cita-resumen-c b { color: #e0f2fe; }
+
+/* Boton Maximizar de las tablas (js/tabla-maximizar.js) */
+.tabla-barra-max { display: flex; justify-content: flex-end; margin: 0 0 6px; }
+.tabla-barra-max.tabla-barra-fija { position: fixed; top: 12px; right: 16px; z-index: 9001; margin: 0; }
+.tabla-maximizada {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9000;
+  width: auto !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 56px 16px 16px !important;
+  border-radius: 0 !important;
+  box-sizing: border-box;
+  overflow: auto !important;
+  background: var(--surface-2);
+}
+.tabla-maximizada .tabla-agenda-scroll { max-height: none !important; height: calc(100vh - 110px); }
+
+body.tabla-max-activa { overflow: hidden; }
 .chk-clase { display: inline-flex; align-items: center; gap: .35rem; font-weight: 600; font-size: 13.5px; color: var(--tinta); cursor: pointer; text-transform: none; letter-spacing: normal; }
 .chk-clase input { width: auto; height: auto; }
 
