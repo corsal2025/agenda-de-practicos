@@ -1,6 +1,6 @@
 'use strict';
 const { db, tx, log } = require('./db');
-const { HORAS } = require('./config');
+const { horasDelDia } = require('./config');
 const { diasHabiles } = require('./fechas');
 const feriados = require('./feriados');
 
@@ -15,7 +15,7 @@ function generar(desde, hasta) {
   let creados = 0;
   tx(() => {
     for (const dia of dias) {
-      for (const hora of HORAS) {
+      for (const hora of horasDelDia(dia)) {
         for (const ex of examinadores) {
           const r = ins.run(dia, hora, ex.id);
           creados += Number(r.changes);

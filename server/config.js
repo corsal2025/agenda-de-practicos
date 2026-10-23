@@ -16,6 +16,14 @@ const HORAS = [
   '11:30', '12:00', '12:30', '13:00', '13:30',
 ];
 
+// Desde esta fecha (incluida) el bloque de 08:30 ya no existe. Antes de ella rige HORAS completa.
+const DESDE_SIN_0830 = '2026-11-09';
+
+// Horas que tiene un dia: quita 08:30 desde DESDE_SIN_0830 (fechas YYYY-MM-DD, orden lexicografico).
+function horasDelDia(fecha) {
+  return fecha >= DESDE_SIN_0830 ? HORAS.filter((h) => h !== '08:30') : HORAS;
+}
+
 // Unico bloque donde se admiten las clases D y A5 (vehiculos pesados).
 // El resto de los bloques: PROHIBIDO D y A5.
 const HORA_D_A5 = '12:30';
@@ -61,7 +69,7 @@ const SMTP = {
 const URL_PUBLICA = (process.env.AGENDA_URL_PUBLICA || '').replace(/\/$/, '') || null;
 
 module.exports = {
-  HORAS, HORA_D_A5, CLASES_PESADAS,
+  HORAS, HORA_D_A5, CLASES_PESADAS, DESDE_SIN_0830, horasDelDia,
   EXAMINADORES, FUNCIONARIOS, CATALOGOS,
   RAIZ, DB_PATH, PUERTO, HOST, SMTP, URL_PUBLICA,
 };
