@@ -96,9 +96,14 @@ El Reporte lista **1.893 hallazgos**. Son datos mal cargados en la base real; el
 | Cita en día inhábil | 1 | Aviso | fecha 13/10/2001 |
 
 Anomalías puntuales que conviene tratar primero:
-- **Cita id 220936 (EMILIA LIRAYEN LAGUN) con fecha 13/10/2001.** Probablemente es 13/10/2026. Esa fecha ensucia la cabecera ("Agenda 13/10/2001 – 30/06/2027") y el rango por defecto de Estadísticas. **No la he tocado**: es dato de producción y necesito tu confirmación.
+- **Cita id 220936 (EMILIA LIRAYEN LAGUN) con fecha 13/10/2001.** Era 13/10/2026. **Corregida el 23/10/2026 con tu confirmación**: se movió, tal cual (sin marcarla como reagendada), al bloque libre 214948 (13/10/2026 11:30, mismo examinador); el bloque de 2001 quedó vacío. Respaldo previo: `data/backups/agenda-2026-10-23T16-32-02-pre-correccion-fecha-220936.db`; quedó anotado en la bitácora (actor `CORRECCION MANUAL`).
+- **Corrección a este catastro:** esa cita **no** era la causa principal del rango "2001 – 2027" de la cabecera. La base tiene **220.966 bloques** y **208.495 de ellos son bloques vacíos entre 2001 y 2025** (sin ninguna cita); el rango sale del `MIN(fecha)` de todos los bloques (`/api/meta`, `server/index.js:353`). Mientras existan esos bloques, la cabecera y el rango por defecto de Estadísticas seguirán empezando en 2001. Además hacen la base de 39 MB (cada respaldo diario pesa 37 MB). Ver anomalía **B2**.
 - 6 correos que son frases de texto libre (por ejemplo, "en 2 ocasiones no está disponible…"). Hay un botón existente para vaciarlos (con respaldo previo).
 - 485 filas en Corrección rápida (correo inválido, teléfono incompleto, nombre con espacios).
+
+| ID | Sev. | Anomalía | Evidencia | Corrección propuesta |
+| --- | --- | --- | --- | --- |
+| B2 | Media | **Resuelto el 23/10/2026**: se borraron los 208.495 bloques vacíos anteriores a 2026 (respaldo previo `agenda-2026-10-23T16-39-50-pre-borrado-bloques-vacios.db`, bitácora "CORRECCION MANUAL"); la base pasó de 39 MB a 2,4 MB, la cabecera muestra 02/01/2026 – 30/06/2027 y las 2.399 citas siguen intactas. **Riesgo cerrado el 23/10/2026:** `server/migrate.js` generaba la grilla desde la primera fecha del Excel; ahora descarta las filas con fecha anterior al 01/01/2020 (`FECHA_MINIMA`), lo informa en la pantalla de importación y tiene 2 pruebas (`test/migrate.test.js`, 199 de 199 pasan; fallan sin la corrección). Original: 208.495 bloques vacíos de 2001 a 2025 en la base de producción. | Por año: ~8.600 bloques, 0 citas (2002–2025); 1.849 en 2001. Rango de la cabecera 13/10/2001 – 30/06/2027. | Opción A: borrar los bloques vacíos anteriores a 2026 (con respaldo): la base baja a unos 3 MB y la cabecera muestra 2026–2027. Opción B (sin borrar): que `rango_agenda` calcule el mínimo solo sobre bloques con cita o desde el 01/01/2026. Falta tu decisión. |
 
 **Por qué no se han corregido:** nadie pidió limpiar datos, y corregirlos exige decisión humana (por ejemplo, saber cuál de dos citas duplicadas es la válida). Mis cambios han sido solo de interfaz y no toqué la base de producción.
 
@@ -139,6 +144,11 @@ Anomalías puntuales que conviene tratar primero:
 | P2 | Tablas de ventanas emergentes (A6), texto mínimo de 12 px (A4), etiquetas accesibles (A5) | Coherencia y accesibilidad. |
 | P2 | Limpieza de datos con tu validación (4.B) | Baja los 1.893 hallazgos. |
 | P3 | Consolidar CSS y sacar estilos en línea (A8, A9); orden del repositorio (C4) | Deuda técnica. |
+
+### 6.0 Avance de P0
+
+- Fecha de la cita 220936: **hecha** (ver 4.B).
+- Correo (C1): `CORREO_MODO=auto` ya está puesto; **falta que escribas `SMTP_PASS` en `.env`** (hoy sigue vacío). Después se reinicia el servidor y se prueba con `node server/probar-correo.js tu-correo@dominio.cl`.
 
 ### 6.1 Avance de P1 (tablas) — 23/10/2026, sin commitear
 
