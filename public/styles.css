@@ -317,6 +317,20 @@ input#bq:focus {
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* Todas las tablas de los modulos con la presentacion de Citas disponibles:
+   encabezado y celdas centrados, cuadricula suave. La tabla de errores conserva su alineacion a la izquierda. */
+#view .tabla-scroll table:not(.tabla-errores-planilla) thead th { text-align: center; }
+#view .tabla-scroll table:not(.tabla-errores-planilla) tbody td {
+  text-align: center;
+  vertical-align: middle;
+  border-right: 1px solid #cbd5e1;
+  border-bottom: 1px solid #cbd5e1;
+}
+#view .tabla-scroll table:not(.tabla-errores-planilla) tbody td:last-child { border-right: 0; }
+:root[data-tema="oscuro"] #view .tabla-scroll table:not(.tabla-errores-planilla) tbody td {
+  border-color: #334155;
+}
+
 /* Columnas fijas: HORA, NOMBRE y RUT se quedan a la vista al desplazar la tabla a la derecha.
    Los anchos son fijos para que cada columna fija tenga una posicion exacta (left). */
 #view table.tabla-agenda-elegante thead th.th-hora,
