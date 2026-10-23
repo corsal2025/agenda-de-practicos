@@ -63,7 +63,6 @@ async function renderAgenda() {
             Buscar
           </button>
 
-          <span class="muted" id="a-regla" style="font-size:12px;font-weight:600;align-self:center;margin-left:6px;line-height:1.2"></span>
         </div>
       </div>
 
@@ -142,14 +141,6 @@ async function renderAgenda() {
       const rows = await apiReciente(`/disponibles?${qDisp}`, 15e3);
       if (Array.isArray(rows)) {
         totalLibresRango = rows.length;
-        const pesada = META.clases_pesadas.includes(clase);
-        const reglaPesada = pesada ? `Clase ${clase}: solo bloques de las ${META.hora_d_a5}.` : '';
-        const reglaEl = $('#a-regla');
-        if (reglaEl) {
-          reglaEl.textContent = rows.length
-            ? `${reglaPesada ? reglaPesada + ' · ' : ''}${rows.length} bloque(s) libre(s) en el rango.`
-            : (reglaPesada ? reglaPesada + ' · Sin bloques libres en el rango.' : 'Sin bloques libres en el rango.');
-        }
       }
     } catch (_) {}
   };

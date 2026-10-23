@@ -188,7 +188,156 @@ input#bq:focus {
 .buscador-res .bq-vacio { padding: .55rem .65rem; color: var(--tinta-2); font-size: 13px; }
 
 .top-right { justify-self: end; display: flex; align-items: center; gap: .7rem; }
-.estado { font-size: 12px; color: var(--tinta-2); }
+.estado { font-size: 12px; color: var(--tinta-2); max-width: 175px; line-height: 1.35; }
+
+/* Cabecera limpia: la mascota Lico queda fuera de la barra (el asistente sigue disponible en su pestaña) */
+.head-lico-wrap { display: none !important; }
+
+/* ===== Tablas unificadas: mismo estilo en todos los modulos =====
+   Capa comun por encima de los estilos de cada tabla (selectores con ID para ganar a ellos). */
+#view table thead th,
+#modal-root table thead th {
+  background: var(--azul-th);
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  border-right: 1px solid #334155;
+  border-bottom: 4px solid var(--marca-cian);
+}
+
+#view table tbody td,
+#modal-root table tbody td {
+  border: 1px solid #cbd5e1;
+  font-size: 13.5px;
+}
+
+#view table tbody tr:first-child td,
+#modal-root table tbody tr:first-child td {
+  border-top: 1px solid #cbd5e1;
+}
+
+#view table thead th.th-hora {
+  background: var(--azul-th) !important;
+}
+
+/* Celdas autoajustables: cada columna se ajusta a su contenido.
+   La Agenda conserva sus columnas fijas (HORA, NOMBRE y RUT quedan pegadas al desplazar). */
+#view table {
+  width: auto;
+  min-width: 100%;
+  table-layout: auto;
+}
+
+#view table:not(.tabla-agenda-elegante) th,
+#view table:not(.tabla-agenda-elegante) td,
+#view #tabla-disponibles-main th,
+#view #tabla-disponibles-main td {
+  width: auto !important;
+  min-width: 0 !important;
+}
+
+/* Mismo estilo que la Agenda en todos los modulos con tabla */
+#view .tabla-scroll {
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, .06);
+}
+
+#view table thead th {
+  padding: 12px 12px;
+}
+
+#view table tbody td {
+  padding: 9px 12px;
+}
+
+#view table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+#view table tbody tr:hover {
+  background: #f1f5f9;
+}
+
+:root[data-tema="oscuro"] #view table tbody tr:nth-child(even) {
+  background: var(--elev);
+}
+
+:root[data-tema="oscuro"] #view table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Columnas fijas: HORA, NOMBRE y RUT se quedan a la vista al desplazar la tabla a la derecha.
+   Los anchos son fijos para que cada columna fija tenga una posicion exacta (left). */
+#view table.tabla-agenda-elegante thead th.th-hora,
+#view table.tabla-agenda-elegante tbody td.td-hora {
+  width: 200px !important;
+  min-width: 200px !important;
+}
+
+#view table.tabla-agenda-elegante thead th.th-hora {
+  z-index: 12 !important;
+}
+
+#view table.tabla-agenda-elegante thead th.th-nombre,
+#view table.tabla-agenda-elegante thead th.th-rut {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  background: var(--azul-th);
+}
+
+#view table.tabla-agenda-elegante thead th.th-nombre {
+  left: 200px;
+  width: 280px;
+  min-width: 280px;
+}
+
+#view table.tabla-agenda-elegante thead th.th-rut {
+  left: 480px;
+  width: 170px;
+  min-width: 170px;
+}
+
+#view table.tabla-agenda-elegante tbody td.td-nombre,
+#view table.tabla-agenda-elegante tbody td.td-rut {
+  position: sticky;
+  z-index: 6;
+  background: #ffffff;
+}
+
+#view table.tabla-agenda-elegante tbody td.td-nombre {
+  left: 200px;
+  width: 280px;
+  min-width: 280px;
+}
+
+#view table.tabla-agenda-elegante tbody td.td-rut {
+  left: 480px;
+  width: 170px;
+  min-width: 170px;
+}
+
+#view table.tabla-agenda-elegante tbody tr:nth-child(even) td.td-nombre,
+#view table.tabla-agenda-elegante tbody tr:nth-child(even) td.td-rut {
+  background: #f8fafc;
+}
+
+:root[data-tema="oscuro"] #view table.tabla-agenda-elegante tbody td.td-nombre,
+:root[data-tema="oscuro"] #view table.tabla-agenda-elegante tbody td.td-rut {
+  background: var(--papel);
+}
+
+#view table tbody td.td-hora {
+  border-right: 1px solid #cbd5e1 !important;
+}
+
+:root[data-tema="oscuro"] #view table tbody td,
+:root[data-tema="oscuro"] #modal-root table tbody td {
+  border-color: var(--linea-2);
+}
 .estado b { color: var(--tinta); font-weight: 700; }
 .icono-btn {
   background: var(--elev); border: 1px solid var(--linea); color: var(--tinta-2);
@@ -430,6 +579,21 @@ input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:f
   position: absolute; top: 6px; right: 7px; font-size: 13px; line-height: 1;
   color: var(--alerta, #b45309); cursor: help;
 }
+/* Aviso de dato faltante en la tabla de Agenda: parpadea para llamar la atencion */
+#view .tabla-agenda-elegante .alerta-dato {
+  display: inline-block;
+  animation: alerta-parpadea 1.2s ease-in-out infinite;
+}
+
+@keyframes alerta-parpadea {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #view .tabla-agenda-elegante .alerta-dato { animation: none; }
+}
+
 .slot:focus-visible { outline: 2px solid var(--azul); outline-offset: 1px; }
 .slot:focus:not(:focus-visible) { outline: none; }
 .slot .nombre {
@@ -1550,6 +1714,8 @@ tbody tr:first-child td { border-top: 0; }
   border-radius: 999px;
   padding: .25rem 1rem .25rem .3rem;
   box-shadow: 0 4px 14px rgba(38, 56, 140, .35);
+  flex: none;
+  white-space: nowrap;
 }
 .btn-guia-accion:hover {
   background: linear-gradient(135deg, var(--btn-g2-h), var(--btn-g1-h));
@@ -2336,6 +2502,34 @@ input.tabla-busc-input:focus,
   -webkit-overflow-scrolling: touch;
   max-height: 80vh;
   position: relative;
+  scrollbar-width: none;
+}
+
+.tabla-agenda-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Unica barra lateral de la tabla: va al pie del marco y mueve .tabla-agenda-scroll */
+.tabla-agenda-barra-lateral {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 14px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.tabla-agenda-barra-lateral > div {
+  height: 1px;
+}
+
+/* En la Agenda (vista tabla) el scroll lateral lo hace solo la barra del marco: sin barra de pagina */
+body:has(#a-grid.tabla-agenda-wrap) {
+  overflow-x: clip;
+}
+
+:root[data-tema="oscuro"] .tabla-agenda-barra-lateral {
+  border-top-color: var(--linea-2);
+  background: var(--papel);
 }
 
 .tabla-agenda-elegante {
@@ -2349,14 +2543,14 @@ input.tabla-busc-input:focus,
 
 .tabla-agenda-elegante thead th {
   background: #ffffff;
-  color: #475569;
-  font-size: 11.5px;
-  font-weight: 800;
+  color: #0f172a;
+  font-size: 13.5px;
+  font-weight: 900;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  padding: 13px 12px;
-  border-bottom: 1px solid #d1d5db;
-  border-right: 1px solid #d1d5db;
+  padding: 10px 12px;
+  border-bottom: 1px solid #2563eb;
+  border-right: 1px solid #2563eb;
   text-align: center;
   white-space: nowrap;
   user-select: none;
@@ -2369,15 +2563,12 @@ input.tabla-busc-input:focus,
   text-align: center;
 }
 
-.tabla-agenda-elegante thead th:last-child {
-  border-right: none;
-}
 
 :root[data-tema="oscuro"] .tabla-agenda-elegante thead th {
   background: var(--papel);
   color: var(--tinta-3);
-  border-bottom-color: var(--linea);
-  border-right-color: var(--linea);
+  border-bottom-color: #3b82f6;
+  border-right-color: #3b82f6;
 }
 
 .tabla-agenda-elegante tbody tr {
@@ -2386,11 +2577,11 @@ input.tabla-busc-input:focus,
 }
 
 .tabla-agenda-elegante tbody tr:not(:last-child) td {
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #2563eb;
 }
 
 :root[data-tema="oscuro"] .tabla-agenda-elegante tbody tr:not(:last-child) td {
-  border-bottom-color: var(--linea-2);
+  border-bottom-color: #3b82f6;
 }
 
 .tabla-agenda-elegante tbody tr:hover,
@@ -2404,19 +2595,19 @@ input.tabla-busc-input:focus,
 }
 
 .tabla-agenda-elegante tbody td {
-  padding: 12px 14px;
+  padding: 9px 12px;
   vertical-align: middle;
   text-align: center;
   color: var(--tinta);
-  border-right: none !important;
+  border: 1px solid #2563eb;
 }
 
-.tabla-agenda-elegante tbody td:last-child {
-  border-right: none;
+.tabla-agenda-elegante tbody tr:first-child td {
+  border-top: 1px solid #2563eb;
 }
 
 :root[data-tema="oscuro"] .tabla-agenda-elegante tbody td {
-  border-right-color: var(--linea-2);
+  border-color: #3b82f6;
 }
 
 .tabla-agenda-elegante thead th.th-hora,
@@ -2425,9 +2616,9 @@ input.tabla-busc-input:focus,
   left: 0 !important;
   z-index: 5 !important;
   background: #ffffff !important;
-  border-right: 2px solid #cbd5e1 !important;
-  width: 90px !important;
-  min-width: 90px !important;
+  border-right: 1px solid #2563eb !important;
+  width: 200px !important;
+  min-width: 200px !important;
   white-space: nowrap !important;
 }
 
@@ -2511,7 +2702,7 @@ input.tabla-busc-input:focus,
 
 .tabla-agenda-elegante tbody td.td-nombre {
   text-align: center;
-  padding: 12px 14px;
+  padding: 9px 12px;
   width: 280px;
   min-width: 280px;
 }
@@ -2660,6 +2851,133 @@ input.tabla-busc-input:focus,
   background: var(--elev);
   border-color: var(--linea);
   color: var(--tinta-2);
+}
+
+.fila-ocupada [data-valor] {
+  cursor: text;
+  border-radius: 6px;
+  padding: 2px 4px;
+  transition: background-color 0.12s ease;
+}
+
+.fila-ocupada [data-valor]:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.fila-ocupada .clase-badge-tabla[data-valor] {
+  cursor: pointer;
+}
+
+.celda-edicion {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.celda-edicion-input {
+  height: 28px;
+  min-width: 0;
+  text-align: center;
+  padding: 0 8px;
+  border: 1px solid #2563eb;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.accion-celda-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.tabla-agenda-elegante thead th.th-accion,
+.tabla-agenda-elegante tbody td.td-accion {
+  width: 96px;
+  min-width: 96px;
+}
+
+.btn-tabla-liberar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-tabla-liberar:hover {
+  background: #fee2e2;
+}
+
+/* Nube de licencias: se abre bajo la celda CLASE de la Agenda */
+.nube-clases {
+  position: fixed;
+  z-index: 90;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(48px, 1fr));
+  gap: 6px;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+}
+
+.nube-clases::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: #ffffff;
+  border-top: 1px solid #cbd5e1;
+  border-left: 1px solid #cbd5e1;
+  transform: rotate(45deg);
+}
+
+.nube-clase {
+  height: 36px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #0f172a;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.nube-clase:hover,
+.nube-clase:focus-visible {
+  border-color: #2563eb;
+  background: #eff6ff;
+  outline: none;
+}
+
+.nube-clase.actual {
+  background: #1e3a8a;
+  border-color: #1e3a8a;
+  color: #ffffff;
+}
+
+:root[data-tema="oscuro"] .nube-clases {
+  background: var(--papel);
+  border-color: var(--linea);
 }
 
 .rut-txt {
@@ -2881,22 +3199,23 @@ input.tabla-busc-input:focus,
   accent-color: #2563eb;
 }
 
+/* Cada opcion es una pestaña independiente (sin cápsula compartida) */
 .confirmar-pills-pair {
   display: inline-flex;
   align-items: center;
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  border-radius: 9999px;
-  padding: 2px;
-  gap: 2px;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+  gap: 6px;
+  background: none;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
 }
 
 .btn-conf-tab {
-  border: none;
-  background: transparent;
-  padding: 4px 9px;
-  border-radius: 9999px;
+  height: 30px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  padding: 0 12px;
+  border-radius: 999px;
   font: inherit;
   font-size: 11px;
   font-weight: 700;
@@ -2904,6 +3223,18 @@ input.tabla-busc-input:focus,
   transition: all 0.15s ease;
   white-space: nowrap;
   color: var(--tinta-2);
+}
+
+.btn-conf-tab.tab-confirmado {
+  background: #f0fdf4;
+  border-color: #86efac;
+  color: #15803d;
+}
+
+.btn-conf-tab.tab-sin-confirmar {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #c2410c;
 }
 
 .btn-conf-tab.tab-confirmado:hover {
@@ -2919,8 +3250,8 @@ input.tabla-busc-input:focus,
 }
 
 :root[data-tema="oscuro"] .confirmar-pills-pair {
-  background: var(--elev);
-  border-color: var(--borde);
+  background: none;
+  border: 0;
 }
 
 :root[data-tema="oscuro"] .btn-conf-tab {
@@ -3016,7 +3347,7 @@ input.tabla-busc-input:focus,
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  gap: 3px !important;
+  gap: 6px !important;
   flex-wrap: nowrap !important;
   white-space: nowrap !important;
 }
@@ -3025,7 +3356,7 @@ input.tabla-busc-input:focus,
   padding: 4px 8px !important;
   font-size: 11px !important;
   font-weight: 700 !important;
-  border-radius: 4px !important;
+  border-radius: 8px !important;
   white-space: nowrap !important;
   border: 1px solid #cbd5e1;
   background: #ffffff;
@@ -3039,28 +3370,64 @@ input.tabla-busc-input:focus,
   background: #f8fafc;
 }
 
+.tabla-slot-res .sr.sr-a {
+  background: #f0fdf4;
+  border-color: #86efac;
+  color: #15803d;
+}
+
+.tabla-slot-res .sr.sr-r {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.tabla-slot-res .sr.sr-n {
+  background: #f5f3ff;
+  border-color: #c4b5fd;
+  color: #6d28d9;
+}
+
 .tabla-slot-res .sr.sr-a.on {
-  background: var(--ok-bg) !important;
-  border-color: var(--ok) !important;
-  color: var(--ok) !important;
+  background: #16a34a !important;
+  border-color: #15803d !important;
+  color: #ffffff !important;
 }
 
 .tabla-slot-res .sr.sr-r.on {
-  background: var(--alerta-bg) !important;
-  border-color: var(--alerta) !important;
-  color: var(--alerta) !important;
+  background: #dc2626 !important;
+  border-color: #b91c1c !important;
+  color: #ffffff !important;
 }
 
 .tabla-slot-res .sr.sr-n.on {
-  background: #f1f5f9 !important;
-  border-color: #64748b !important;
-  color: #334155 !important;
+  background: #7c3aed !important;
+  border-color: #6d28d9 !important;
+  color: #ffffff !important;
 }
 
 :root[data-tema="oscuro"] .tabla-slot-res .sr {
   background: var(--elev);
   border-color: var(--linea);
   color: var(--tinta-2);
+}
+
+:root[data-tema="oscuro"] .tabla-slot-res .sr.sr-a {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: #22c55e;
+  color: #4ade80;
+}
+
+:root[data-tema="oscuro"] .tabla-slot-res .sr.sr-r {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+  color: #f87171;
+}
+
+:root[data-tema="oscuro"] .tabla-slot-res .sr.sr-n {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: #8b5cf6;
+  color: #c4b5fd;
 }
 
 .btn-tabla-reagendar {
@@ -3070,9 +3437,9 @@ input.tabla-busc-input:focus,
   width: 26px;
   height: 26px;
   border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: var(--tinta-3);
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  color: #b45309;
   cursor: pointer;
   transition: all 0.15s ease;
   padding: 0;
@@ -3392,13 +3759,15 @@ input.tabla-busc-input:focus,
    ========================================================================== */
 .sidebar-modulos {
   position: fixed;
-  top: var(--alto-header, 58px);
-  left: 0;
-  bottom: 0;
-  width: 236px;
+  top: calc(var(--alto-header, 58px) + 12px);
+  left: 12px;
+  bottom: 12px;
+  width: 224px;
   background: var(--papel);
-  border-right: 1px solid var(--linea);
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--linea);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
   z-index: 40;
   display: flex;
   flex-direction: column;
@@ -3554,8 +3923,8 @@ html.sidebar-plegado nav#nav button .nav-badge {
 
 /* Área de Contenido Principal (#view) */
 #view {
-  margin-left: 236px;
-  width: calc(100vw - 236px);
+  margin-left: 248px;
+  width: calc(100vw - 248px);
   min-height: calc(100vh - 58px);
   padding: 16px 24px 32px;
   box-sizing: border-box;
@@ -3564,6 +3933,6 @@ html.sidebar-plegado nav#nav button .nav-badge {
 }
 
 html.sidebar-plegado #view {
-  margin-left: 60px;
-  width: calc(100vw - 60px);
+  margin-left: 84px;
+  width: calc(100vw - 84px);
 }

@@ -213,12 +213,166 @@ async function marcarResultado(id, resultado) {
   await api(`/agenda/${id}/resultado`, { method: 'POST', body: { resultado } });
 }
 
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+// "2026-11-23" -> "lunes 23 de nov" (fecha local, sin desfase por zona horaria)
+function fFechaAgenda(iso) {
+  const [anio, mes, dia] = String(iso).split('-').map(Number);
+  const fecha = new Date(anio, mes - 1, dia);
+  return `${DIAS_SEMANA[fecha.getDay()]} ${dia} de ${MESES_CORTOS[mes - 1]}`;
+}
+
+// Licencias del catalogo; conserva la clase actual aunque no este en el catalogo
+function clasesDisponibles(claseActual) {
+  const clases = [...(META.catalogos.clase || [])];
+  if (claseActual && !clases.includes(claseActual)) clases.unshift(claseActual);
+  return clases;
+}
+
+// Nube de licencias: se abre al tocar CLASE; elegir una la guarda
+let nubeClases = null;
+
+function cerrarNubeClases() {
+  if (!nubeClases) return;
+  nubeClases.el.remove();
+  document.removeEventListener('pointerdown', alPresionarFueraNube, true);
+  document.removeEventListener('keydown', alPresionarTeclaNube, true);
+  nubeClases = null;
+}
+
+function alPresionarFueraNube(e) {
+  if (nubeClases && !nubeClases.el.contains(e.target) && !nubeClases.ancla.contains(e.target)) cerrarNubeClases();
+}
+
+function alPresionarTeclaNube(e) {
+  if (e.key === 'Escape') cerrarNubeClases();
+}
+
+async function guardarClaseEnNube(b, valor) {
+  if (valor === (b.clase || '')) return;
+  try {
+    if (!(await guardarCampoCita(b, 'clase', valor))) return;
+    toast('Dato actualizado en la planilla', 'ok');
+    if (window.renderAgenda) renderAgenda();
+  } catch (e) {
+    toast(e.message, 'err');
+  }
+}
+
+function abrirNubeClases(ancla, b) {
+  cerrarNubeClases();
+  const el = document.createElement('div');
+  el.className = 'nube-clases';
+  el.setAttribute('role', 'listbox');
+  el.setAttribute('aria-label', 'Tipo de licencia');
+  el.innerHTML = clasesDisponibles(b.clase)
+    .map((c) => `<button type="button" class="nube-clase${c === b.clase ? ' actual' : ''}" role="option" aria-selected="${c === b.clase}" data-clase="${esc(c)}">${esc(c)}</button>`)
+    .join('');
+  document.body.appendChild(el);
+
+  const r = ancla.getBoundingClientRect();
+  const ancho = el.offsetWidth;
+  el.style.top = `${r.bottom + 10}px`;
+  el.style.left = `${Math.min(Math.max(8, r.left + r.width / 2 - ancho / 2), window.innerWidth - ancho - 8)}px`;
+
+  el.addEventListener('click', (e) => {
+    const boton = e.target.closest('.nube-clase');
+    if (!boton) return;
+    cerrarNubeClases();
+    guardarClaseEnNube(b, boton.dataset.clase);
+  });
+  el.addEventListener('keydown', (e) => {
+    const botones = [...el.querySelectorAll('.nube-clase')];
+    const i = botones.indexOf(document.activeElement);
+    const salto = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!salto || i < 0) return;
+    e.preventDefault();
+    botones[(i + salto + botones.length) % botones.length].focus();
+  });
+  el.addEventListener('focusout', (e) => {
+    if (e.relatedTarget && !el.contains(e.relatedTarget)) cerrarNubeClases();
+  });
+
+  nubeClases = { el, ancla };
+  document.addEventListener('pointerdown', alPresionarFueraNube, true);
+  document.addEventListener('keydown', alPresionarTeclaNube, true);
+  (el.querySelector('.actual') || el.querySelector('.nube-clase')).focus();
+}
+
+const CAMPOS_EDITABLES = {
+  nombre: { label: 'Nombre completo', placeholder: 'NOMBRES Y APELLIDOS', requerido: true },
+  rut: { label: 'RUT', placeholder: '12.345.678-9', requerido: true },
+  contacto: { label: 'Teléfono celular', placeholder: '+56 9 XXXX XXXX' },
+  clase: { label: 'Clase', placeholder: 'B, C, A2...' },
+};
+
+function valorCampoCita(b, campo) {
+  if (campo === 'nombre') return nom(b.nombre) || '';
+  return b[campo] || '';
+}
+
+function normalizarCampoCita(campo, valor) {
+  const limpio = valor.trim();
+  if (campo === 'nombre') return limpio.toUpperCase();
+  if (campo === 'clase') return limpio.toUpperCase() || 'B';
+  return limpio;
+}
+
+async function guardarCampoCita(b, campo, valor) {
+  let slot = b;
+  try { slot = await api(`/agenda/${b.id}`); } catch (_) {}
+  const payload = { ...(slot || {}), [campo]: valor };
+  const enviar = (body) => api(`/agenda/${b.id}`, { method: 'PUT', body });
+
+  let r;
+  try {
+    r = await enviar(payload);
+  } catch (err) {
+    if (!(err.status === 409 && err.data && err.data.codigo === 'TERCER_INTENTO')) throw err;
+    const motivo = await pedirAutorizacionTercerIntento(err.data);
+    if (!motivo) return false;
+    r = await enviar({ ...payload, autorizar_tercer_intento: { motivo } });
+  }
+  (r.avisos || []).forEach((a) => toast(a, 'err'));
+  return true;
+}
+
+async function liberarCupoCita(b) {
+  const desc = `${nom(b.nombre) || b.rut || 'cita'} (${fFecha(b.fecha)} ${b.hora})`;
+  if (!confirm(`¿Estás seguro de liberar este cupo de "${desc}"?\n\nEl cupo quedará libre y disponible para ser citado nuevamente.`)) return;
+  try {
+    await api(`/agenda/${b.id}/liberar`, { method: 'POST', body: { motivo: 'Liberado desde edición rápida en planilla' } });
+    toast('Cupo liberado exitosamente', 'ok');
+    if (window.renderAgenda) renderAgenda();
+  } catch (e) {
+    toast(e.message, 'err');
+  }
+}
+
+// Una sola barra de scroll lateral: la del pie del marco; sincronizada con la tabla
+function crearBarraLateralTabla(scrollEl) {
+  const barra = document.createElement('div');
+  barra.className = 'tabla-agenda-barra-lateral';
+  barra.innerHTML = '<div></div>';
+  scrollEl.after(barra);
+
+  const ajustar = () => {
+    barra.firstElementChild.style.width = `${scrollEl.scrollWidth}px`;
+    barra.hidden = scrollEl.scrollWidth <= scrollEl.clientWidth;
+  };
+  barra.onscroll = () => { scrollEl.scrollLeft = barra.scrollLeft; };
+  scrollEl.onscroll = () => { barra.scrollLeft = scrollEl.scrollLeft; };
+
+  const observer = new ResizeObserver(ajustar);
+  observer.observe(scrollEl);
+  ajustar();
+  return { observer };
+}
+
 function pintarTablaAgenda(cont, filas, fecha, exs) {
   cont.className = 'tabla-agenda-wrap';
   cont.style.gridTemplateColumns = '';
-
-  const fechasSet = new Set(filas.map((f) => f.fecha).filter(Boolean));
-  const esRangoFechas = fechasSet.size > 1;
 
   // Ordenar filas por fecha (si hay rango), hora ascendente y luego examinador
   const ordenadas = [...filas].sort((a, b) => {
@@ -251,7 +405,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         <table class="tabla-agenda-elegante" id="tabla-agenda-main">
           <thead>
             <tr>
-              <th class="th-hora ${esRangoFechas ? 'es-rango' : ''}">${esRangoFechas ? 'FECHA / HORA' : 'HORA'}</th>
+              <th class="th-hora es-rango">FECHA / HORA</th>
               <th class="th-nombre">NOMBRE DE CONTRIBUYENTE</th>
               <th class="th-rut">RUT</th>
               <th class="th-examinador">EXAMINADOR</th>
@@ -260,26 +414,13 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
               <th class="th-avisos">AVISADO</th>
               <th class="th-confirmar">CONFIRMAR</th>
               <th class="th-resultado">RESULTADO</th>
+              <th class="th-accion">ACCIÓN</th>
             </tr>
           </thead>
           <tbody>
   `;
 
-  let fechaAnterior = null;
   for (const b of ordenadas) {
-    if (esRangoFechas && b.fecha && b.fecha !== fechaAnterior) {
-      fechaAnterior = b.fecha;
-      html += `
-        <tr class="fila-separador-fecha no-hover" data-fecha="${esc(b.fecha)}">
-          <td colspan="9">
-            <div class="separador-fecha-content">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" style="vertical-align:middle;margin-right:6px"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              <span>${esc(fFechaDia(b.fecha))}</span>
-            </div>
-          </td>
-        </tr>
-      `;
-    }
 
     const ocupada = Boolean(b.rut || b.nombre);
     const bloqueada = Boolean(b.bloqueado);
@@ -297,8 +438,8 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     if (bloqueada) {
       html += `
         <tr class="fila-agenda-tabla fila-bloqueada" data-id="${b.id}" data-tipo="bloqueada" data-examinador="${b.examinador_id}">
-          <td class="td-hora ${esRangoFechas ? 'es-rango' : ''}">
-            ${esRangoFechas ? `<div class="fecha-slot-tabla">${esc(fFecha(b.fecha))}</div>` : ''}
+          <td class="td-hora es-rango">
+            <div class="fecha-slot-tabla">${esc(fFechaAgenda(b.fecha))}</div>
             <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
               ${esc(b.hora)}
               ${pesada ? '<span class="et-d">D·A5</span>' : ''}
@@ -314,13 +455,14 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           <td class="td-avisos text-muted">—</td>
           <td class="td-confirmar text-muted">—</td>
           <td class="td-resultado"><span class="badge-bloq-tag">No disponible</span></td>
+          <td class="td-accion text-muted">—</td>
         </tr>
       `;
     } else if (!ocupada) {
       html += `
         <tr class="fila-agenda-tabla fila-libre" data-id="${b.id}" data-tipo="libre" data-examinador="${b.examinador_id}">
-          <td class="td-hora ${esRangoFechas ? 'es-rango' : ''}">
-            ${esRangoFechas ? `<div class="fecha-slot-tabla">${esc(fFecha(b.fecha))}</div>` : ''}
+          <td class="td-hora es-rango">
+            <div class="fecha-slot-tabla">${esc(fFechaAgenda(b.fecha))}</div>
             <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
               ${esc(b.hora)}
               ${pesada ? '<span class="et-d">D·A5</span>' : ''}
@@ -338,6 +480,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           <td class="td-resultado">
             <button type="button" class="btn-agendar-tabla" data-id="${b.id}" title="Agendar cita en este bloque">+ Agendar cita</button>
           </td>
+          <td class="td-accion"></td>
         </tr>
       `;
     } else {
@@ -360,8 +503,8 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
 
       html += `
         <tr class="fila-agenda-tabla fila-ocupada ${resCls}" data-id="${b.id}" data-tipo="ocupada" data-examinador="${b.examinador_id}">
-          <td class="td-hora ${esRangoFechas ? 'es-rango' : ''}">
-            ${esRangoFechas ? `<div class="fecha-slot-tabla">${esc(fFecha(b.fecha))}</div>` : ''}
+          <td class="td-hora es-rango">
+            <div class="fecha-slot-tabla">${esc(fFechaAgenda(b.fecha))}</div>
             <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
               ${esc(b.hora)}
               ${pesada ? '<span class="et-d">D·A5</span>' : ''}
@@ -371,32 +514,28 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
             <div class="nombre-cell-box">
               <div class="nombre-cell-top">
                 ${problema ? `<span class="alerta-dato" title="${esc(problema)}">⚠</span>` : ''}
-                <span class="nombre-contribuyente">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
+                <span class="nombre-contribuyente" data-valor="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
               </div>
               <div class="nombre-cell-sub">
                 ${plazoHtml ? `<span class="plazo-badge-wrap">${plazoHtml}</span>` : ''}
                 ${(b.alerts || []).length ? `<span class="slot-alertas-mini">${alertasHtml(b)}</span>` : ''}
-                ${b.funcionario ? `<span class="slot-func" title="Atendido por ${esc(b.funcionario)}"><svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/></svg> ${esc(b.funcionario)}</span>` : ''}
               </div>
             </div>
           </td>
           <td class="td-rut">
             <div class="rut-cell-box">
-              <button type="button" class="btn-lapiz-editar" data-id="${b.id}" title="Modificar datos personales en esta planilla">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-              </button>
-              <span class="rut-txt num">${rutFmt}</span>
+              <span class="rut-txt num" data-valor="rut">${rutFmt}</span>
             </div>
           </td>
           <td class="td-sede">
             <span class="sede-pill-badge">${esc(examNombre)}</span>
           </td>
           <td class="td-clase">
-            <span class="clase-badge-tabla">${esc(b.clase || '—')}</span>
+            <span class="clase-badge-tabla" data-valor="clase">${esc(b.clase || '—')}</span>
           </td>
           <td class="td-contacto">
             <div class="contacto-col-wrap">
-              ${telFmt ? `<span class="tel-txt num">${telFmt}</span>` : '<span class="sin-tel text-muted">—</span>'}
+              ${telFmt ? `<span class="tel-txt num" data-valor="contacto">${telFmt}</span>` : '<span class="sin-tel text-muted" data-valor="contacto">—</span>'}
               ${telWa ? `<a href="sms:+${telWa}?body=${encodeURIComponent(mensajeSms)}" class="btn-sms-tabla" onclick="event.stopPropagation()" title="Enviar mensaje de texto (SMS) a este postulante"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:middle;margin-right:3px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Mensaje de texto</a>` : ''}
             </div>
           </td>
@@ -432,7 +571,14 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
                 <span class="sr sr-r ${b.resultado === 'REPROBADO' ? 'on' : ''}" role="button" tabindex="0" data-r="REPROBADO" title="Marcar Reprobado">Reprobó</span>
                 <span class="sr sr-n ${noAsiste ? 'on' : ''}" role="button" tabindex="0" data-r="NO ASISTIO" title="Marcar No asistió">No asistió</span>
               </div>
-              <button type="button" class="btn-tabla-reagendar" data-id="${b.id}" title="Derivar directamente a Reagendar">
+            </div>
+          </td>
+          <td class="td-accion">
+            <div class="accion-celda-wrap">
+              <button type="button" class="btn-tabla-liberar" data-id="${b.id}" title="Liberar este cupo" aria-label="Liberar este cupo">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+              </button>
+              <button type="button" class="btn-tabla-reagendar" data-id="${b.id}" title="Derivar directamente a Reagendar" aria-label="Derivar directamente a Reagendar">
                 <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
               </button>
             </div>
@@ -453,200 +599,90 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
 
   const scrollEl = cont.querySelector('.tabla-agenda-scroll');
   if (scrollEl) scrollEl.scrollLeft = 0;
+  cont._barraLateral?.observer.disconnect();
+  cont._barraLateral = scrollEl ? crearBarraLateralTabla(scrollEl) : null;
 
   const mapaSlots = new Map(ordenadas.map((item) => [item.id, item]));
 
-  function abrirEditorInlineAgenda(tr, b, examNombre) {
-    const next = tr.nextElementSibling;
-    if (next && next.classList.contains('fila-inline-editor-agenda')) {
-      next.remove();
-      tr.classList.remove('row-activa');
+  function iniciarEdicionCelda(tr, campo) {
+    const b = mapaSlots.get(Number(tr.dataset.id));
+    const cfg = CAMPOS_EDITABLES[campo];
+    const valorEl = tr.querySelector(`[data-valor="${campo}"]`);
+    if (!b || !cfg || !valorEl || tr.querySelector('.celda-edicion')) return;
+    if (campo === 'clase') {
+      abrirNubeClases(valorEl, b);
       return;
     }
 
-    // Cerrar otros editores abiertos en la tabla
-    cont.querySelectorAll('.fila-inline-editor-agenda').forEach((el) => el.remove());
-    cont.querySelectorAll('.fila-agenda-tabla').forEach((r) => r.classList.remove('row-activa'));
-    tr.classList.add('row-activa');
+    const original = valorEl.cloneNode(true);
+    const editor = document.createElement('span');
+    editor.className = 'celda-edicion';
+    editor.dataset.campo = campo;
+    editor.innerHTML = `<input type="text" class="celda-edicion-input" value="${esc(valorCampoCita(b, campo))}" placeholder="${esc(cfg.placeholder)}" aria-label="${esc(cfg.label)}" autocomplete="off">`;
+    valorEl.replaceWith(editor);
 
-    const editTr = document.createElement('tr');
-    editTr.className = 'fila-inline-editor fila-inline-editor-agenda';
-    editTr.dataset.editorId = String(b.id);
-    editTr.innerHTML = `
-      <td colspan="9">
-        <div class="inline-editor-card">
-          <div class="inline-editor-encabezado">
-            <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
-              <strong style="color:var(--azul);font-size:13.5px">✏️ Modificar datos personales en la planilla</strong>
-              <span class="muted" style="font-size:12px">· Cita: ${esc(fFecha(b.fecha))} a las ${esc(b.hora)} hrs · Examinador: ${esc(examNombre)}</span>
-            </div>
-            <button type="button" class="btn chico sec btn-iea-cerrar" title="Cerrar editor">✖ Cerrar</button>
-          </div>
-          <div class="inline-editor-form">
-            <div class="inline-campo" style="max-width:150px">
-              <label>RUT *</label>
-              <input type="text" id="iea-rut-${b.id}" value="${esc(b.rut || '')}" placeholder="12.345.678-9" autocomplete="off" />
-            </div>
-            <div class="inline-campo" style="flex:2;min-width:210px">
-              <label>Nombre completo *</label>
-              <input type="text" id="iea-nom-${b.id}" value="${esc(nom(b.nombre) || '')}" placeholder="NOMBRES Y APELLIDOS" style="text-transform:uppercase;font-weight:600" autocomplete="off" />
-            </div>
-            <div class="inline-campo" style="max-width:160px">
-              <label>Teléfono celular</label>
-              <input type="text" id="iea-tel-${b.id}" value="${esc(b.contacto || '')}" placeholder="+56 9 XXXX XXXX" inputmode="tel" autocomplete="off" />
-            </div>
-            <div class="inline-campo" style="flex:1.5;min-width:190px">
-              <label>Correo Electrónico</label>
-              <input type="email" id="iea-mail-${b.id}" value="${esc(b.correo || '')}" placeholder="nombre@correo.com" autocomplete="off" />
-            </div>
-            <div class="inline-campo" style="max-width:120px">
-              <label>Clase *</label>
-              <input type="text" id="iea-clase-${b.id}" value="${esc(b.clase || 'B')}" placeholder="B, C, A2..." style="text-transform:uppercase;font-weight:700" autocomplete="off" />
-            </div>
-            <div class="inline-campo" style="flex:2;min-width:200px">
-              <label>Observaciones</label>
-              <input type="text" id="iea-obs-${b.id}" value="${esc(b.comentarios || '')}" placeholder="Notas o detalles adicionales" autocomplete="off" />
-            </div>
-          </div>
-          <div class="inline-editor-footer">
-            <button type="button" class="btn chico" id="iea-save-${b.id}" style="background:var(--azul);color:#fff;font-weight:700">💾 Guardar cambios en planilla</button>
-            <button type="button" class="btn chico sec" id="iea-cancel-${b.id}">✖ Cancelar</button>
-            <span style="border-left:1px solid var(--linea);height:20px;margin:0 .3rem;display:inline-block"></span>
-            <button type="button" class="btn chico sec" id="iea-reagendar-${b.id}" title="Reagendar postulante">🔄 Reagendar</button>
-            <button type="button" class="btn chico peligro" id="iea-liberar-${b.id}" title="Liberar este cupo">🗑️ Liberar cupo</button>
-          </div>
-        </div>
-      </td>
-    `;
-    tr.after(editTr);
+    const inp = editor.querySelector('.celda-edicion-input');
+    // El campo se ajusta al largo del texto (ej. un telefono), sin ancho fijo
+    const ajustarAncho = () => { inp.style.width = `${Math.max(8, inp.value.length + 2)}ch`; };
+    ajustarAncho();
+    inp.addEventListener('input', ajustarAncho);
+    let guardando = false;
+    let cancelado = false;
+    const cancelar = () => {
+      if (guardando) return;
+      cancelado = true;
+      editor.replaceWith(original);
+    };
 
-    const rutInp = editTr.querySelector(`#iea-rut-${b.id}`);
-    const nomInp = editTr.querySelector(`#iea-nom-${b.id}`);
-    const telInp = editTr.querySelector(`#iea-tel-${b.id}`);
-    const mailInp = editTr.querySelector(`#iea-mail-${b.id}`);
-    const claseInp = editTr.querySelector(`#iea-clase-${b.id}`);
-    const obsInp = editTr.querySelector(`#iea-obs-${b.id}`);
-    const btnSave = editTr.querySelector(`#iea-save-${b.id}`);
-    const btnCancel = editTr.querySelector(`#iea-cancel-${b.id}`);
-    const btnCerrar = editTr.querySelector('.btn-iea-cerrar');
-    const btnReagendar = editTr.querySelector(`#iea-reagendar-${b.id}`);
-    const btnLiberar = editTr.querySelector(`#iea-liberar-${b.id}`);
+    if (campo === 'rut' && window.autoformatoRut) autoformatoRut(inp);
+    if (campo === 'rut' && window.rutEnVivo) rutEnVivo(inp);
 
-    if (rutInp && window.autoformatoRut) autoformatoRut(rutInp);
-    if (rutInp && window.rutEnVivo) rutEnVivo(rutInp);
-
-    const cerrar = () => { editTr.remove(); tr.classList.remove('row-activa'); };
-    btnCancel.onclick = cerrar;
-    btnCerrar.onclick = cerrar;
-
-    editTr.querySelectorAll('input').forEach((inp) => {
-      inp.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') { ev.preventDefault(); btnSave.click(); }
-        if (ev.key === 'Escape') { ev.preventDefault(); cerrar(); }
-      });
-    });
-
-    if (nomInp) nomInp.focus();
-
-    if (btnLiberar) {
-      btnLiberar.onclick = async () => {
-        const desc = `${nom(b.nombre) || b.rut || 'cita'} (${fFecha(b.fecha)} ${b.hora})`;
-        if (!confirm(`¿Estás seguro de liberar este cupo de "${desc}"?\n\nEl cupo quedará libre y disponible para ser citado nuevamente.`)) return;
-        try {
-          await api(`/agenda/${b.id}/liberar`, { method: 'POST', body: { motivo: 'Liberado desde edición rápida en planilla' } });
-          toast('Cupo liberado exitosamente', 'ok');
-          if (window.renderAgenda) renderAgenda();
-        } catch (e) { toast(e.message, 'err'); }
-      };
-    }
-
-    if (btnReagendar) {
-      btnReagendar.onclick = async () => {
-        if (!confirm('¿Deseas derivar a este postulante a la Lista de Espera para reagendarle un nuevo cupo?')) return;
-        try {
-          await api(`/agenda/${b.id}/reagendar`, { method: 'POST', body: { motivo: 'POSTULANTE SOLICITA CAMBIO' } });
-          toast('Postulante enviado a Lista de Espera con alta prioridad', 'ok');
-          sessionStorage.setItem('le_destacado', String(b.id));
-          actualizarBadgeReagendar();
-          irA('espera');
-        } catch (e) { toast(e.message, 'err'); }
-      };
-    }
-
-    btnSave.onclick = async () => {
-      const nombreVal = nomInp.value.trim().toUpperCase();
-      const rutVal = rutInp.value.trim();
-      const telVal = telInp.value.trim();
-      const mailVal = mailInp.value.trim().toLowerCase();
-      const claseVal = claseInp.value.trim().toUpperCase() || 'B';
-      const obsVal = obsInp.value.trim();
-
-      if (!nombreVal) {
-        toast('El nombre completo es obligatorio', 'err');
-        nomInp.focus();
+    // origen: 'enter' | 'tab' | 'fuera' (raton, touch o cambio de foco)
+    const guardar = async (origen) => {
+      if (guardando || cancelado) return;
+      const valor = normalizarCampoCita(campo, inp.value);
+      if (cfg.requerido && !valor) {
+        if (origen === 'fuera') {
+          cancelar();
+          return;
+        }
+        toast(`${cfg.label} es obligatorio`, 'err');
+        inp.focus();
         return;
       }
-
-      btnSave.disabled = true;
-      btnSave.textContent = 'Guardando...';
-
+      if (valor === valorCampoCita(b, campo)) {
+        cancelar();
+        return;
+      }
+      guardando = true;
+      inp.disabled = true;
       try {
-        let slotData = b;
-        try {
-          slotData = await api(`/agenda/${b.id}`);
-        } catch (_) {}
-
-        const bodyPayload = {
-          ...(slotData || {}),
-          rut: rutVal,
-          nombre: nombreVal,
-          contacto: telVal,
-          correo: mailVal,
-          clase: claseVal,
-          comentarios: obsVal || null,
-        };
-
-        let r;
-        try {
-          r = await api(`/agenda/${b.id}`, { method: 'PUT', body: bodyPayload });
-        } catch (err) {
-          if (err.status === 409 && err.data && err.data.codigo === 'TERCER_INTENTO') {
-            const motivo = await pedirAutorizacionTercerIntento(err.data);
-            if (!motivo) {
-              btnSave.disabled = false;
-              btnSave.textContent = '💾 Guardar cambios en planilla';
-              return;
-            }
-            r = await api(`/agenda/${b.id}`, {
-              method: 'PUT',
-              body: { ...bodyPayload, autorizar_tercer_intento: { motivo } },
-            });
-          } else {
-            throw err;
-          }
+        const guardado = await guardarCampoCita(b, campo, valor);
+        if (!guardado) {
+          guardando = false;
+          inp.disabled = false;
+          inp.focus();
+          return;
         }
-
-        (r.avisos || []).forEach((a) => toast(a, 'err'));
-        toast('Datos personales actualizados exitosamente en la planilla', 'ok');
+        toast('Dato actualizado en la planilla', 'ok');
         if (window.renderAgenda) renderAgenda();
       } catch (e) {
-        btnSave.disabled = false;
-        btnSave.textContent = '💾 Guardar cambios en planilla';
+        guardando = false;
+        inp.disabled = false;
+        inp.focus();
         toast(e.message, 'err');
       }
     };
-  }
 
-  const sincronizarVisibilidadEditores = () => {
-    cont.querySelectorAll('.fila-inline-editor-agenda').forEach((ed) => {
-      const parent = cont.querySelector(`.fila-agenda-tabla[data-id="${ed.dataset.editorId}"]`);
-      if (parent && parent.style.display === 'none') {
-        ed.style.display = 'none';
-      } else {
-        ed.style.display = '';
-      }
+    inp.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); guardar('enter'); }
+      if (ev.key === 'Escape') { ev.preventDefault(); cancelar(); }
+      if (ev.key === 'Tab') guardar('tab');
     });
-  };
+    inp.addEventListener('blur', () => guardar('fuera'));
+    inp.focus();
+    inp.select();
+  }
 
   // 1. Filtro rápido de búsqueda en tiempo real
   const inpBusc = document.querySelector('#tabla-busc-input');
@@ -677,7 +713,6 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         }
         sep.style.display = hasVisible ? '' : 'none';
       });
-      sincronizarVisibilidadEditores();
     };
     inpBusc.oninput = filtrarBuscador;
     if (inpBusc.value) filtrarBuscador();
@@ -712,7 +747,6 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         }
         sep.style.display = hasVisible ? '' : 'none';
       });
-      sincronizarVisibilidadEditores();
     };
   });
 
@@ -721,16 +755,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     btnPillActivo.click();
   }
 
-  // 3. Selección y edición inline de fila en la tabla
-  const toggleFilaEditor = (tr) => {
-    const id = Number(tr.dataset.id);
-    const b = mapaSlots.get(id);
-    if (!b || (!b.rut && !b.nombre)) return;
-    const examObj = META.examinadores.find((e) => e.id === b.examinador_id);
-    const examNombre = b.examinador || (examObj ? examObj.nombre : 'AV. ARGENTINA');
-    abrirEditorInlineAgenda(tr, b, examNombre);
-  };
-
+  // 3. Filas: se seleccionan y cada dato se edita con su propio lápiz
   cont.querySelectorAll('.fila-agenda-tabla').forEach((tr) => {
     tr.onclick = (e) => {
       if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.sr') || e.target.closest('input') || e.target.closest('label')) return;
@@ -738,22 +763,23 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         dialogoDesbloquearDia();
         return;
       }
-      if (tr.classList.contains('fila-ocupada')) {
-        toggleFilaEditor(tr);
-        return;
-      }
       cont.querySelectorAll('.fila-agenda-tabla').forEach((r) => r.classList.remove('row-activa'));
       tr.classList.add('row-activa');
     };
   });
 
-  cont.querySelectorAll('.btn-lapiz-editar').forEach((btn) => {
-    btn.onclick = (e) => {
+  cont.onclick = (e) => {
+    const liberar = e.target.closest('.btn-tabla-liberar');
+    if (liberar) {
       e.stopPropagation();
-      const tr = btn.closest('.fila-agenda-tabla');
-      if (tr) toggleFilaEditor(tr);
-    };
-  });
+      liberarCupoCita(mapaSlots.get(Number(liberar.dataset.id)));
+      return;
+    }
+    const dato = e.target.closest('.fila-ocupada [data-valor]');
+    if (!dato) return;
+    e.stopPropagation();
+    iniciarEdicionCelda(dato.closest('.fila-ocupada'), dato.dataset.valor);
+  };
 
   cont.querySelectorAll('.btn-agendar-tabla').forEach((btn) => {
     btn.onclick = (e) => {
