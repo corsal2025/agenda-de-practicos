@@ -2341,6 +2341,8 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
 #view #tabla-disponibles-main th:nth-child(5) { width: 20% !important; }
 #view #tabla-disponibles-main th,
 #view #tabla-disponibles-main td { text-align: center !important; vertical-align: middle; }
+/* Separador entre dias: linea gruesa y de color sobre la primera hora de cada dia */
+#view #tabla-disponibles-main tbody tr.dia-inicio > td { border-top: 3px solid var(--azul, #1e40af) !important; }
 #tabla-disponibles-main td:nth-child(1) { white-space: nowrap; }
 /* Lista de espera: el RUT no debe partirse en dos lineas. */
 #le-body td.num { white-space: nowrap; }
