@@ -314,6 +314,7 @@ const CAMPOS_EDITABLES = {
   nombre: { label: 'Nombre completo', placeholder: 'NOMBRES Y APELLIDOS', requerido: true },
   rut: { label: 'RUT', placeholder: '12.345.678-9', requerido: true },
   contacto: { label: 'Teléfono celular', placeholder: '+56 9 XXXX XXXX' },
+  correo: { label: 'Correo electrónico', placeholder: 'nombre@correo.cl' },
   clase: { label: 'Clase', placeholder: 'B, C, A2...' },
 };
 
@@ -403,6 +404,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
               <th class="th-examinador">EXAMINADOR</th>
               <th class="th-clase">CLASE *</th>
               <th class="th-contacto">CONTACTO</th>
+              <th class="th-correo">CORREO</th>
               <th class="th-avisos">AVISADO</th>
               <th class="th-confirmar">CONFIRMAR</th>
               <th class="th-resultado">RESULTADO</th>
@@ -444,6 +446,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           <td class="td-sede"><span class="sede-pill-badge">${esc(examNombre)}</span></td>
           <td class="td-clase text-muted">—</td>
           <td class="td-contacto text-muted">—</td>
+          <td class="td-correo text-muted">—</td>
           <td class="td-avisos text-muted">—</td>
           <td class="td-confirmar text-muted">—</td>
           <td class="td-resultado"><span class="badge-bloq-tag">No disponible</span></td>
@@ -467,6 +470,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           <td class="td-sede"><span class="sede-pill-badge">${esc(examNombre)}</span></td>
           <td class="td-clase">${pesada ? '<span class="badge dpesada">D y A5</span>' : '<span class="text-muted">—</span>'}</td>
           <td class="td-contacto text-muted">—</td>
+          <td class="td-correo text-muted">—</td>
           <td class="td-avisos text-muted">—</td>
           <td class="td-confirmar text-muted">—</td>
           <td class="td-resultado">
@@ -530,6 +534,11 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
               ${telFmt ? `<span class="tel-txt num" data-valor="contacto">${telFmt}</span>` : '<span class="sin-tel text-muted" data-valor="contacto">—</span>'}
               ${telWa ? `<a href="sms:+${telWa}?body=${encodeURIComponent(mensajeSms)}" class="btn-sms-tabla" onclick="event.stopPropagation()" title="Enviar mensaje de texto (SMS) a este postulante"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:middle;margin-right:3px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Mensaje de texto</a>` : ''}
             </div>
+          </td>
+          <td class="td-correo">
+            ${b.correo
+              ? `<span class="correo-txt" data-valor="correo" title="Clic para editar el correo">${esc(b.correo)}</span>`
+              : '<span class="sin-correo" data-valor="correo" title="Clic para ingresar el correo">+ Agregar correo</span>'}
           </td>
           <td class="td-avisos">
             <div class="slot-avisos-tabla" data-id="${b.id}" onclick="event.stopPropagation()">

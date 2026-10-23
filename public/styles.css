@@ -2797,6 +2797,35 @@ body:has(#a-grid.tabla-agenda-wrap) {
   min-width: 215px;
 }
 
+/* Correo: ancho fijo; si no cabe, se corta con puntos suspensivos (el valor completo sale en el title) */
+.tabla-agenda-elegante thead th.th-correo,
+.tabla-agenda-elegante tbody td.td-correo {
+  width: 230px;
+  min-width: 230px;
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap !important;
+}
+
+.correo-txt {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tinta, #1f2937);
+  cursor: pointer;
+}
+
+.sin-correo {
+  display: inline-block;
+  padding: 2px 10px;
+  border: 1px dashed #2563eb;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2563eb;
+  cursor: pointer;
+}
+
 .tabla-agenda-elegante tbody td.td-avisos {
   width: 145px;
   min-width: 145px;
