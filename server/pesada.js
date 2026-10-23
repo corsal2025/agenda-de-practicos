@@ -59,9 +59,10 @@ function liberar(fecha, examinador_id) {
 // fecha) sigue ocupado por una clase D/A5: liberarlo dejaria al examinador con otra cita encima.
 function bloqueoAutoVigente(b) {
   if (!b || !b.bloqueado || b.bloqueo_motivo !== MOTIVO_AUTO) return false;
-  const base = db.prepare('SELECT * FROM agenda WHERE fecha = ? AND examinador_id = ? AND hora = ?')
-    .get(b.fecha, b.examinador_id, HORA_D_A5);
-  return Boolean(base && (base.rut || base.nombre) && esPesadaEnHoraValida(base));
+  // A las 12:30 puede haber varios cupos: alcanza con que alguno tenga la clase pesada
+  const bases = db.prepare('SELECT * FROM agenda WHERE fecha = ? AND examinador_id = ? AND hora = ?')
+    .all(b.fecha, b.examinador_id, HORA_D_A5);
+  return bases.some((base) => (base.rut || base.nombre) && esPesadaEnHoraValida(base));
 }
 
 // Bloques dependientes (13:00/13:30) que ya tienen una cita real ese

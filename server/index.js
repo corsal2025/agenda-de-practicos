@@ -696,6 +696,27 @@ app.post('/api/agenda/:id/liberar', wrap((req, res) => {
   res.json({ ok: true, encolado: teniaPersona });
 }));
 
+// ---------- VARIAS PERSONAS EN LA MISMA HORA ----------
+// Crea un cupo extra (cupo = MAX+1) en el mismo (fecha, hora, examinador) del bloque :id, libre.
+app.post('/api/agenda/:id/persona', wrap((req, res) => {
+  const id = Number(req.params.id);
+  const origen = db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
+  if (!origen) throw bad('Bloque no encontrado', 404);
+  if (origen.bloqueado) throw bad('El bloque está bloqueado.', 409);
+
+  const nuevoId = tx(() => {
+    const { maximo } = db.prepare(
+      'SELECT COALESCE(MAX(cupo), 1) AS maximo FROM agenda WHERE fecha = ? AND hora = ? AND examinador_id = ?'
+    ).get(origen.fecha, origen.hora, origen.examinador_id);
+    const cupo = maximo + 1;
+    const r = db.prepare('INSERT INTO agenda (fecha, hora, examinador_id, cupo) VALUES (?, ?, ?, ?)')
+      .run(origen.fecha, origen.hora, origen.examinador_id, cupo);
+    return { id: Number(r.lastInsertRowid), cupo };
+  });
+  logReq(req, nuevoId.id, 'generar', `cupo ${nuevoId.cupo} en ${origen.fecha} ${origen.hora} (examinador ${origen.examinador_id})`);
+  res.json({ ok: true, bloque: traer(nuevoId.id) });
+}));
+
 // ---------- LISTA DE ESPERA: sugerencias para un cupo libre ----------
 // Solo sugiere candidatos; la asignacion usa /cola-reagendar/:id/asignar o /agenda/:id/reagendar.
 app.get('/api/sugerencias-cupo/:id', wrap((req, res) => {

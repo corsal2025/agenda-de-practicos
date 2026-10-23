@@ -24,13 +24,15 @@ CREATE TABLE IF NOT EXISTS catalogos (
   PRIMARY KEY (tipo, valor)
 );
 
--- Una fila por bloque de la agenda: (fecha, hora, examinador).
+-- Una fila por cupo de la agenda: (fecha, hora, examinador, cupo).
+-- cupo 1 es el bloque original; cupo 2, 3... son personas extra en la misma hora.
 -- El bloque esta OCUPADO cuando tiene rut o nombre.
 CREATE TABLE IF NOT EXISTS agenda (
   id                    INTEGER PRIMARY KEY,
   fecha                 TEXT NOT NULL,             -- YYYY-MM-DD
   hora                  TEXT NOT NULL,             -- HH:MM
   examinador_id         INTEGER NOT NULL REFERENCES examinadores(id),
+  cupo                  INTEGER NOT NULL DEFAULT 1, -- 1 = bloque original; 2, 3... = personas extra
   rut                   TEXT,
   nombre                TEXT,
   clase                 TEXT,
@@ -52,7 +54,7 @@ CREATE TABLE IF NOT EXISTS agenda (
   agendado_en           TEXT,                      -- timestamp de la primera vez que se ocupo
   creado_en             TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   actualizado_en        TEXT NOT NULL DEFAULT (datetime('now','localtime')),
-  UNIQUE (fecha, hora, examinador_id)
+  UNIQUE (fecha, hora, examinador_id, cupo)
 );
 
 CREATE INDEX IF NOT EXISTS idx_agenda_fecha ON agenda(fecha);

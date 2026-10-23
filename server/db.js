@@ -3,6 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const { DB_PATH, EXAMINADORES, FUNCIONARIOS, CATALOGOS } = require('./config');
+const { DIR: DIR_BACKUPS } = require('./backup');
+const { ahoraTS } = require('./fechas');
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
@@ -60,6 +62,77 @@ asegurarColumna('movimientos', 'actor', 'actor TEXT');
 asegurarColumna('funcionarios', 'usuario', 'usuario TEXT');
 asegurarColumna('funcionarios', 'clave_hash', 'clave_hash TEXT');
 asegurarColumna('funcionarios', 'rol', "rol TEXT NOT NULL DEFAULT 'staff'");
+
+// --- Migracion: cupo (varias personas en la misma hora) ---
+// Bases anteriores tienen UNIQUE (fecha, hora, examinador_id) y no tienen cupo. Se reconstruye
+// la tabla con el UNIQUE nuevo y cupo = 1 para todas las filas existentes. Idempotente: si ya
+// existe cupo no hace nada. Las columnas se copian desde la base vieja, sin listarlas a mano.
+const INDICES_AGENDA = [
+  'CREATE INDEX IF NOT EXISTS idx_agenda_fecha ON agenda(fecha)',
+  'CREATE INDEX IF NOT EXISTS idx_agenda_rut   ON agenda(rut)',
+  'CREATE INDEX IF NOT EXISTS idx_agenda_exam  ON agenda(examinador_id)',
+  'CREATE INDEX IF NOT EXISTS idx_agenda_agend ON agenda(agendado_en)',
+];
+
+// DDL de agenda_nueva: mismas columnas que la tabla vieja + cupo y el UNIQUE nuevo.
+function ddlAgendaNueva(columnas, fks) {
+  const defs = columnas.map((c) => {
+    const partes = [c.name, c.type];
+    if (c.pk) partes.push('PRIMARY KEY');
+    if (c.notnull) partes.push('NOT NULL');
+    // PRAGMA devuelve la expresion sin parentesis (datetime(...)): SQLite los exige en DEFAULT.
+    if (c.dflt_value !== null) partes.push(`DEFAULT (${c.dflt_value})`);
+    const fk = fks.find((f) => f.from === c.name);
+    if (fk) partes.push(`REFERENCES ${fk.table}${fk.to ? `(${fk.to})` : ''}`);
+    return partes.filter(Boolean).join(' ');
+  });
+  defs.push('cupo INTEGER NOT NULL DEFAULT 1');
+  defs.push('UNIQUE (fecha, hora, examinador_id, cupo)');
+  return `CREATE TABLE agenda_nueva (\n  ${defs.join(',\n  ')}\n)`;
+}
+
+function copiaPreCupo() {
+  fs.mkdirSync(DIR_BACKUPS, { recursive: true });
+  // En WAL, copiar solo el .db puede dejar fuera cambios que siguen en el -wal: se vuelcan antes.
+  db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+  const base = `agenda-${ahoraTS().replace(' ', 'T').replace(/:/g, '-')}-pre-cupo`;
+  let destino = path.join(DIR_BACKUPS, `${base}.db`);
+  for (let n = 2; fs.existsSync(destino); n++) destino = path.join(DIR_BACKUPS, `${base}-${n}.db`);
+  fs.copyFileSync(DB_PATH, destino);
+  return destino;
+}
+
+function migrarCupoAgenda() {
+  const columnas = db.prepare('PRAGMA table_info(agenda)').all();
+  if (columnas.some((c) => c.name === 'cupo')) return;
+
+  copiaPreCupo();
+  const fks = db.prepare('PRAGMA foreign_key_list(agenda)').all();
+  const lista = columnas.map((c) => c.name).join(', ');
+
+  // foreign_keys no se puede cambiar dentro de una transaccion: se apaga antes y se restaura al final.
+  db.exec('PRAGMA foreign_keys = OFF');
+  try {
+    db.exec('BEGIN');
+    try {
+      db.exec('DROP TABLE IF EXISTS agenda_nueva');
+      db.exec(ddlAgendaNueva(columnas, fks));
+      db.exec(`INSERT INTO agenda_nueva (${lista}, cupo) SELECT ${lista}, 1 FROM agenda`);
+      db.exec('DROP TABLE agenda');
+      db.exec('ALTER TABLE agenda_nueva RENAME TO agenda');
+      for (const sql of INDICES_AGENDA) db.exec(sql);
+      const huerfanas = db.prepare('PRAGMA foreign_key_check').all();
+      if (huerfanas.length) throw new Error(`Migracion de agenda: ${huerfanas.length} clave(s) foranea(s) invalida(s)`);
+      db.exec('COMMIT');
+    } catch (e) {
+      try { db.exec('ROLLBACK'); } catch (_) { /* ignore */ }
+      throw e;
+    }
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+}
+migrarCupoAgenda();
 
 // --- Semillas (solo si faltan) ---
 function seed() {

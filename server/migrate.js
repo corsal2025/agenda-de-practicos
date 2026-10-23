@@ -5,6 +5,7 @@ const XLSX = require('xlsx');
 const { db, tx, upsertExaminador, upsertFuncionario, log } = require('./db');
 const { generar } = require('./slots');
 const pesada = require('./pesada');
+const { reservarCupoLibre } = require('./cupos');
 const N = require('./normalizar');
 const { aISO, aHora } = require('./fechas');
 const { RAIZ } = require('./config');
@@ -116,13 +117,13 @@ const UPSERT = `
   INSERT INTO agenda (
     fecha, hora, examinador_id, rut, nombre, clase, contacto, correo, tipo_cita,
     motivo_reagendamiento, lista_espera, intento, funcionario_id, fecha_inicio_tramite,
-    confirmo_asistencia, resultado, comentarios, bloqueado, bloqueo_motivo, agendado_en
+    confirmo_asistencia, resultado, comentarios, bloqueado, bloqueo_motivo, agendado_en, cupo
   ) VALUES (
     @fecha, @hora, @examinador_id, @rut, @nombre, @clase, @contacto, @correo, @tipo_cita,
     @motivo_reagendamiento, @lista_espera, @intento, @funcionario_id, @fecha_inicio_tramite,
-    @confirmo_asistencia, @resultado, @comentarios, @bloqueado, @bloqueo_motivo, @agendado_en
+    @confirmo_asistencia, @resultado, @comentarios, @bloqueado, @bloqueo_motivo, @agendado_en, 1
   )
-  ON CONFLICT (fecha, hora, examinador_id) DO UPDATE SET
+  ON CONFLICT (fecha, hora, examinador_id, cupo) DO UPDATE SET
     bloqueado = excluded.bloqueado,
     bloqueo_motivo = excluded.bloqueo_motivo,
     rut = excluded.rut,
@@ -223,12 +224,6 @@ function importar(fuente, { limpiar = false } = {}) {
   let rescatadas = 0;
   const filasCD = hojas['CITAS DISPONIBLES'];
   if (filasCD) {
-    const upd = db.prepare(`
-      UPDATE agenda SET rut=@rut, nombre=@nombre, clase=@clase, contacto=@contacto, correo=@correo,
-        tipo_cita=@tipo_cita, funcionario_id=@funcionario_id, agendado_en=COALESCE(agendado_en, @fecha),
-        actualizado_en=datetime('now','localtime')
-      WHERE fecha=@fecha AND hora=@hora AND examinador_id=@examinador_id
-        AND rut IS NULL AND nombre IS NULL AND bloqueado = 0`);
     for (let i = 1; i < filasCD.length; i++) {
       const f = filasCD[i];
       if (!f) continue;
@@ -239,13 +234,14 @@ function importar(fuente, { limpiar = false } = {}) {
       const hora = aHora(f[2]);
       const examinador_id = upsertExaminador(N.examinador(f[15]));
       if (!fecha || !hora || !examinador_id || fecha < FECHA_MINIMA) continue;
-      const r = upd.run({
-        fecha, hora, examinador_id, rut: rr.valor, nombre: nom,
+      // Cada reserva suelta ocupa un cupo libre distinto de esa hora
+      const reservadas = reservarCupoLibre(fecha, hora, examinador_id, {
+        rut: rr.valor, nombre: nom,
         clase: N.clase(f[6]).valor, contacto: N.contacto(f[7]), correo: N.correo(f[8]),
         tipo_cita: N.tipoCita(f[10]), funcionario_id: upsertFuncionario(N.funcionario(f[13])),
       });
-      rescatadas += Number(r.changes);
-      if (Number(r.changes)) ocupadas++;
+      rescatadas += reservadas;
+      if (reservadas) ocupadas++;
     }
   }
 

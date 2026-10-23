@@ -1,4 +1,5 @@
 'use strict';
+process.env.AGENDA_DB = require('node:path').join(require('node:os').tmpdir(), `agenda-aislada-${process.pid}.db`); // nunca tocar data/
 // Logica pura de lectura de respuestas por correo. No invoca PowerShell ni Outlook.
 const test = require('node:test');
 const assert = require('node:assert/strict');
