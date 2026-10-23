@@ -553,15 +553,23 @@ app.put('/api/agenda/:id', wrap((req, res) => {
   if (!funcionario_id && body.funcionario_nombre) funcionario_id = upsertFuncionario(String(body.funcionario_nombre).trim().toUpperCase());
 
   const nombre = body.nombre ? String(body.nombre).trim().replace(/\s+/g, ' ').toUpperCase() : null;
-  // Dar hora (bloque libre -> ocupado, o cambiar la persona) exige correo valido.
-  // Citas antiguas sin correo se pueden seguir editando; un correo que cambia debe ser valido.
-  const personaNueva = Boolean(rutFmt || nombre)
-    && (bloque.rut !== rutFmt || (bloque.nombre || '') !== (nombre || ''));
-  if (personaNueva) exigirCorreo(body.correo);
-  else if (body.correo && String(body.correo).trim().toLowerCase() !== (bloque.correo || '').toLowerCase()
-    && !correoValido(body.correo)) throw bad(`Correo con formato inválido: ${String(body.correo).trim()}`);
   const estabaOcupada = Boolean(bloque.rut || bloque.nombre);
   const quedaOcupada = Boolean(rutFmt || nombre);
+  // Es otra persona solo si cambia el RUT (comparado normalizado); sin RUT en ninguno de los
+  // dos, se compara el nombre sin mayusculas ni espacios de mas. Corregir la capitalizacion
+  // del nombre del mismo RUT no cuenta como cambio.
+  const normNombre = (n) => String(n || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const rutAntes = rut.limpiar(bloque.rut);
+  const rutAhora = rut.limpiar(rutFmt);
+  const otraPersona = (rutAntes || rutAhora)
+    ? rutAntes !== rutAhora
+    : normNombre(bloque.nombre) !== normNombre(nombre);
+  const cambiaPersona = estabaOcupada !== quedaOcupada || (estabaOcupada && otraPersona);
+  // Dar hora (bloque libre -> ocupado) o cambiar de persona exige correo valido.
+  // Corregir el nombre o editar otros campos de una cita antigua sin correo no lo exige.
+  if (quedaOcupada && cambiaPersona) exigirCorreo(body.correo);
+  else if (body.correo && String(body.correo).trim().toLowerCase() !== (bloque.correo || '').toLowerCase()
+    && !correoValido(body.correo)) throw bad(`Correo con formato inválido: ${String(body.correo).trim()}`);
 
   // Si se va a pisar una cita distinta, guardar la anterior en papelera.
   if (estabaOcupada && (bloque.rut !== rutFmt || (bloque.nombre || '') !== (nombre || ''))) {
@@ -584,17 +592,6 @@ app.put('/api/agenda/:id', wrap((req, res) => {
 
   // Cambia el ocupante (se ocupa, se libera o entra otra persona): el token y las
   // banderas de correo del ocupante anterior no deben pasar al nuevo.
-  // Es otra persona solo si cambia el RUT (comparado normalizado); sin RUT en ninguno de los
-  // dos, se compara el nombre sin mayusculas ni espacios de mas. Corregir comentarios o la
-  // capitalizacion del nombre del mismo RUT no cuenta como cambio.
-  const normNombre = (n) => String(n || '').toUpperCase().replace(/\s+/g, ' ').trim();
-  const rutAntes = rut.limpiar(bloque.rut);
-  const rutAhora = rut.limpiar(rutFmt);
-  const otraPersona = (rutAntes || rutAhora)
-    ? rutAntes !== rutAhora
-    : normNombre(bloque.nombre) !== normNombre(nombre);
-  const cambiaPersona = estabaOcupada !== quedaOcupada || (estabaOcupada && otraPersona);
-
   db.prepare(`
     UPDATE agenda SET
       rut = @rut, nombre = @nombre, clase = @clase, contacto = @contacto, correo = @correo,

@@ -542,6 +542,19 @@ test('una cita antigua sin correo se puede seguir editando', async () => {
   assert.equal(r.status, 200, r.texto);
 });
 
+test('corregir el nombre de una cita antigua sin correo no pide correo', async () => {
+  const b = ocupado(diaNuevo(), '09:30', { correo: null });
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '11.111.111-1', nombre: 'JUAN PEREZ GONZALEZ', clase: 'B' });
+  assert.equal(r.status, 200, r.texto);
+});
+
+test('cambiar el RUT de una cita sin correo sí pide correo', async () => {
+  const b = ocupado(diaNuevo(), '10:00', { correo: null });
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'JUAN PEREZ', clase: 'B' });
+  assert.equal(r.status, 400);
+  assert.match(r.datos.error, /Falta el correo/);
+});
+
 // ---------- sin login ----------
 test('no existe login: /api/login, /api/logout, /api/sesion y /api/mi-clave responden 404', async () => {
   assert.equal((await api('POST', '/login', { usuario: 'x', clave: 'y' })).status, 404);
