@@ -523,14 +523,13 @@ main { padding: .75rem 24px 2.5rem; max-width: none; width: 100%; box-sizing: bo
 :root[data-tema="oscuro"] .cita-resumen-c b { color: #e0f2fe; }
 
 /* Boton Maximizar de las tablas (js/tabla-maximizar.js) */
-/* El boton flota sobre el borde superior de la tabla, a la derecha: no ocupa una fila propia */
+/* Sin buscador encima: el boton flota en la franja libre sobre la tabla, a la derecha, sin fila propia */
 .tabla-barra-max { height: 0; position: relative; }
-.tabla-barra-max > button { position: absolute; right: 4px; top: -36px; z-index: 5; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); }
-/* Lista de espera: el buscador queda justo encima; se reserva una franja para el boton */
-.tabla-barra-max:has(+ #le-tabla) { height: 40px; }
-.tabla-barra-max:has(+ #le-tabla) > button { top: 6px; }
-.tabla-barra-max.tabla-barra-fija { position: fixed; top: 12px; right: 16px; height: auto; z-index: 9001; }
-.tabla-barra-max.tabla-barra-fija > button { position: static; }
+.tabla-barra-max > .btn-max-tabla { position: absolute; right: 4px; top: -36px; z-index: 5; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); }
+/* Con buscador encima (Lista de espera): el boton va en la misma fila, a la derecha del buscador */
+.btn-max-tabla.tabla-btn-en-fila { margin-left: auto; flex: none; align-self: center; box-shadow: none; white-space: nowrap; }
+/* Maximizada: el boton queda fijo arriba a la derecha de la pantalla */
+.btn-max-tabla.tabla-btn-fija { position: fixed !important; top: 12px !important; right: 16px !important; z-index: 9001 !important; margin: 0 !important; }
 .tabla-maximizada {
   position: fixed !important;
   inset: 0 !important;
