@@ -524,10 +524,11 @@ main { padding: .75rem 24px 2.5rem; max-width: none; width: 100%; box-sizing: bo
 
 /* Modal Agendar cita (maqueta C): panel de resumen a la izquierda y formulario a la derecha */
 .modal.lateral.cita-c { width: min(840px, calc(100vw - 40px)); }
-.modal.lateral.cita-c .cuerpo { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: .8rem 1.1rem; align-items: start; }
-.modal.lateral.cita-c .cuerpo > :not(.cita-resumen-c) { grid-column: 2; }
+.modal.lateral.cita-c .cuerpo { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 0 1.1rem; align-items: start; }
+.modal.lateral.cita-c .cuerpo > :not(.cita-resumen-c) { grid-column: 2; margin-bottom: .8rem; }
 .modal.lateral.cita-c .cita-resumen-c {
   grid-column: 1;
+  grid-row: 1 / span 30;
   grid-template-columns: 1fr;
   gap: 0;
   margin: 0;
@@ -544,7 +545,7 @@ main { padding: .75rem 24px 2.5rem; max-width: none; width: 100%; box-sizing: bo
   .modal.lateral.cita-c { width: 100%; }
   .modal.lateral.cita-c .cuerpo { grid-template-columns: 1fr; }
   .modal.lateral.cita-c .cuerpo > * { grid-column: 1 !important; }
-  .modal.lateral.cita-c .cita-resumen-c { position: static; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; }
+  .modal.lateral.cita-c .cita-resumen-c { position: static; grid-row: auto; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-bottom: .8rem; }
   .modal.lateral.cita-c .cita-resumen-c > div { border-bottom: 0; }
 }
 
