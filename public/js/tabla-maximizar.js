@@ -32,12 +32,18 @@
     return getComputedStyle(prev).display === 'flex' ? prev : null;
   }
 
+  // Citas disponibles: el boton va en la fila de filtros, a la derecha del resumen "N libres"
+  function filaDeResumen(contenedor) {
+    if (!contenedor.querySelector('#tabla-disponibles-main')) return null;
+    return document.querySelector('#view .disp-filtros-cab');
+  }
+
   function agregarBotones(view) {
     view.querySelectorAll('.tabla-scroll, .tabla-agenda-card').forEach((c) => {
       if (c._btnMax || !c.querySelector('table') || !c.parentNode) return;
       const btn = crearBoton(c);
       c._btnMax = btn;
-      const fila = filaConBuscador(c);
+      const fila = filaConBuscador(c) || filaDeResumen(c);
       if (fila) {
         btn.classList.add('tabla-btn-en-fila');
         fila.appendChild(btn);

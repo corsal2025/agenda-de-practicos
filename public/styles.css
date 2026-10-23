@@ -2401,6 +2401,8 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
 }
 .btn-plegar:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; border-radius: 4px; }
 .disp-resumen { font-size: 13px; }
+/* El resumen toma el espacio sobrante y se parte dentro de su caja: el boton Maximizar queda a su lado */
+.disp-filtros-cab > .disp-resumen { flex: 1 1 0; min-width: 0; }
 
 /* Grid de Filtros + Bloqueos en Agenda */
 .af-contenedor-grid {
