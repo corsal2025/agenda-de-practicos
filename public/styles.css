@@ -3847,6 +3847,9 @@ body:has(#a-grid.tabla-agenda-wrap) {
   text-align: center;
 }
 
+/* Buscador del Reporte de errores: lo bastante ancho para que se lea el placeholder completo */
+#view #e-q { max-width: 460px !important; min-width: 320px !important; width: 100%; }
+
 /* Presentacion profesional: alineacion coherente por tipo de dato, filas legibles
    y encabezado sobrio. Las reglas generales de #view table no se tocan. */
 #view .tabla-errores-planilla { table-layout: auto; width: 100%; font-size: 13px; }
