@@ -2975,6 +2975,12 @@ body:has(#a-grid.tabla-agenda-wrap) {
   white-space: nowrap !important;
 }
 
+/* El correo se escribe en minusculas en el editor de la tabla (el resto de campos siguen en mayusculas) */
+.celda-edicion[data-campo="correo"] .celda-edicion-input {
+  text-transform: none;
+  min-width: 220px;
+}
+
 /* Sugerencias de dominio en los campos de correo */
 .correo-dominios {
   position: fixed;

@@ -2,7 +2,8 @@
 // (gmail.com, hotmail.com, outlook.com, yahoo.com) para elegir con el mouse, el touch o el teclado.
 (function () {
   const DOMINIOS = ['gmail.com', 'hotmail.com', 'outlook.com', 'yahoo.com'];
-  const SELECTOR = 'input[type="email"]';
+  // Campos de correo: los de tipo email y el editor de la columna CORREO de la tabla (normal y maximizada)
+  const SELECTOR = 'input[type="email"], .celda-edicion[data-campo="correo"] > input';
   const PATRON = /^([^\s@]+)@([^\s@]*)$/;
 
   let lista = null;
@@ -80,8 +81,7 @@
       e.stopPropagation();
       elegir(opciones[activa]);
     } else if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
+      // Sin detener el evento: el campo tambien cancela su edicion
       cerrar();
     }
   }, true);
