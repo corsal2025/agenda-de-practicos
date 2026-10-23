@@ -895,6 +895,11 @@ tbody tr:first-child td { border-top: 0; }
 @media print {
   body.dia-imprimiendo main#view { display: none !important; }
   body.dia-imprimiendo #impresion-dia { display: block; }
+  /* Solo sale la hoja del dia: el menu de modulos y el resto de la pagina no se imprimen */
+  body.dia-imprimiendo * { visibility: hidden !important; }
+  body.dia-imprimiendo #impresion-dia,
+  body.dia-imprimiendo #impresion-dia * { visibility: visible !important; }
+  body.dia-imprimiendo #impresion-dia { position: absolute; left: 0; top: 0; width: 100%; }
 }
 
 /* ---------- impresion ---------- */
@@ -2564,6 +2569,10 @@ input.tabla-busc-input:focus,
   display: none;
 }
 
+/* La regla "scrollbar-width: thin" de #view (mas abajo) pisa el "none" de arriba y muestra una
+   segunda barra; aqui se oculta otra vez, porque la barra visible es .tabla-agenda-barra-lateral. */
+#view .tabla-agenda-scroll { scrollbar-width: none; }
+
 /* Unica barra lateral de la tabla: va al pie del marco y mueve .tabla-agenda-scroll */
 .tabla-agenda-barra-lateral {
   overflow-x: auto;
@@ -3837,6 +3846,39 @@ body:has(#a-grid.tabla-agenda-wrap) {
   white-space: nowrap !important;
   text-align: center;
 }
+
+/* Presentacion profesional: alineacion coherente por tipo de dato, filas legibles
+   y encabezado sobrio. Las reglas generales de #view table no se tocan. */
+#view .tabla-errores-planilla { table-layout: auto; width: 100%; font-size: 13px; }
+#view .tabla-errores-planilla thead th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: .7rem .8rem;
+}
+#view .tabla-errores-planilla thead th.c { text-align: center; }
+#view .tabla-errores-planilla tbody td {
+  padding: .6rem .8rem;
+  text-align: left;
+  border-bottom: 1px solid var(--linea);
+  color: var(--tinta);
+}
+#view .tabla-errores-planilla tbody tr:last-child td { border-bottom: 0; }
+#view .tabla-errores-planilla tbody tr:hover td { background: var(--azul-suave, #eff6ff); }
+#view .tabla-errores-planilla tbody td.c,
+#view .tabla-errores-planilla tbody td.td-err-sev { text-align: center; }
+#view .tabla-errores-planilla td.td-err-tipo { font-weight: 600; }
+#view .tabla-errores-planilla td.td-err-rut { font-variant-numeric: tabular-nums; }
+#view .tabla-errores-planilla td.td-err-detalle {
+  white-space: normal !important;
+  min-width: 220px;
+  max-width: 380px;
+  color: var(--muted, #475569);
+  line-height: 1.4;
+}
+#view .tabla-errores-planilla td.td-err-acciones .acciones-error-wrap { flex-wrap: wrap; gap: 6px; }
+#view .tabla-errores-planilla td.td-err-acciones .btn.chico { white-space: nowrap; }
 
 /* Contenedor de acciones lineal: sin botones montados */
 .acciones-error-wrap {
