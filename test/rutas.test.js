@@ -536,6 +536,12 @@ test('no se da hora sin correo o con correo invalido', async () => {
   assert.equal(r.status, 200, r.texto);
 });
 
+test('una cita con tipo de cita antiguo fuera del catalogo se puede editar sin cambiarlo', async () => {
+  const b = ocupado(diaNuevo(), '11:30', { correo: 'juan@x.cl', tipo_cita: 'REAG. PRESENCIAL' });
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '11.111.111-1', nombre: 'JUAN PEREZ', clase: 'C', tipo_cita: 'REAG. PRESENCIAL', correo: 'juan@x.cl' });
+  assert.equal(r.status, 200, r.texto);
+});
+
 test('una cita antigua sin correo se puede seguir editando', async () => {
   const b = ocupado(diaNuevo(), '09:00', { correo: null });
   const r = await api('PUT', `/agenda/${b.id}`, { rut: '11.111.111-1', nombre: 'JUAN PEREZ', clase: 'B', comentarios: 'nota' });

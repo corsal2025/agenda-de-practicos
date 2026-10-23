@@ -442,12 +442,14 @@ function validarBloque(body, bloque) {
   for (const cl of clases) if (!enCatalogo('clase', cl)) throw bad(`Clase no valida: ${cl}`);
   const clase = clases.length ? clases.join(',') : null;
   const tienePesada = clases.some((cl) => CLASES_PESADAS.includes(cl));
-  if (!enCatalogo('tipo_cita', body.tipo_cita)) throw bad(`Tipo de cita no valido: ${body.tipo_cita}`);
-  if (!enCatalogo('resultado', body.resultado)) throw bad(`Resultado no valido: ${body.resultado}`);
-  if (!enCatalogo('tipo_reagendamiento', body.tipo_reagendamiento)) throw bad(`Tipo de reagendamiento no valido: ${body.tipo_reagendamiento}`);
-  if (!enCatalogo('escuela_conductores', body.escuela_conductores)) throw bad(`Escuela no valida: ${body.escuela_conductores}`);
-  if (!enCatalogo('intento', body.intento)) throw bad(`Intento no valido: ${body.intento}`);
-  if (!enCatalogo('lista_espera', body.lista_espera)) throw bad(`Lista de espera no valida: ${body.lista_espera}`);
+  // Un valor que no cambia no se revalida: datos antiguos fuera del catalogo se pueden seguir editando
+  const catalogoSiCambia = (tipo, campo) => body[campo] === bloque[campo] || enCatalogo(tipo, body[campo]);
+  if (!catalogoSiCambia('tipo_cita', 'tipo_cita')) throw bad(`Tipo de cita no valido: ${body.tipo_cita}`);
+  if (!catalogoSiCambia('resultado', 'resultado')) throw bad(`Resultado no valido: ${body.resultado}`);
+  if (!catalogoSiCambia('tipo_reagendamiento', 'tipo_reagendamiento')) throw bad(`Tipo de reagendamiento no valido: ${body.tipo_reagendamiento}`);
+  if (!catalogoSiCambia('escuela_conductores', 'escuela_conductores')) throw bad(`Escuela no valida: ${body.escuela_conductores}`);
+  if (!catalogoSiCambia('intento', 'intento')) throw bad(`Intento no valido: ${body.intento}`);
+  if (!catalogoSiCambia('lista_espera', 'lista_espera')) throw bad(`Lista de espera no valida: ${body.lista_espera}`);
 
   if (tienePesada && bloque.hora !== HORA_D_A5 && !body.forzar) {
     throw bad(`Las clases D/A5 solo se agendan en el bloque ${HORA_D_A5}. Elige ese horario o marca "forzar".`);
