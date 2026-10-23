@@ -2508,7 +2508,7 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
   box-shadow: 0 4px 20px rgba(37, 99, 235, 0.08);
   overflow: hidden;
   margin-top: 0 !important;
-  margin-bottom: 24px;
+  margin-bottom: 0;
 }
 
 :root[data-tema="oscuro"] .tabla-agenda-card {
