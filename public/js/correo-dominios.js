@@ -61,10 +61,17 @@
     pintar();
   }
 
-  // Mientras se escribe, actualizar la lista
+  // Mientras se escribe: el correo siempre queda en minusculas (tambien al pegar) y se actualiza la lista
   document.addEventListener('input', (e) => {
     const input = e.target;
-    if (input.matches && input.matches(SELECTOR)) abrir(input);
+    if (!(input.matches && input.matches(SELECTOR))) return;
+    const minusculas = input.value.toLowerCase();
+    if (minusculas !== input.value) {
+      const pos = input.selectionStart;
+      input.value = minusculas;
+      try { input.setSelectionRange(pos, pos); } catch (_) { /* campo sin cursor */ }
+    }
+    abrir(input);
   });
 
   // Teclado: flechas para moverse, Enter o Tab para elegir, Escape para cerrar.
