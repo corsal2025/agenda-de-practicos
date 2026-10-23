@@ -2975,6 +2975,45 @@ body:has(#a-grid.tabla-agenda-wrap) {
   white-space: nowrap !important;
 }
 
+/* Sugerencias de dominio en los campos de correo */
+.correo-dominios {
+  position: fixed;
+  z-index: 9500;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+}
+
+.correo-dominio {
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #0f172a;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.correo-dominio:hover,
+.correo-dominio.activa {
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+:root[data-tema="oscuro"] .correo-dominios {
+  background: var(--papel);
+  border-color: var(--linea);
+}
+
 .correo-txt {
   font-size: 12px;
   font-weight: 600;
