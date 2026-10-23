@@ -225,9 +225,39 @@ input#bq:focus {
 /* Celdas autoajustables: cada columna se ajusta a su contenido.
    La Agenda conserva sus columnas fijas (HORA, NOMBRE y RUT quedan pegadas al desplazar). */
 #view table {
-  width: auto;
+  width: max-content;
   min-width: 100%;
   table-layout: auto;
+}
+
+/* El texto de las celdas no se parte; si la tabla no cabe, se desplaza dentro de su marco.
+   La Agenda (#tabla-agenda-main) conserva sus propias reglas de nombre y columnas fijas. */
+#view table:not(#tabla-agenda-main) th,
+#view table:not(#tabla-agenda-main) td {
+  white-space: nowrap;
+  max-width: none !important;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+/* Todas las tablas se desplazan dentro de su marco (arriba y a los lados), con el
+   encabezado pegado al borde superior de la caja, como en la Agenda. */
+#view .tabla-scroll {
+  overflow: auto;
+  max-height: 78vh;
+}
+
+#view .tabla-scroll > table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+/* Barra de desplazamiento delgada y uniforme en todas las tablas */
+#view .tabla-scroll,
+#view .tabla-agenda-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
 }
 
 #view table:not(.tabla-agenda-elegante) th,
@@ -250,10 +280,16 @@ input#bq:focus {
 }
 
 /* Mismo estilo que la Agenda en todos los modulos con tabla */
+/* Marco igual al de la Agenda (tarjeta azul, esquinas de 12 px, misma sombra) */
 #view .tabla-scroll {
-  border: 1px solid #cbd5e1;
-  border-radius: 14px;
-  box-shadow: 0 6px 20px rgba(15, 23, 42, .06);
+  border: 2px solid #2563eb;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.08);
+}
+
+:root[data-tema="oscuro"] #view .tabla-scroll {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
 }
 
 #view table thead th {
@@ -262,6 +298,7 @@ input#bq:focus {
 
 #view table tbody td {
   padding: 9px 12px;
+  height: 44px;
 }
 
 #view table tbody tr:nth-child(even) {
@@ -3956,7 +3993,7 @@ html.sidebar-plegado nav#nav button .nav-badge {
 /* Área de Contenido Principal (#view) */
 #view {
   margin-left: 248px;
-  width: calc(100vw - 248px);
+  width: auto;
   min-height: calc(100vh - 58px);
   padding: 16px 24px 32px;
   box-sizing: border-box;
@@ -3966,5 +4003,5 @@ html.sidebar-plegado nav#nav button .nav-badge {
 
 html.sidebar-plegado #view {
   margin-left: 84px;
-  width: calc(100vw - 84px);
+  width: auto;
 }
