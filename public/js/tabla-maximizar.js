@@ -16,6 +16,18 @@
     return btn;
   }
 
+  // Nombre del modulo activo (boton marcado en el menu), para la barra superior de la vista maximizada
+  function ponerTitulo(activar) {
+    document.querySelectorAll('.tabla-max-titulo').forEach((el) => el.remove());
+    if (!activar) return;
+    const activo = document.querySelector('nav#nav button.activo');
+    if (!activo) return;
+    const titulo = document.createElement('span');
+    titulo.className = 'tabla-max-titulo';
+    titulo.textContent = activo.textContent.trim();
+    document.body.appendChild(titulo);
+  }
+
   function alternar(contenedor) {
     const btn = contenedor._btnMax;
     const activar = !contenedor.classList.contains(CLASE_TABLA);
@@ -23,6 +35,7 @@
     btn.classList.toggle('tabla-btn-fija', activar);
     btn.textContent = activar ? TEXTO.on : TEXTO.off;
     document.body.classList.toggle('tabla-max-activa', activar);
+    ponerTitulo(activar);
   }
 
   // Fila con buscador justo encima de la tabla: el boton se pone a la derecha del buscador.
@@ -32,10 +45,12 @@
     return getComputedStyle(prev).display === 'flex' ? prev : null;
   }
 
-  // Citas disponibles: el boton va en la fila de filtros, a la derecha del resumen "N libres"
+  // Citas disponibles: el boton va en la fila de filtros, a la derecha del resumen "N libres".
+  // Agenda: el boton va junto a "Imprimir dia" en la barra de acciones.
   function filaDeResumen(contenedor) {
-    if (!contenedor.querySelector('#tabla-disponibles-main')) return null;
-    return document.querySelector('#view .disp-filtros-cab');
+    if (contenedor.querySelector('#tabla-disponibles-main')) return document.querySelector('#view .disp-filtros-cab');
+    if (contenedor.querySelector('#tabla-agenda-main')) return document.querySelector('#view #a-acciones-dia');
+    return null;
   }
 
   function agregarBotones(view) {

@@ -590,24 +590,59 @@ main { padding: .75rem 24px 2.5rem; max-width: none; width: 100%; box-sizing: bo
 .tabla-barra-max > .btn-max-tabla { position: absolute; right: 4px; top: -36px; z-index: 5; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); }
 /* Con buscador encima (Lista de espera): el boton va en la misma fila, a la derecha del buscador */
 .btn-max-tabla.tabla-btn-en-fila { margin-left: auto; flex: none; align-self: center; box-shadow: none; white-space: nowrap; }
-/* Maximizada: el boton queda fijo arriba a la derecha de la pantalla */
-.btn-max-tabla.tabla-btn-fija { position: fixed !important; top: 12px !important; right: 16px !important; z-index: 9001 !important; margin: 0 !important; }
+/* Maximizada: superficie de pagina, marco blanco con borde azul y una barra superior limpia */
+body.tabla-max-activa::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: #f1f5f9;
+  z-index: 8999;
+}
+body.tabla-max-activa { overflow: hidden; }
 .tabla-maximizada {
   position: fixed !important;
-  inset: 0 !important;
+  inset: 64px 20px 20px !important;
   z-index: 9000;
   width: auto !important;
   max-height: none !important;
   margin: 0 !important;
-  padding: 56px 16px 16px !important;
-  border-radius: 0 !important;
+  padding: 0 !important;
+  border: 2px solid #2563eb !important;
+  border-radius: 14px !important;
+  background: #ffffff !important;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12) !important;
   box-sizing: border-box;
   overflow: auto !important;
-  background: var(--surface-2);
 }
 .tabla-maximizada .tabla-agenda-scroll { max-height: none !important; height: calc(100vh - 110px); }
-
-body.tabla-max-activa { overflow: hidden; }
+/* Boton de salir: en la barra superior, a la derecha */
+.btn-max-tabla.tabla-btn-fija {
+  position: fixed !important;
+  top: 14px !important;
+  right: 20px !important;
+  z-index: 9001 !important;
+  margin: 0 !important;
+  height: 36px;
+  padding: 0 14px;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  color: #1e3a8a !important;
+  font-weight: 800;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1) !important;
+}
+/* Nombre del modulo en la barra superior de la vista maximizada */
+.tabla-max-titulo {
+  position: fixed;
+  top: 14px;
+  left: 24px;
+  z-index: 9001;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #1e3a8a;
+}
 .chk-clase { display: inline-flex; align-items: center; gap: .35rem; font-weight: 600; font-size: 13.5px; color: var(--tinta); cursor: pointer; text-transform: none; letter-spacing: normal; }
 .chk-clase input { width: auto; height: auto; }
 
