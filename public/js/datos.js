@@ -90,7 +90,8 @@ async function renderDatos() {
       $('#im-res').innerHTML = '<p class="muted">Importando...</p>';
       const r = await api('/import', { method: 'POST', body: { hojas, limpiar: $('#im-limpiar').checked } });
       $('#im-res').innerHTML = `<div class="aviso">Listo. Leidas ${r.resumen.leidas}, citas ${r.resumen.ocupadas},
-        bloques nuevos ${r.resumen.bloques_generados}, rango ${r.resumen.rango.map(fFecha).join(' a ')}.</div>`;
+        bloques nuevos ${r.resumen.bloques_generados}, rango ${r.resumen.rango.map(fFecha).join(' a ')}.
+        ${r.resumen.fuera_de_rango ? `<br><b>${r.resumen.fuera_de_rango} fila(s) con fecha anterior a 2020 se descartaron</b> (probable error de digitación en el Excel).` : ''}</div>`;
       META = await api('/meta');
       toast('Importacion completada');
     } catch (e) { $('#im-res').innerHTML = `<div class="aviso">${esc(e.message)}</div>`; }

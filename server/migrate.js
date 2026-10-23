@@ -19,6 +19,10 @@ const COL = {
 // AGO-DIC / ENE-JUN 2027: formato original (Google Sheets). AGENDA: formato que exporta este dashboard.
 const HOJAS_MAESTRAS = ['AGO-DIC', 'ENE-JUN 2027', 'AGENDA'];
 
+// Las filas con fecha anterior a esta se descartan al importar. Una fecha mal digitada (por ejemplo 2001)
+// haria que la grilla se generara desde ese anio y crearia cientos de miles de bloques vacios.
+const FECHA_MINIMA = '2020-01-01';
+
 
 function detectarColumnas(filaEncabezado) {
   if (!Array.isArray(filaEncabezado)) return COL;
@@ -163,6 +167,7 @@ function importar(fuente, { limpiar = false } = {}) {
   const porSlot = new Map();
   let leidas = 0;
   let saltadas = 0;
+  let fueraDeRango = 0;
 
   const hojasAProcesar = HOJAS_MAESTRAS.filter((h) => hojas[h]);
   const listaHojas = hojasAProcesar.length > 0 ? hojasAProcesar : Object.keys(hojas).filter((h) => h !== 'CITAS DISPONIBLES');
@@ -174,6 +179,7 @@ function importar(fuente, { limpiar = false } = {}) {
     for (let i = 1; i < filas.length; i++) {
       const b = filaABloque(filas[i], colMap);
       if (!b) { if (filas[i] && filas[i].some((c) => c != null && c !== '')) saltadas++; continue; }
+      if (b.fecha < FECHA_MINIMA) { fueraDeRango++; continue; }
       leidas++;
       const key = `${b.fecha}|${b.hora}|${b.examinadorNom}`;
       const prev = porSlot.get(key);
@@ -232,7 +238,7 @@ function importar(fuente, { limpiar = false } = {}) {
       const fecha = aISO(f[1]);
       const hora = aHora(f[2]);
       const examinador_id = upsertExaminador(N.examinador(f[15]));
-      if (!fecha || !hora || !examinador_id) continue;
+      if (!fecha || !hora || !examinador_id || fecha < FECHA_MINIMA) continue;
       const r = upd.run({
         fecha, hora, examinador_id, rut: rr.valor, nombre: nom,
         clase: N.clase(f[6]).valor, contacto: N.contacto(f[7]), correo: N.correo(f[8]),
@@ -247,7 +253,7 @@ function importar(fuente, { limpiar = false } = {}) {
   const sync = pesada.sincronizarTodo();
 
   const resumen = {
-    leidas, saltadas, ocupadas, rescatadas, bloques_generados: gen.creados, rango: [desde, hasta],
+    leidas, saltadas, fuera_de_rango: fueraDeRango, ocupadas, rescatadas, bloques_generados: gen.creados, rango: [desde, hasta],
     pesadas_sincronizadas: sync.procesados,
   };
   log(null, 'importar', JSON.stringify(resumen));
