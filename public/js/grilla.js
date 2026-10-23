@@ -195,8 +195,6 @@ function pintarGrilla(cont, filas, fecha) {
 
 
   if (!filas.length) {
-    const slotPills = document.getElementById('a-pills-slot');
-    if (slotPills) slotPills.innerHTML = '';
     cont.className = '';
     cont.style.gridTemplateColumns = '';
     const textoPeriodo = (filtAgenda && filtAgenda.esRango && filtAgenda.desde && filtAgenda.hasta && filtAgenda.desde !== filtAgenda.hasta)
@@ -256,19 +254,22 @@ async function guardarClaseEnNube(b, valor) {
     toast('Dato actualizado en la planilla', 'ok');
     if (window.renderAgenda) renderAgenda();
   } catch (e) {
-    toast(e.message, 'err');
+    // Sin correo no se guarda la clase; la nube no muestra aviso y la celda conserva su valor
+    if (!e.message.startsWith('Falta el correo')) toast(e.message, 'err');
   }
 }
 
+// Nube de licencias: se pueden marcar varias; OK guarda y cierra; clic fuera o Escape cancela
 function abrirNubeClases(ancla, b) {
   cerrarNubeClases();
+  const marcadas = new Set((b.clase || '').split(',').map((c) => c.trim()).filter(Boolean));
   const el = document.createElement('div');
   el.className = 'nube-clases';
-  el.setAttribute('role', 'listbox');
-  el.setAttribute('aria-label', 'Tipo de licencia');
-  el.innerHTML = clasesDisponibles(b.clase)
-    .map((c) => `<button type="button" class="nube-clase${c === b.clase ? ' actual' : ''}" role="option" aria-selected="${c === b.clase}" data-clase="${esc(c)}">${esc(c)}</button>`)
-    .join('');
+  el.setAttribute('role', 'group');
+  el.setAttribute('aria-label', 'Tipos de licencia');
+  el.innerHTML = `${clasesDisponibles(b.clase)
+    .map((c) => `<button type="button" class="nube-clase" aria-pressed="${marcadas.has(c)}" data-clase="${esc(c)}">${esc(c)}</button>`)
+    .join('')}<button type="button" class="nube-ok">OK</button>`;
   document.body.appendChild(el);
 
   const r = ancla.getBoundingClientRect();
@@ -277,18 +278,27 @@ function abrirNubeClases(ancla, b) {
   el.style.left = `${Math.min(Math.max(8, r.left + r.width / 2 - ancho / 2), window.innerWidth - ancho - 8)}px`;
 
   el.addEventListener('click', (e) => {
-    const boton = e.target.closest('.nube-clase');
-    if (!boton) return;
+    const licencia = e.target.closest('.nube-clase');
+    if (licencia) {
+      licencia.setAttribute('aria-pressed', String(licencia.getAttribute('aria-pressed') !== 'true'));
+      return;
+    }
+    if (!e.target.closest('.nube-ok')) return;
+    const elegidas = [...el.querySelectorAll('.nube-clase[aria-pressed="true"]')].map((btn) => btn.dataset.clase);
+    if (!elegidas.length) {
+      toast('Elige al menos una licencia', 'err');
+      return;
+    }
     cerrarNubeClases();
-    guardarClaseEnNube(b, boton.dataset.clase);
+    guardarClaseEnNube(b, elegidas.join(','));
   });
   el.addEventListener('keydown', (e) => {
-    const botones = [...el.querySelectorAll('.nube-clase')];
-    const i = botones.indexOf(document.activeElement);
+    const controles = [...el.querySelectorAll('.nube-clase, .nube-ok')];
+    const i = controles.indexOf(document.activeElement);
     const salto = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
     if (!salto || i < 0) return;
     e.preventDefault();
-    botones[(i + salto + botones.length) % botones.length].focus();
+    controles[(i + salto + controles.length) % controles.length].focus();
   });
   el.addEventListener('focusout', (e) => {
     if (e.relatedTarget && !el.contains(e.relatedTarget)) cerrarNubeClases();
@@ -297,7 +307,7 @@ function abrirNubeClases(ancla, b) {
   nubeClases = { el, ancla };
   document.addEventListener('pointerdown', alPresionarFueraNube, true);
   document.addEventListener('keydown', alPresionarTeclaNube, true);
-  (el.querySelector('.actual') || el.querySelector('.nube-clase')).focus();
+  el.querySelector('.nube-clase').focus();
 }
 
 const CAMPOS_EDITABLES = {
@@ -381,25 +391,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     return Number(a.examinador_id || 0) - Number(b.examinador_id || 0);
   });
 
-  const totalCitas = ordenadas.filter((f) => f.rut || f.nombre).length;
-  const totalLibres = ordenadas.filter((f) => !f.rut && !f.nombre && !f.bloqueado).length;
-  const totalConfirmadas = ordenadas.filter((f) => f.confirmo_asistencia === 1).length;
-
-  const slotPills = document.getElementById('a-pills-slot');
-  const pillsHtml = `
-    <div class="tabla-filtros-rapidos">
-      <button type="button" class="btn-filtro-pill activo" data-filtro="todos">Todas (${ordenadas.length})</button>
-      <button type="button" class="btn-filtro-pill" data-filtro="ocupadas">Citas (${totalCitas})</button>
-      <button type="button" class="btn-filtro-pill" data-filtro="libres">Libres (${totalLibres})</button>
-      ${totalConfirmadas ? `<button type="button" class="btn-filtro-pill" data-filtro="confirmadas">✓ Confirmadas (${totalConfirmadas})</button>` : ''}
-    </div>
-  `;
-  if (slotPills) {
-    slotPills.innerHTML = pillsHtml;
-  }
-
   let html = `
-    ${!slotPills ? `<div class="tabla-agenda-toolbar-exterior" style="justify-content:flex-end">${pillsHtml}</div>` : ''}
     <div class="tabla-agenda-card">
       <div class="tabla-agenda-scroll">
         <table class="tabla-agenda-elegante" id="tabla-agenda-main">
@@ -669,6 +661,11 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
       } catch (e) {
         guardando = false;
         inp.disabled = false;
+        // Sin correo no se guarda: el campo vuelve a su valor anterior, sin aviso en la agenda
+        if (e.message.startsWith('Falta el correo')) {
+          cancelar();
+          return;
+        }
         inp.focus();
         toast(e.message, 'err');
       }
@@ -718,44 +715,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     if (inpBusc.value) filtrarBuscador();
   }
 
-  // 2. Filtros de píldoras
-  const rootPills = document.getElementById('a-pills-slot') || cont;
-  rootPills.querySelectorAll('.btn-filtro-pill').forEach((btn) => {
-    btn.onclick = () => {
-      rootPills.querySelectorAll('.btn-filtro-pill').forEach((b) => b.classList.remove('activo'));
-      btn.classList.add('activo');
-      const filtro = btn.dataset.filtro;
-      cont.querySelectorAll('.fila-agenda-tabla').forEach((tr) => {
-        if (filtro === 'todos') tr.style.display = '';
-        else if (filtro === 'ocupadas') tr.style.display = tr.dataset.tipo === 'ocupada' ? '' : 'none';
-        else if (filtro === 'libres') tr.style.display = tr.dataset.tipo === 'libre' ? '' : 'none';
-        else if (filtro === 'confirmadas') tr.style.display = tr.querySelector('.btn-confirmar-tabla.es-confirmado') ? '' : 'none';
-      });
-      cont.querySelectorAll('.fila-separador-fecha').forEach((sep) => {
-        if (filtro === 'todos') {
-          sep.style.display = '';
-          return;
-        }
-        let next = sep.nextElementSibling;
-        let hasVisible = false;
-        while (next && !next.classList.contains('fila-separador-fecha')) {
-          if (next.classList.contains('fila-agenda-tabla') && next.style.display !== 'none') {
-            hasVisible = true;
-            break;
-          }
-          next = next.nextElementSibling;
-        }
-        sep.style.display = hasVisible ? '' : 'none';
-      });
-    };
-  });
-
-  const btnPillActivo = rootPills.querySelector('.btn-filtro-pill.activo');
-  if (btnPillActivo && btnPillActivo.dataset.filtro !== 'todos') {
-    btnPillActivo.click();
-  }
-
-  // 3. Filas: se seleccionan y cada dato se edita con su propio lápiz
+  // Filas: se seleccionan y cada dato se edita con su propio lápiz
   cont.querySelectorAll('.fila-agenda-tabla').forEach((tr) => {
     tr.onclick = (e) => {
       if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.sr') || e.target.closest('input') || e.target.closest('label')) return;

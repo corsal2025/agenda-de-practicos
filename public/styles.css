@@ -238,6 +238,17 @@ input#bq:focus {
   min-width: 0 !important;
 }
 
+/* Texto centrado como en la Agenda; solo las columnas marcadas con .r quedan a la derecha */
+#view table th,
+#view table td {
+  text-align: center;
+}
+
+#view table th.r,
+#view table td.r {
+  text-align: right;
+}
+
 /* Mismo estilo que la Agenda en todos los modulos con tabla */
 #view .tabla-scroll {
   border: 1px solid #cbd5e1;
@@ -2969,10 +2980,31 @@ body:has(#a-grid.tabla-agenda-wrap) {
   outline: none;
 }
 
-.nube-clase.actual {
+.nube-clase[aria-pressed="true"] {
   background: #1e3a8a;
   border-color: #1e3a8a;
   color: #ffffff;
+}
+
+.nube-ok {
+  grid-column: 1 / -1;
+  justify-self: end;
+  height: 36px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 10px;
+  background: #16a34a;
+  color: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.nube-ok:hover,
+.nube-ok:focus-visible {
+  background: #15803d;
+  outline: none;
 }
 
 :root[data-tema="oscuro"] .nube-clases {
