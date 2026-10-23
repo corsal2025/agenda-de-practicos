@@ -56,10 +56,40 @@
     if (activa) alternar(activa);
   });
 
+  // Un solo scroll vertical: cada tabla ocupa el alto libre de la pantalla (desde donde empieza hasta
+  // el borde inferior). Si tiene mas filas, se desplaza dentro de su marco y la pagina casi no se mueve.
+  // En celular (modo tarjeta) no se limita el alto.
+  const MOVIL = window.matchMedia('(max-width: 600px)');
+  function ajustarAltura(contenedor) {
+    if (contenedor.classList.contains(CLASE_TABLA)) return;
+    if (MOVIL.matches) { contenedor.style.removeProperty('--tabla-alto'); return; }
+    const main = document.getElementById('view');
+    const arriba = contenedor.getBoundingClientRect().top + window.scrollY;
+    const reserva = (parseFloat(getComputedStyle(main).paddingBottom) || 0)
+      + (parseFloat(getComputedStyle(contenedor).marginBottom) || 0) + 16;
+    let libre = Math.floor(window.innerHeight - arriba - reserva);
+    // Tabla que empieza bajo el pliegue (paginas con varios paneles): al llegar a ella tiene casi toda la pantalla
+    if (libre < 360) libre = Math.max(360, window.innerHeight - 160);
+    // Con letra agrandada (zoom en body) los px del CSS se amplian: se divide entre el zoom
+    const zoom = parseFloat(getComputedStyle(document.body).zoom) || 1;
+    contenedor.style.setProperty('--tabla-alto', `${Math.floor(libre / zoom)}px`);
+  }
+  function ajustarAlturas(view) {
+    view.querySelectorAll('.tabla-scroll, .tabla-agenda-card').forEach(ajustarAltura);
+  }
+
   // Sin requestAnimationFrame: en pestanas en segundo plano no se ejecuta y el boton no aparece.
   const view = document.getElementById('view');
   if (view) {
-    new MutationObserver(() => agregarBotones(view)).observe(view, { childList: true, subtree: true });
+    let pendiente = null;
+    const programarAjuste = () => {
+      clearTimeout(pendiente);
+      pendiente = setTimeout(() => ajustarAlturas(view), 120);
+    };
+    new MutationObserver(() => { agregarBotones(view); programarAjuste(); }).observe(view, { childList: true, subtree: true });
+    window.addEventListener('resize', programarAjuste);
+    MOVIL.addEventListener('change', programarAjuste);
     agregarBotones(view);
+    programarAjuste();
   }
 })();

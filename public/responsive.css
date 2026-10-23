@@ -154,6 +154,8 @@ html:not([data-escala="100"]) .grid3 > * { min-width: 0; }
 html:not([data-escala="100"]) .grafico,
 html:not([data-escala="100"]) .grafico canvas { max-width: 100%; }
 html:not([data-escala="100"]) #view .panel { overflow-x: auto; }
+/* Con zoom las unidades vh tambien se amplian: el alto minimo del contenido sobrepasaba la pantalla y sumaba scroll */
+html:not([data-escala="100"]) #view { min-height: 0; }
 /* Con letra 130-150 %: el encabezado se apila (como en tablet) para no salirse */
 html[data-escala="130"] .top-inner > *, html[data-escala="150"] .top-inner > * { min-width: 0; }
 html[data-escala="150"] .top-inner { grid-template-columns: 1fr auto; }
@@ -174,4 +176,32 @@ html:not([data-escala="100"]) .estado { white-space: normal; }
 @media (min-width: 1024px) and (max-width: 1439px) {
   html[data-escala="100"] header.top nav button { padding: 8px 6px 10px; font-size: 13.5px; gap: 5px; }
   html[data-escala="100"] header.top nav .nav-ico { width: 16px; height: 16px; }
+}
+
+/* Celular: el menu lateral pasa a barra inferior y el contenido usa todo el ancho.
+   Sin esto el menu fijo (84-248 px) dejaba el contenido en ~70 px. Lleva !important porque
+   debe ganar a las reglas del menu lateral (html.sidebar-plegado ...) definidas en styles.css. */
+@media (max-width: 600px) {
+  .sidebar-modulos, html.sidebar-plegado .sidebar-modulos {
+    top: auto !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+    width: auto !important; height: 60px; flex-direction: row;
+    border-radius: 16px 16px 0 0; border-width: 1px 0 0; z-index: 60;
+  }
+  .sidebar-cabecera, html.sidebar-plegado .sidebar-cabecera { display: none !important; }
+  nav#nav, html.sidebar-plegado nav#nav {
+    flex-direction: row; align-items: center; justify-content: flex-start; gap: 4px;
+    padding: 6px 8px; overflow-x: auto; overflow-y: hidden;
+  }
+  nav#nav button, html.sidebar-plegado nav#nav button {
+    width: 48px !important; height: 48px; flex: 0 0 auto; padding: 0; justify-content: center;
+    border-left: none; position: relative;
+  }
+  nav#nav button .nav-txt { display: none; }
+  nav#nav button .nav-badge, html.sidebar-plegado nav#nav button .nav-badge {
+    position: absolute; top: 2px; right: 2px; margin: 0; font-size: 9px; padding: 0 4px; min-width: 14px; height: 14px;
+  }
+  #view, html.sidebar-plegado #view { margin-left: 0 !important; padding: 12px 12px 84px !important; }
+  /* Modo tarjeta: cada fila de la tabla crece con su contenido (la regla global fija 44 px y el texto se encimaba) */
+  #view table.tabla-responsiva tbody td { height: auto; min-height: 40px; }
+  #view select, #view input[type="search"] { max-width: 100%; }
 }
