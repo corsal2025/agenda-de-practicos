@@ -146,12 +146,10 @@ const ListaEspera = (() => {
         <td class="num">${esc(p.rut || '—')}</td>
         <td class="c"><b>${esc(p.clase || '—')}</b></td>
         <td class="c">${origenBadge(p)}</td>
-        <td class="c num">${p.dias_esperando == null ? '—' : esc(p.dias_esperando)}</td>
         <td class="c">${tramiteHtml(p)}</td>
         <td class="c">${citaActual(p)}</td>
-        <td class="c num">${esc(p.cupos_compatibles)}</td>
         <td class="c"><button class="btn chico" style="font-weight:700" data-le="${esc(p.origen)}:${esc(p.id)}" ${p.cupos_compatibles ? '' : 'disabled'}>${p.cupos_compatibles ? '🔍 Asignar cupo' : 'Sin cupos'}</button></td>
-      </tr>`).join('') : '<tr><td colspan="10" class="muted c" style="padding:1.5rem">No hay personas en espera con los filtros seleccionados.</td></tr>';
+      </tr>`).join('') : '<tr><td colspan="8" class="muted c" style="padding:1.5rem">No hay personas en espera con los filtros seleccionados.</td></tr>';
 
     const destacado = sessionStorage.getItem('le_destacado');
     if (destacado) {
@@ -164,10 +162,11 @@ const ListaEspera = (() => {
     }
   }
 
-  function asignar(p, cupo) {
-    if (p.origen === 'reagendar') return api(`/cola-reagendar/${p.id}/asignar`, { method: 'POST', body: { destino_id: cupo.id } });
+  // correo: solo se envia cuando la persona no tenia (el servidor lo exige para dar la hora)
+  function asignar(p, cupo, correo) {
+    if (p.origen === 'reagendar') return api(`/cola-reagendar/${p.id}/asignar`, { method: 'POST', body: { destino_id: cupo.id, correo } });
     const motivo = p.origen === 'cambio' ? 'POSTULANTE SOLICITA CAMBIO' : 'Adelantada desde lista de espera';
-    return api(`/agenda/${p.id}/reagendar`, { method: 'POST', body: { destino_id: cupo.id, motivo } });
+    return api(`/agenda/${p.id}/reagendar`, { method: 'POST', body: { destino_id: cupo.id, motivo, correo } });
   }
 
   async function buscarCupo(p, recargar) {
@@ -179,6 +178,8 @@ const ListaEspera = (() => {
       <td>${esc(c.examinador || '—')}</td><td class="c"><button class="btn chico" data-i="${i}">Asignar</button></td></tr>`).join('');
     const cuerpo = `<p style="margin-top:0"><b>${esc(nom(p.nombre))}</b> · ${esc(p.rut || '')} · Clase ${esc(p.clase || '—')}</p>
       <p class="muted" style="font-size:.82rem">Cupos libres de los próximos 30 días compatibles (regla D/A5 y sin repetir día)${p.origen === 'lista_espera' ? ', anteriores a su cita actual' : ''}.</p>
+      ${p.correo ? '' : `<div class="campo" style="margin-bottom:.6rem"><label for="le-correo">Correo del postulante (obligatorio para dar la hora)</label>
+        <input id="le-correo" type="email" placeholder="nombre@correo.cl" autocomplete="off"></div>`}
       <div class="tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th></th></tr></thead>
       <tbody>${filas || '<tr><td colspan="4" class="muted">No hay cupos compatibles.</td></tr>'}</tbody></table></div>`;
     const ov = modal('Buscar cupo', cuerpo, '<button class="btn sec" id="le-cerrar">Cerrar</button>');
@@ -186,13 +187,20 @@ const ListaEspera = (() => {
     ov.querySelectorAll('button[data-i]').forEach((btn) => {
       btn.onclick = async () => {
         const c = cupos[Number(btn.dataset.i)];
+        const campoCorreo = ov.querySelector('#le-correo');
+        const correo = campoCorreo ? campoCorreo.value.trim() : null;
+        if (campoCorreo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+          toast('Ingresa un correo válido para dar la hora', 'err');
+          campoCorreo.focus();
+          return;
+        }
         const txt = p.origen === 'reagendar'
           ? `¿Asignar a ${nom(p.nombre)} el ${fFecha(c.fecha)} ${c.hora}?`
           : `¿${p.origen === 'cambio' ? 'Cambiar' : 'Adelantar'} a ${nom(p.nombre)} al ${fFecha(c.fecha)} ${c.hora}? Su cita del ${fFecha(p.fecha)} ${p.hora} quedará libre.`;
         if (!confirm(txt)) return;
         btn.disabled = true;
         try {
-          const r = await asignar(p, c);
+          const r = await asignar(p, c, correo);
           cerrarModal();
           toast(`Cupo asignado a ${nom(p.nombre)}`);
           ((r && r.avisos) || []).forEach((a) => toast(a, 'err'));
@@ -234,14 +242,12 @@ const ListaEspera = (() => {
                 <th class="c" style="width:125px">RUT</th>
                 <th class="c" style="width:65px">Clase</th>
                 <th class="c" style="width:145px">Estado / Origen</th>
-                <th class="c" style="width:100px">Esperando</th>
                 <th class="c" style="width:130px">Trámite</th>
                 <th class="c" style="width:150px">Cita actual</th>
-                <th class="c" style="width:90px">Cupos</th>
                 <th class="c" style="width:130px">Acción</th>
               </tr>
             </thead>
-            <tbody id="le-body"><tr><td colspan="10" class="c muted" style="padding:1.5rem">Cargando lista de espera...</td></tr></tbody>
+            <tbody id="le-body"><tr><td colspan="8" class="c muted" style="padding:1.5rem">Cargando lista de espera...</td></tr></tbody>
           </table>
         </div>
       </div>`;
@@ -256,7 +262,7 @@ const ListaEspera = (() => {
       const lista = await badge();
       if (!$('#le-body')) return;
       if (!lista) {
-        $('#le-body').innerHTML = '<tr><td colspan="10" class="muted">No se pudo cargar la lista de espera.</td></tr>';
+        $('#le-body').innerHTML = '<tr><td colspan="8" class="muted">No se pudo cargar la lista de espera.</td></tr>';
         $('#le-total').textContent = 'Error';
         return;
       }

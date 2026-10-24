@@ -62,7 +62,7 @@ async function renderPorConfirmar() {
         <table class="tabla-porconfirmar thead-fijo">
           <thead>
             <tr>
-              <th class="c pc-chk"><input type="checkbox" id="pc-chk-todos" aria-label="Seleccionar todos"></th>
+              <th class="c pc-chk"></th>
               <th class="c">Fecha</th>
               <th class="c">Hora</th>
               <th>Postulante</th>
@@ -93,9 +93,6 @@ async function renderPorConfirmar() {
     $('#pc-mail-sel').textContent = n ? '✉ Enviar correo de confirmación' : `✉ Enviar correo de confirmación a todos (${visibles.length})`;
     $('#pc-wa-sel').textContent = n ? '💬 WhatsApp a seleccionados' : `💬 WhatsApp a todos (${visibles.length})`;
     $('#pc-mail-sel').disabled = $('#pc-wa-sel').disabled = !visibles.length;
-    const todos = $('#pc-chk-todos');
-    todos.checked = visibles.length > 0 && visibles.every((r) => seleccion.has(r.id));
-    todos.indeterminate = !todos.checked && visibles.some((r) => seleccion.has(r.id));
   };
 
   const pintarLista = () => {
@@ -240,12 +237,6 @@ async function renderPorConfirmar() {
     } catch (e) {
       $('#pc-tbody').innerHTML = `<tr><td colspan="9" class="c muted" style="color:var(--error);padding:2rem">Error: ${esc(e.message)}</td></tr>`;
     }
-  };
-
-  $('#pc-chk-todos').onchange = (e) => {
-    if (e.target.checked) visibles.forEach((r) => seleccion.add(r.id)); else seleccion.clear();
-    $('#pc-tbody').querySelectorAll('input[data-sel]').forEach((el) => { el.checked = e.target.checked; });
-    pintarSeleccion();
   };
 
   $('#pc-mail-sel').onclick = async () => {
