@@ -295,6 +295,27 @@ input#bq:focus {
   scrollbar-color: #94a3b8 #f1f5f9;
 }
 
+/* Barra vertical de las tablas: empieza debajo del encabezado (--cab-alto la mide js/tabla-maximizar.js),
+   asi el encabezado queda solo con su color y la barra arranca en la segunda fila */
+#view .tabla-scroll { scrollbar-width: auto; scrollbar-color: auto; }
+#view .tabla-scroll::-webkit-scrollbar { width: 12px; height: 12px; background: #ffffff; }
+/* Zona de la barra junto al encabezado: mismo azul y linea cian que el encabezado, a su misma altura */
+#view .tabla-scroll::-webkit-scrollbar:vertical { background: transparent; }
+/* El color de esa zona lo pinta el fondo del marco: arranca donde el encabezado y sigue las esquinas redondeadas */
+#view .tabla-scroll {
+  background-image: linear-gradient(to bottom,
+    var(--azul-th) 0, var(--azul-th) calc(var(--cab-alto, 45px) - 4px),
+    var(--marca-cian) calc(var(--cab-alto, 45px) - 4px), var(--marca-cian) var(--cab-alto, 45px),
+    transparent var(--cab-alto, 45px));
+}
+#view .tabla-scroll::-webkit-scrollbar-track:vertical { margin-top: var(--cab-alto, 45px); background: #f1f5f9; }
+#view .tabla-scroll::-webkit-scrollbar-track:horizontal { background: #f1f5f9; }
+#view .tabla-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 8px; border: 2px solid #f1f5f9; }
+#view .tabla-scroll::-webkit-scrollbar-corner { background: #f1f5f9; }
+
+/* Tablas en ventana (modal): el marco tiene scroll propio, asi la barra horizontal queda debajo de las filas */
+#modal-root .tabla-scroll { overflow: auto; max-height: 60vh; grid-column: 1 / -1; }
+
 #view table:not(.tabla-agenda-elegante) th,
 #view table:not(.tabla-agenda-elegante) td,
 #view #tabla-disponibles-main th,
@@ -370,9 +391,42 @@ input#bq:focus {
    Los anchos son fijos para que cada columna fija tenga una posicion exacta (left). */
 #view table.tabla-agenda-elegante thead th.th-hora,
 #view table.tabla-agenda-elegante tbody td.td-hora {
-  width: 200px !important;
-  min-width: 200px !important;
+  width: 110px !important;
+  min-width: 110px !important;
 }
+
+/* FECHA (una celda por dia) queda fija a la izquierda; HORA la sigue */
+#view table.tabla-agenda-elegante thead th.th-fecha,
+#view table.tabla-agenda-elegante tbody td.fecha-celda {
+  position: sticky;
+  left: 0;
+  z-index: 12;
+  width: 140px;
+  min-width: 140px;
+  background: #ffffff;
+  border-right: 1px solid #2563eb;
+  vertical-align: top;
+  padding-top: 10px;
+}
+/* La celda abarca todo el dia: la etiqueta se queda visible bajo el encabezado al desplazar */
+#view table.tabla-agenda-elegante tbody td.fecha-celda .fecha-slot-dia {
+  position: sticky;
+  top: 56px;
+  margin: 0 auto;
+}
+#view table.tabla-agenda-elegante thead th.th-fecha { background: var(--azul-th); z-index: 16; }
+#view table.tabla-agenda-elegante tbody td.fecha-celda.dia-inicio { border-top: 2px solid #94a3b8; }
+
+.fecha-slot-dia {
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  line-height: 1.25;
+  white-space: normal;
+  text-align: center;
+}
+.fecha-slot-dia span:first-child { font-size: 10.5px; opacity: .85; }
+.fecha-slot-dia span:last-child { font-size: 12px; }
 
 #view table.tabla-agenda-elegante thead th.th-hora {
   z-index: 12 !important;
@@ -387,13 +441,13 @@ input#bq:focus {
 }
 
 #view table.tabla-agenda-elegante thead th.th-nombre {
-  left: 200px;
+  left: 250px;
   width: 280px;
   min-width: 280px;
 }
 
 #view table.tabla-agenda-elegante thead th.th-rut {
-  left: 480px;
+  left: 530px;
   width: 170px;
   min-width: 170px;
 }
@@ -406,13 +460,13 @@ input#bq:focus {
 }
 
 #view table.tabla-agenda-elegante tbody td.td-nombre {
-  left: 200px;
+  left: 250px;
   width: 280px;
   min-width: 280px;
 }
 
 #view table.tabla-agenda-elegante tbody td.td-rut {
-  left: 480px;
+  left: 530px;
   width: 170px;
   min-width: 170px;
 }
@@ -624,12 +678,12 @@ body.tabla-max-activa { overflow: hidden; }
   margin: 0 !important;
   height: 36px;
   padding: 0 14px;
-  border: 1.5px solid #cbd5e1 !important;
+  border: 1.5px solid #4338ca !important;
   border-radius: 10px !important;
-  background: #ffffff !important;
-  color: #1e3a8a !important;
+  background: #4f46e5 !important;
+  color: #ffffff !important;
   font-weight: 800;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1) !important;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35) !important;
 }
 /* Pastillas de estado y prioridad en una sola linea dentro de las tablas */
 #view table td .badge-prio,
@@ -1306,6 +1360,23 @@ tbody tr:first-child td { border-top: 0; }
 }
 :root[data-tema="oscuro"] .dato-invalido { background: rgba(220, 38, 38, 0.2); color: #fecaca !important; }
 
+/* Formulario de agendar mas compacto: campos, chips, botones y espacios mas chicos */
+#modal-root .cita-c .campo > input:not([type="checkbox"]):not([type="radio"]),
+#modal-root .cita-c .campo > select {
+  height: 34px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+#modal-root .cita-c .chk-clases { gap: 6px; padding: 4px 0 0; }
+#modal-root .cita-c .chk-clase { height: 30px; min-width: 44px; padding: 0 11px; font-size: 13px; }
+#modal-root .cita-c .cuerpo { padding: .8rem 1rem; }
+#modal-root .cita-c .cuerpo > :not(.cita-resumen-c) { margin-bottom: .5rem; }
+#modal-root .cita-c .campo { gap: .25rem; }
+#modal-root .cita-c .cita-resumen-c > div { padding: .6rem .8rem; }
+#modal-root .cita-c .cita-resumen-c b { font-size: 14px; }
+#modal-root .cita-c footer { padding: .6rem 1rem; }
+#modal-root .cita-c footer .btn { height: 34px; padding: 0 16px; font-size: 13px; }
+
 /* Citas disponibles: el resumen no se estira, asi Maximizar queda pegado a "· N libres" */
 #d-resumen { flex: 0 1 auto; min-width: 0; }
 .disp-filtros .disp-filtros-cab { flex-wrap: nowrap; }
@@ -1318,7 +1389,14 @@ tbody tr:first-child td { border-top: 0; }
   font-size: 13px;
   border-radius: var(--r-sm);
   white-space: nowrap;
+  /* Color propio (indigo) para que resalte entre los demas botones */
+  background: #4f46e5;
+  border: 1px solid #4338ca;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.35);
 }
+.btn.btn-max-tabla:hover { background: #4338ca; border-color: #3730a3; color: #ffffff; }
 
 /* Barra de acciones de la Agenda: pastilla, Bloquear, Desbloquear, Imprimir y Maximizar con la misma altura y forma */
 #a-libres, #a-bloqdia, #a-desbloqdia, #a-imprimir, #a-acciones-dia .btn-max-tabla {
@@ -2885,7 +2963,7 @@ body:has(#a-grid.tabla-agenda-wrap) {
 .tabla-agenda-elegante thead th.th-hora,
 .tabla-agenda-elegante tbody td.td-hora {
   position: sticky !important;
-  left: 0 !important;
+  left: 140px !important;
   z-index: 5 !important;
   background: #ffffff !important;
   border-right: 1px solid #2563eb !important;
@@ -4225,6 +4303,20 @@ body:has(#a-grid.tabla-agenda-wrap) {
 }
 #view .tabla-errores-planilla td.td-err-acciones .acciones-error-wrap { flex-wrap: wrap; gap: 6px; }
 #view .tabla-errores-planilla td.td-err-acciones .btn.chico { white-space: nowrap; }
+
+/* Reporte de errores: el marco no lleva el relleno de .panel (el encabezado llega al borde) y las columnas
+   conservan un ancho minimo para que el texto no se parta letra por letra */
+#view .panel.tabla-scroll { padding: 0; }
+#view .tabla-errores-planilla th, #view .tabla-errores-planilla td { word-break: normal; overflow-wrap: normal; }
+#view .tabla-errores-planilla th.th-err-sev, #view .tabla-errores-planilla td.td-err-sev { min-width: 76px !important; }
+#view .tabla-errores-planilla th.th-err-tipo, #view .tabla-errores-planilla td.td-err-tipo { min-width: 150px !important; }
+#view .tabla-errores-planilla th.th-err-fecha, #view .tabla-errores-planilla td.td-err-fecha { min-width: 104px !important; }
+#view .tabla-errores-planilla th.th-err-hora, #view .tabla-errores-planilla td.td-err-hora { min-width: 72px !important; }
+#view .tabla-errores-planilla th.th-err-examinador, #view .tabla-errores-planilla td.td-err-examinador { min-width: 130px !important; }
+#view .tabla-errores-planilla th.th-err-rut, #view .tabla-errores-planilla td.td-err-rut { min-width: 116px !important; }
+#view .tabla-errores-planilla th.th-err-nombre, #view .tabla-errores-planilla td.td-err-nombre { min-width: 160px !important; }
+#view .tabla-errores-planilla th.th-err-detalle, #view .tabla-errores-planilla td.td-err-detalle { min-width: 220px !important; }
+#view .tabla-errores-planilla th.th-err-acciones, #view .tabla-errores-planilla td.td-err-acciones { min-width: 250px !important; }
 
 /* Contenedor de acciones lineal: sin botones montados */
 .acciones-error-wrap {

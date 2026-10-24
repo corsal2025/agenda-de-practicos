@@ -109,6 +109,13 @@
       const buscador = buscadorDe(c);
       const hijo = buscador && hijoDeFila(buscador);
       // Solo si la fila del buscador queda pegada a la tabla; si hay otros bloques entre ambos, va la barra
+      if (hijo && hijo.parentElement.nextElementSibling === c && hijo.previousElementSibling) {
+        // Hay filtros antes del buscador (p. ej. prioridad y clase): boton y buscador siguen en su misma linea
+        buscador._btnMax = btn;
+        btn.classList.add('tabla-btn-en-fila');
+        hijo.parentNode.insertBefore(btn, hijo);
+        return;
+      }
       if (hijo && hijo.parentElement.nextElementSibling === c) {
         // Buscador y boton en su propia linea: el boton queda a la izquierda del buscador
         const linea = document.createElement('div');
@@ -117,6 +124,14 @@
         btn.classList.add('tabla-btn-en-fila');
         hijo.parentNode.insertBefore(linea, hijo);
         linea.append(btn, hijo);
+        return;
+      }
+      // Por confirmar: fila de acciones masivas pegada a la tabla; el boton va al final de esa fila
+      const acciones = c.previousElementSibling;
+      if (acciones && acciones.classList.contains('pc-toolbar')) {
+        btn.classList.add('tabla-btn-en-fila');
+        btn.style.marginLeft = 'auto';
+        acciones.appendChild(btn);
         return;
       }
       // Sin buscador: barra propia pegada a la tabla, con el boton a la derecha
@@ -153,8 +168,19 @@
     const zoom = parseFloat(getComputedStyle(document.body).zoom) || 1;
     contenedor.style.setProperty('--tabla-alto', `${Math.floor(libre / zoom)}px`);
   }
+  // Alto del encabezado: la barra de desplazamiento empieza justo debajo de el
+  function ajustarCabecera(contenedor) {
+    const cab = contenedor.querySelector('thead');
+    // Donde termina el encabezado medido desde el borde interior del marco (con decimales: con zoom o
+    // pantallas escaladas no es un entero, y los bordes colapsados lo corren una fraccion de pixel)
+    if (!cab) return;
+    const zoom = parseFloat(getComputedStyle(document.body).zoom) || 1;
+    const fin = cab.getBoundingClientRect().bottom - (contenedor.getBoundingClientRect().top + contenedor.clientTop);
+    contenedor.style.setProperty('--cab-alto', `${fin / zoom}px`);
+  }
   function ajustarAlturas(view) {
     view.querySelectorAll('.tabla-scroll, .tabla-agenda-card').forEach(ajustarAltura);
+    view.querySelectorAll('.tabla-scroll').forEach(ajustarCabecera);
   }
 
   // Sin requestAnimationFrame: en pestanas en segundo plano no se ejecuta y el boton no aparece.

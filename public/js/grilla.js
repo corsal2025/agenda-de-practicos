@@ -221,6 +221,13 @@ function fFechaAgenda(iso) {
   return `${DIAS_SEMANA[fecha.getDay()]} ${dia} de ${MESES_CORTOS[mes - 1]}`;
 }
 
+// Fecha de la agenda en dos lineas ("VIERNES" / "23 de oct") para la celda unica del dia
+function fechaChipHtml(iso) {
+  const txt = fFechaAgenda(iso);
+  const i = txt.indexOf(' ');
+  return `<div class="fecha-slot-tabla fecha-slot-dia"><span>${esc(txt.slice(0, i))}</span><span>${esc(txt.slice(i + 1))}</span></div>`;
+}
+
 // Licencias del catalogo; conserva la clase actual aunque no este en el catalogo
 function clasesDisponibles(claseActual) {
   const clases = [...(META.catalogos.clase || [])];
@@ -409,7 +416,8 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         <table class="tabla-agenda-elegante" id="tabla-agenda-main">
           <thead>
             <tr>
-              <th class="th-hora es-rango">FECHA / HORA</th>
+              <th class="th-fecha">FECHA</th>
+              <th class="th-hora es-rango">HORA</th>
               <th class="th-nombre">NOMBRE DE CONTRIBUYENTE</th>
               <th class="th-rut">RUT</th>
               <th class="th-examinador">EXAMINADOR</th>
@@ -425,7 +433,18 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           <tbody>
   `;
 
+  // Como en Citas disponibles: la fecha va en una sola celda por dia (rowspan) que abarca todas sus horas
+  const horasPorDia = new Map();
+  for (const f of ordenadas) horasPorDia.set(f.fecha, (horasPorDia.get(f.fecha) || 0) + 1);
+  let fechaAnterior = null;
+
   for (const b of ordenadas) {
+    const primeraDelDia = b.fecha !== fechaAnterior;
+    const celdaFecha = primeraDelDia
+      ? `<td class="fecha-celda" rowspan="${horasPorDia.get(b.fecha)}" data-fecha="${esc(b.fecha)}">${fechaChipHtml(b.fecha)}</td>`
+      : '';
+    const claseDia = primeraDelDia && fechaAnterior !== null ? ' dia-inicio' : '';
+    fechaAnterior = b.fecha;
 
     const ocupada = Boolean(b.rut || b.nombre);
     const bloqueada = Boolean(b.bloqueado);
@@ -442,9 +461,8 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
 
     if (bloqueada) {
       html += `
-        <tr class="fila-agenda-tabla fila-bloqueada" data-id="${b.id}" data-tipo="bloqueada" data-examinador="${b.examinador_id}">
+        <tr class="fila-agenda-tabla fila-bloqueada${claseDia}" data-id="${b.id}" data-tipo="bloqueada" data-examinador="${b.examinador_id}" data-fecha="${esc(b.fecha)}">${celdaFecha}
           <td class="td-hora es-rango">
-            <div class="fecha-slot-tabla">${esc(fFechaAgenda(b.fecha))}</div>
             <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
               ${esc(b.hora)}
               ${pesada ? '<span class="et-d">D·A5</span>' : ''}
@@ -466,9 +484,8 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
       `;
     } else if (!ocupada) {
       html += `
-        <tr class="fila-agenda-tabla fila-libre" data-id="${b.id}" data-tipo="libre" data-examinador="${b.examinador_id}">
+        <tr class="fila-agenda-tabla fila-libre${claseDia}" data-id="${b.id}" data-tipo="libre" data-examinador="${b.examinador_id}" data-fecha="${esc(b.fecha)}">${celdaFecha}
           <td class="td-hora es-rango">
-            <div class="fecha-slot-tabla">${esc(fFechaAgenda(b.fecha))}</div>
             <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
               ${esc(b.hora)}
               ${pesada ? '<span class="et-d">D·A5</span>' : ''}
@@ -512,9 +529,8 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
       const errTel = errorDato('contacto', b.contacto);
 
       html += `
-        <tr class="fila-agenda-tabla fila-ocupada ${resCls}" data-id="${b.id}" data-tipo="ocupada" data-examinador="${b.examinador_id}">
+        <tr class="fila-agenda-tabla fila-ocupada ${resCls}${claseDia}" data-id="${b.id}" data-tipo="ocupada" data-examinador="${b.examinador_id}" data-fecha="${esc(b.fecha)}">${celdaFecha}
           <td class="td-hora es-rango">
-            <div class="fecha-slot-tabla">${esc(fFechaAgenda(b.fecha))}</div>
             <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
               ${esc(b.hora)}
               ${pesada ? '<span class="et-d">D·A5</span>' : ''}
@@ -714,6 +730,24 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     inp.select();
   }
 
+  // La fecha de cada dia vive en una celda (rowspan) dentro de su primera fila visible: si el buscador
+  // oculta filas, la celda pasa a la primera que queda y abarca solo las visibles.
+  function reubicarFechas(contenedor) {
+    const grupos = new Map();
+    contenedor.querySelectorAll('.fila-agenda-tabla[data-fecha]').forEach((tr) => {
+      if (!grupos.has(tr.dataset.fecha)) grupos.set(tr.dataset.fecha, []);
+      grupos.get(tr.dataset.fecha).push(tr);
+    });
+    for (const filas of grupos.values()) {
+      const celda = filas.map((tr) => tr.querySelector('td.fecha-celda')).find(Boolean);
+      if (!celda) continue;
+      const visibles = filas.filter((tr) => tr.style.display !== 'none');
+      if (!visibles.length) continue;
+      if (celda.parentElement !== visibles[0]) visibles[0].insertBefore(celda, visibles[0].firstElementChild);
+      celda.rowSpan = visibles.length;
+    }
+  }
+
   // 1. Filtro rápido de búsqueda en tiempo real
   const inpBusc = document.querySelector('#tabla-busc-input');
   if (inpBusc) {
@@ -743,6 +777,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         }
         sep.style.display = hasVisible ? '' : 'none';
       });
+      reubicarFechas(cont);
     };
     inpBusc.oninput = filtrarBuscador;
     if (inpBusc.value) filtrarBuscador();
