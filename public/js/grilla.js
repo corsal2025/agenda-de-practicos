@@ -4,25 +4,6 @@ function problemaDatos(b) {
   if (b.contacto && b.contacto.replace(/\D/g, '').length !== 9) return 'Teléfono incompleto';
   return null;
 }
-// Reprobaciones previas (mismo RUT, alguna clase en comun) antes de esta cita.
-const RESULTADOS_REPROBADO = ['REPROBADO', 'REPROBADO INASISTENCIA'];
-function reprobacionesPrevias(b, rows) {
-  if (!b.rut) return 0;
-  const clases = clasesDe(b.clase);
-  return rows.filter((r) => r.id !== b.id && r.fecha <= b.fecha
-    && RESULTADOS_REPROBADO.includes(r.resultado)
-    && clasesDe(r.clase).some((c) => clases.includes(c))).length;
-}
-const ordinalIntento = (n) => (n === 3 ? '3er' : `${n}°`);
-// Aviso (no bloquea): con 2+ reprobaciones previas en la misma clase, este es el 3er intento o mas.
-function pintarAvisoIntento(b, rows) {
-  const zona = $('#f-intento-aviso');
-  const previas = reprobacionesPrevias(b, rows);
-  if (!zona || previas < 2) return;
-  zona.innerHTML = `<span class="badge reprob" title="${previas} reprobaciones previas en la misma clase">⚠ ${ordinalIntento(previas + 1)} intento</span>`;
-  zona.hidden = false;
-}
-
 // CSS de la ficha imprimible; estadisticas.js la reutiliza para su propia impresion.
 const FICHA_CSS = `@page{size:A4;margin:16mm 15mm 18mm}
 *{box-sizing:border-box}body{font:10.5pt/1.4 "Segoe UI",Arial,Helvetica,sans-serif;color:#000;background:#fff;margin:0}
