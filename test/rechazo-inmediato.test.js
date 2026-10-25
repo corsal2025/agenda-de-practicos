@@ -25,8 +25,17 @@ test('EENVELOPE en DATA o sin responseCode no es rechazo inmediato', () => {
   assert.equal(correo.esRechazoInmediato(Object.assign(new Error('x'), { code: 'EENVELOPE' })), false);
 });
 
-test('EENVELOPE que no es rechazo del destinatario cuenta como error general', () => {
-  assert.equal(correo.esErrorGeneral(envelope('MAIL FROM', 452)), true);
-  assert.equal(correo.esErrorGeneral(envelope('RCPT TO', 451)), true);
+test('EENVELOPE en RCPT TO fuera de 550-553 es problema del destinatario, no error general', () => {
+  for (const codigo of [554, 451, 452, 450, 501, undefined]) {
+    assert.equal(correo.esErrorGeneral(envelope('RCPT TO', codigo)), false, String(codigo));
+  }
   assert.equal(correo.esErrorGeneral(envelope('RCPT TO', 550)), false);
+});
+
+test('EENVELOPE fuera de RCPT TO (MAIL FROM, DATA, sin comando) es error general del canal', () => {
+  for (const comando of ['MAIL FROM', 'DATA', undefined]) {
+    for (const codigo of [452, 550, 554, undefined]) {
+      assert.equal(correo.esErrorGeneral(envelope(comando, codigo)), true, `${comando} ${codigo}`);
+    }
+  }
 });

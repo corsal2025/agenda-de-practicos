@@ -849,6 +849,26 @@ test('correo/confirmacion-masiva: aborta tras el primer error sistemico (EAUTH)'
   } finally { correo.solicitudConfirmacion = original; correo.ultimoError = null; }
 });
 
+test('correo/confirmacion-masiva: un destinatario rechazado en RCPT TO 554 cuenta fallido y no aborta', async () => {
+  const d = diaNuevo();
+  const ids = ['09:00', '10:00', '11:00'].map((h, i) => slot(d, h, { rut: `7-${i}`, nombre: 'X', correo: `y${i}@test.cl` }).id);
+  const original = correo.solicitudConfirmacion;
+  const intentados = [];
+  correo.solicitudConfirmacion = async (b) => {
+    intentados.push(b.id);
+    if (b.id !== ids[0]) return true;
+    correo.ultimoError = { code: 'EENVELOPE', command: 'RCPT TO', responseCode: 554, message: 'politica' };
+    return false;
+  };
+  try {
+    const r = await api('POST', '/correo/confirmacion-masiva', { ids });
+    assert.equal(r.status, 200);
+    assert.equal(r.datos.abortado, undefined);
+    assert.deepEqual(intentados, ids);
+    assert.deepEqual([r.datos.enviados, r.datos.fallidos], [2, 1]);
+  } finally { correo.solicitudConfirmacion = original; correo.ultimoError = null; }
+});
+
 // ---------- Avisos al postulante (telefono / whatsapp / correo) ----------
 test('aviso POST marca y desmarca medios, valida medio y bloque, y se limpia al liberar', async () => {
   const dia = diaNuevo();

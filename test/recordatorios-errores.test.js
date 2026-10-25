@@ -74,6 +74,45 @@ test('cuota o remitente (EENVELOPE en MAIL FROM) no marca la cita y corta la tan
   assert.equal(marca(b), 0);
 });
 
+test('rechazo de un destinatario fuera de 550-553 no corta la tanda: el siguiente recibe su recordatorio', async () => {
+  for (const codigo of [554, 451, 452, 501]) {
+    limpiar();
+    const malo = cita(3, 'malo@x.cl');
+    const bueno = cita(3, 'bueno@x.cl');
+    db.prepare('UPDATE agenda SET hora = ? WHERE id = ?').run('08:00', malo);
+    db.prepare('UPDATE agenda SET hora = ? WHERE id = ?').run('08:30', bueno);
+    const envio = (b) => {
+      if (b.id === malo) { correo.ultimoError = error('EENVELOPE', { command: 'RCPT TO', responseCode: codigo }); return false; }
+      return true;
+    };
+    for (let ciclo = 1; ciclo <= 3; ciclo++) {
+      const intentados = await correr(envio);
+      assert.ok(intentados.includes(malo), `${codigo}: malo se reintenta en el ciclo ${ciclo}`);
+      assert.equal(marca(malo), 0, `${codigo}: malo queda reintentable`);
+      assert.equal(marca(bueno), 1, `${codigo}: bueno ya recibio el recordatorio desde el primer ciclo`);
+    }
+  }
+});
+
+test('mensaje rechazado tras DATA (EMESSAGE 552) no marca y no corta: se reintenta en el ciclo siguiente', async () => {
+  limpiar();
+  const malo = cita(3, 'malo@x.cl');
+  const bueno = cita(3, 'bueno@x.cl');
+  db.prepare('UPDATE agenda SET hora = ? WHERE id = ?').run('08:00', malo);
+  db.prepare('UPDATE agenda SET hora = ? WHERE id = ?').run('08:30', bueno);
+  const envio = (b) => {
+    if (b.id === malo) { correo.ultimoError = error('EMESSAGE', { responseCode: 552 }); return false; }
+    return true;
+  };
+  for (let ciclo = 1; ciclo <= 2; ciclo++) {
+    const intentados = await correr(envio);
+    assert.ok(intentados.includes(malo), 'malo se reintenta en cada ciclo');
+    if (ciclo === 1) assert.ok(intentados.includes(bueno), 'no corta la tanda');
+    assert.equal(marca(malo), 0, 'no se marca: se reintenta');
+    assert.equal(marca(bueno), 1);
+  }
+});
+
 test('error general (EAUTH) no marca la cita y corta la tanda', async () => {
   limpiar();
   const a = cita(1);

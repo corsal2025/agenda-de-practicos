@@ -16,10 +16,11 @@ const ERRORES_CAMBIO_OUTLOOK = new Set(['EAUTH', 'ECONNECTION']);
 const esRechazoInmediato = (e) => Boolean(e) && e.code === 'EENVELOPE' && e.command === 'RCPT TO'
   && Number(e.responseCode) >= 550 && Number(e.responseCode) <= 553;
 // Fallas del canal completo (no de un destinatario): fallaran todos los envios siguientes.
-// Un EENVELOPE que no es rechazo del destinatario (cuota, remitente, 4xx) tambien lo es.
+// Un EENVELOPE fuera de la fase RCPT TO (MAIL FROM, DATA, sin comando) tambien lo es. Un
+// EENVELOPE en RCPT TO siempre es sobre UN destinatario (451, 452, 501, 554...): no es del canal.
 const ERRORES_GENERALES = new Set(['EAUTH', 'ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EOUTLOOK']);
 const esErrorGeneral = (e) => Boolean(e)
-  && (ERRORES_GENERALES.has(e.code) || (e.code === 'EENVELOPE' && !esRechazoInmediato(e)));
+  && (ERRORES_GENERALES.has(e.code) || (e.code === 'EENVELOPE' && e.command !== 'RCPT TO'));
 const baseUrl = URL_PUBLICA || `http://localhost:${PUERTO}`;
 
 function fFecha(iso) {
