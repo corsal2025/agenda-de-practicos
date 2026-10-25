@@ -130,63 +130,6 @@ header.top::after {
 .marca-org { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--tinta-2); }
 .marca-titulo { font-family: var(--serif); font-size: 32px; font-weight: 700; color: var(--azul-900); line-height: 1.1; white-space: nowrap; }
 
-/* Buscador global al lado del título Agenda de Prácticos */
-.buscador {
-  position: relative; width: 280px; height: 38px; margin: 0;
-  display: flex; align-items: center; flex: none;
-}
-.buscador.en-filtros {
-  flex: 1 1 300px;
-  max-width: 440px;
-  min-width: 240px;
-  margin-left: auto;
-}
-.buscador input,
-input#bq,
-.buscador input[type="search"] {
-  position: relative; width: 100%; height: 38px; padding: 0 16px 0 42px !important; font-size: 13.5px;
-  background: #ffffff; border: 1.5px solid #2563eb; border-radius: 999px; color: var(--tinta);
-  transition: width .18s ease, background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
-  outline: none; box-sizing: border-box;
-}
-.buscador input:focus, .buscador:focus-within input,
-input#bq:focus {
-  background: var(--papel); border-color: #1d4ed8;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, .2); width: 100%; z-index: 10;
-}
-.buscador:not(.en-filtros) input:focus,
-.buscador:not(.en-filtros):focus-within input {
-  width: 340px;
-}
-.buscador-ico {
-  position: absolute; left: 14px; top: 50%; transform: translateY(-50%); z-index: 12;
-  width: 16px; height: 16px; pointer-events: none;
-  fill: none; stroke: #2563eb; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
-}
-:root[data-tema="oscuro"] .buscador input,
-:root[data-tema="oscuro"] input#bq {
-  background: var(--elev);
-  border-color: #3b82f6;
-  color: var(--tinta);
-}
-:root[data-tema="oscuro"] .buscador-ico {
-  stroke: #60a5fa;
-}
-.buscador .buscador-res {
-  position: absolute; top: calc(100% + 6px); left: 0; width: 340px; z-index: 50;
-  background: var(--papel); border: 1px solid var(--linea); border-radius: var(--r);
-  box-shadow: 0 12px 32px rgba(16, 24, 40, .18);
-  max-height: 360px; overflow-y: auto; padding: 4px;
-}
-.buscador-res .bq-item {
-  display: flex; justify-content: space-between; gap: .75rem; width: 100%;
-  background: transparent; border: 0; border-radius: var(--r-sm);
-  padding: .5rem .65rem; text-align: left; color: var(--tinta);
-}
-.buscador-res .bq-item small { color: var(--tinta-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.buscador-res .bq-item:hover, .buscador-res .bq-item.sel { background: var(--azul-50); color: var(--azul-900); }
-.buscador-res .bq-vacio { padding: .55rem .65rem; color: var(--tinta-2); font-size: 13px; }
-
 .top-right { justify-self: end; display: flex; align-items: center; gap: .7rem; }
 .estado { font-size: 12px; color: var(--tinta-2); max-width: 175px; line-height: 1.35; }
 
@@ -1037,9 +980,6 @@ tbody tr:first-child td { border-top: 0; }
   .modal .cuerpo, .grid2 { grid-template-columns: 1fr; }
   th, .g-head { position: static; }
   header.top nav button { font-size: 12px; padding: .4rem .5rem; }
-  .buscador { flex-basis: 100%; max-width: none; margin: .4rem 0 .5rem; }
-  .buscador:focus-within input, .buscador .buscador-res { width: 100%; }
-  .buscador:focus-within .buscador-ico { left: .7rem; }
   main { padding: 1rem; }
 }
 
@@ -2383,15 +2323,7 @@ tbody tr:first-child td { border-top: 0; }
 .modal.lateral footer { flex-wrap: wrap; }
 @keyframes deslizar { from { transform: translateX(100%); } to { transform: none; } }
 
-/* Historial dentro de la ficha */
-.hist-cita { border-top: 1px solid var(--linea); padding-top: .8rem; }
-.hist-cita h4 { margin: 0 0 .5rem; font-size: 14px; }
-.hist-item { border: 1px solid var(--linea); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; color: var(--tinta); }
-.hist-item[data-id] { cursor: pointer; }
-.hist-item[data-id]:hover, .hist-item[data-id]:focus-visible { border-color: var(--azul); outline: none; }
-.hist-item.actual { border-color: var(--azul); border-width: 2px; }
-.hist-fila { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.hist-clase { margin-left: auto; font-weight: 700; color: var(--azul); }
+/* Aviso de 3er intento en el editor de cita */
 .hist-sub { font-size: 13px; margin-top: 2px; }
 
 /* Cuenta regresiva del tramite D/A5, vencimientos y escuelas */
@@ -2435,12 +2367,6 @@ header.top nav button[data-tab="vencimientos"] .nav-ico { color: var(--error, #d
 .tabla-heat td { font-variant-numeric: tabular-nums; font-weight: 600; }
 .tabla-heat td.heat-peor { outline: 2px solid var(--error); outline-offset: -2px; font-weight: 800; }
 
-/* ---------- Lista de espera: botón Sugerir en cupos libres ---------- */
-.slot.libre .btn-sugerir {
-  margin-top: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600; cursor: pointer;
-  border: 1px solid var(--azul-linea); border-radius: 4px; background: var(--azul-50); color: var(--azul-700);
-}
-.slot.libre .btn-sugerir:hover { background: var(--azul); color: #fff; }
 .aviso-sug { background: var(--alerta-bg); color: var(--alerta); padding: .45rem .7rem; border-radius: 6px; font-size: .85rem; }
 
 /* ---------- Corrección rápida (Reporte de errores) ---------- */
@@ -2490,24 +2416,9 @@ body.vista-movil { overflow-x: hidden; }
   .top-brand-group { gap: 10px; }
   .marca img.es-img { height: 44px; }
   .marca-titulo { font-size: 22px; white-space: normal; }
-  .buscador { width: 100%; }
   .top-inner > * { min-width: 0; max-width: 100%; }
 }
 
-/* ===== Nav: menu "Más" ===== */
-header.top nav .nav-mas { display: inline-flex; }
-.nav-mas-flecha { font-size: 10px; opacity: .7; }
-.nav-mas-btn[aria-expanded="true"] .nav-mas-flecha { transform: rotate(180deg); }
-.nav-mas-menu {
-  position: fixed; z-index: 1200; min-width: 210px; padding: 6px;
-  display: flex; flex-direction: column; gap: 2px;
-  background: var(--papel); border: 1px solid var(--linea); border-radius: var(--r-sm, 8px);
-  box-shadow: 0 10px 28px rgba(15, 23, 42, .18);
-}
-.nav-mas-menu[hidden] { display: none; }
-header.top nav .nav-mas-menu button { justify-content: flex-start; border-radius: 6px; border-bottom: 0; width: 100%; }
-header.top nav .nav-mas-menu button.activo { background: var(--azul-50); color: var(--azul-900); }
-header.top nav .nav-mas-menu button:focus-visible, .nav-mas-btn:focus-visible { outline: 2px solid var(--azul); outline-offset: 1px; }
 header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
 
 /* ===== Estadísticas: capacidad y carga ===== */
@@ -2997,20 +2908,6 @@ body:has(#a-grid.tabla-agenda-wrap) {
   color: #93c5fd;
   background: rgba(30, 64, 175, 0.25);
   border-color: rgba(147, 197, 253, 0.25);
-}
-
-.fila-separador-fecha td {
-  background: #f8fafc !important;
-  padding: 8px 14px !important;
-  border-top: 2px solid #e2e8f0 !important;
-  border-bottom: 2px solid #e2e8f0 !important;
-  text-align: center !important;
-}
-
-:root[data-tema="oscuro"] .fila-separador-fecha td {
-  background: #1e293b !important;
-  border-top-color: #334155 !important;
-  border-bottom-color: #334155 !important;
 }
 
 .separador-fecha-content {
