@@ -1,4 +1,3 @@
-const MOTIVOS_BLOQUEO_DEF = ['PERMISO ADMINISTRATIVO', 'LICENCIA MEDICA', 'FERIADO LEGAL', 'COMPENSATORIO', 'CAPACITACION', 'TERRENO'];
 const ETQ_MOTIVO = {
   'LICENCIA MEDICA': 'Licencia médica',
   'FERIADO LEGAL': 'Feriado legal',
@@ -9,7 +8,7 @@ const ETQ_MOTIVO = {
   'BLOQUEADO': 'Bloqueo administrativo'
 };
 function dialogoBloquearDia() {
-  const motivos = META.motivos_bloqueo || MOTIVOS_BLOQUEO_DEF;
+  const motivos = META.motivos_bloqueo;
   const f = estadoAgenda.fecha || hoy();
   const horasDisponibles = (META && META.horas && META.horas.length) ? META.horas : [
     '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30'
@@ -354,8 +353,8 @@ function dialogoBloquearDia() {
 async function dialogoDesbloquearDia() {
   const f = estadoAgenda.fecha || hoy();
   const examinadores = META.examinadores || [];
-  // Los motivos vienen de la misma lista que usa el bloqueo (META no los envia).
-  const motivos = META.motivos_bloqueo || MOTIVOS_BLOQUEO_DEF;
+  // Los motivos vienen del servidor (/api/meta), la misma lista que valida el bloqueo.
+  const motivos = META.motivos_bloqueo;
   const horasDisponibles = (META && META.horas && META.horas.length) ? META.horas : [
     '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30'
   ];
