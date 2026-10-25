@@ -3,6 +3,7 @@
 const { db, tx } = require('./db');
 const telefono = require('./telefono');
 const rut = require('./rut');
+const { hoyISO } = require('./fechas');
 
 const validar = require('./validar');
 
@@ -12,10 +13,12 @@ const MAX_FILAS = 500;
 const correoInvalido = (c) => Boolean(String(c || '').trim()) && !CORREO_RE.test(String(c).trim());
 const normNombre = (n) => String(n || '').trim().replace(/\s+/g, ' ').toUpperCase();
 
-// Tipos de problema de una cita: CORREO_INVALIDO, TELEFONO_INCOMPLETO, NOMBRE, RUT_INVALIDO.
+// Tipos de problema de una cita: CORREO_INVALIDO, TELEFONO_INCOMPLETO, NOMBRE, RUT_INVALIDO,
+// CORREO_FALLIDO (el servidor rechazo el recordatorio; solo citas de hoy en adelante).
 function problemas(f) {
   const p = [];
   if (correoInvalido(f.correo)) p.push('CORREO_INVALIDO');
+  if (Number(f.correo_recordatorio_enviado) === 2 && f.fecha >= hoyISO()) p.push('CORREO_FALLIDO');
   const tel = telefono.normalizar(f.contacto);
   if (!tel.vacio && !tel.valido) p.push('TELEFONO_INCOMPLETO');
   // Solo espacios dobles o sobrantes: las minusculas no son error (la UI muestra en mayusculas).
@@ -26,7 +29,8 @@ function problemas(f) {
 
 function listar() {
   const filas = db.prepare(`
-    SELECT a.id, a.fecha, a.hora, a.rut, a.nombre, a.correo, a.contacto, a.actualizado_en, e.nombre AS examinador
+    SELECT a.id, a.fecha, a.hora, a.rut, a.nombre, a.correo, a.contacto, a.actualizado_en,
+           a.correo_recordatorio_enviado, e.nombre AS examinador
     FROM agenda a LEFT JOIN examinadores e ON e.id = a.examinador_id
     WHERE (a.rut IS NOT NULL AND a.rut != '') OR (a.nombre IS NOT NULL AND a.nombre != '')
     ORDER BY a.fecha DESC, a.hora
@@ -61,7 +65,11 @@ function validarContacto(body) {
 
 function aplicarContacto(id, cambios) {
   const cols = Object.keys(cambios);
-  db.prepare(`UPDATE agenda SET ${cols.map((c) => `${c} = @${c}`).join(', ')}, actualizado_en = datetime('now','localtime') WHERE id = @id`)
+  // Un correo distinto vuelve a dejar la cita pendiente de recordatorio (el anterior pudo haber rebotado).
+  const reintento = 'correo' in cambios
+    ? ', correo_recordatorio_enviado = CASE WHEN correo IS NOT @correo THEN 0 ELSE correo_recordatorio_enviado END'
+    : '';
+  db.prepare(`UPDATE agenda SET ${cols.map((c) => `${c} = @${c}`).join(', ')}${reintento}, actualizado_en = datetime('now','localtime') WHERE id = @id`)
     .run({ ...cambios, id });
 }
 
