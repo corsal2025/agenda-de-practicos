@@ -134,6 +134,37 @@ test('bloquear-dia limpia token y banderas de las citas bloqueadas', async () =>
   sinTokens(x);
 });
 
+test('bloquear-dia con incluir_ocupados nunca deja 13:00/13:30 abiertos tras liberar la clase D/A5 de las 12:30', async () => {
+  const dia = diaNuevo();
+  ocupado(dia, '12:30', { clase: 'D' });
+  slot(dia, '13:00', { bloqueado: 1, bloqueo_motivo: MOTIVO_AUTO });
+  slot(dia, '13:30', { bloqueado: 1, bloqueo_motivo: MOTIVO_AUTO });
+  const r = await api('POST', '/bloquear-dia', { desde: dia, hasta: dia, motivo: 'TERRENO', incluir_ocupados: true });
+  assert.equal(r.status, 200, r.texto);
+  for (const hora of ['12:30', '13:00', '13:30']) {
+    const x = db.prepare('SELECT bloqueado, bloqueo_motivo FROM agenda WHERE fecha = ? AND hora = ?').get(dia, hora);
+    assert.equal(x.bloqueado, 1, `${hora} debe quedar bloqueada`);
+    assert.equal(x.bloqueo_motivo, 'TERRENO', `${hora} debe tener el motivo del dia`);
+  }
+});
+
+test('bloquear-dia con un rango de horas que no cubre las 13:00/13:30 las libera (ya no queda D/A5 en el 12:30)', async () => {
+  const dia = diaNuevo();
+  ocupado(dia, '12:30', { clase: 'D' });
+  slot(dia, '13:00', { bloqueado: 1, bloqueo_motivo: MOTIVO_AUTO });
+  slot(dia, '13:30', { bloqueado: 1, bloqueo_motivo: MOTIVO_AUTO });
+  const r = await api('POST', '/bloquear-dia', {
+    desde: dia, hasta: dia, motivo: 'TERRENO', incluir_ocupados: true, hora_desde: '12:30', hora_hasta: '12:30',
+  });
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(db.prepare('SELECT bloqueado FROM agenda WHERE fecha = ? AND hora = ?').get(dia, '12:30').bloqueado, 1);
+  for (const hora of ['13:00', '13:30']) {
+    const x = db.prepare('SELECT bloqueado, bloqueo_motivo FROM agenda WHERE fecha = ? AND hora = ?').get(dia, hora);
+    assert.equal(x.bloqueado, 0, `${hora} debe quedar liberada`);
+    assert.equal(x.bloqueo_motivo, null);
+  }
+});
+
 test('PUT con bloqueado=true limpia token y banderas', async () => {
   const b = ocupado(diaNuevo(), '09:00');
   const r = await api('PUT', `/agenda/${b.id}`, { bloqueado: true, bloqueo_motivo: 'terreno' });
@@ -836,4 +867,21 @@ test('aviso POST marca y desmarca medios, valida medio y bloque, y se limpia al 
   const lib = await api('POST', `/agenda/${a.id}/liberar`, {});
   assert.equal(lib.status, 200, lib.texto);
   assert.equal(leer(a.id).avisado_por, null);
+});
+
+// ---------- borrar historial de movimientos ----------
+test('POST /movimientos/borrar exige la frase exacta y borra todo el historial con respaldo previo', async () => {
+  db.prepare("INSERT INTO movimientos (agenda_id, accion, detalle) VALUES (NULL, 'prueba', 'algo')").run();
+  for (const confirmacion of [undefined, '', 'borrar historial', 'BORRAR HISTORIAL ']) {
+    const r = await api('POST', '/movimientos/borrar', { confirmacion });
+    assert.equal(r.status, 400, JSON.stringify(confirmacion));
+  }
+  assert.ok(db.prepare('SELECT COUNT(*) n FROM movimientos').get().n > 0);
+  const r = await api('POST', '/movimientos/borrar', { confirmacion: 'BORRAR HISTORIAL' });
+  assert.equal(r.status, 200, r.texto);
+  assert.ok(r.datos.backup);
+  // Queda exactamente un movimiento: el que registra el propio borrado.
+  const restantes = db.prepare('SELECT * FROM movimientos').all();
+  assert.equal(restantes.length, 1);
+  assert.equal(restantes[0].accion, 'borrar_historial');
 });

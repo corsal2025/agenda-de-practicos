@@ -71,3 +71,37 @@ test('clase pesada: el bloqueo automatico sigue vigente si la clase D/A5 esta en
   });
   assert.equal(pesada.bloqueoAutoVigente(dependiente), true);
 });
+
+test('absorberEnBloqueo: los dependientes dentro del rango quedan bloqueados con el motivo del dia', () => {
+  const fecha = '2031-06-01';
+  insertarBloque(fecha, '13:00', 1, { bloqueado: 1, bloqueo_motivo: pesada.MOTIVO_AUTO });
+  insertarBloque(fecha, '13:30', 1, { bloqueado: 1, bloqueo_motivo: pesada.MOTIVO_AUTO });
+  pesada.absorberEnBloqueo(fecha, EXAMINADOR_ID, 'TERRENO', () => true);
+  const filas = db.prepare('SELECT hora, bloqueado, bloqueo_motivo FROM agenda WHERE fecha = ? AND examinador_id = ? AND hora IN (?,?) ORDER BY hora')
+    .all(fecha, EXAMINADOR_ID, '13:00', '13:30');
+  assert.deepEqual(filas.map((f) => ({ ...f })), [
+    { hora: '13:00', bloqueado: 1, bloqueo_motivo: 'TERRENO' },
+    { hora: '13:30', bloqueado: 1, bloqueo_motivo: 'TERRENO' },
+  ]);
+});
+
+test('absorberEnBloqueo: los dependientes fuera del rango se liberan si ya no queda D/A5 en el 12:30', () => {
+  const fecha = '2031-06-02';
+  insertarBloque(fecha, HORA_D_A5, 1); // 12:30 libre: la clase pesada ya se bloqueo/movio
+  insertarBloque(fecha, '13:00', 1, { bloqueado: 1, bloqueo_motivo: pesada.MOTIVO_AUTO });
+  pesada.absorberEnBloqueo(fecha, EXAMINADOR_ID, 'TERRENO', () => false);
+  const fila = db.prepare('SELECT bloqueado, bloqueo_motivo FROM agenda WHERE fecha = ? AND examinador_id = ? AND hora = ?')
+    .get(fecha, EXAMINADOR_ID, '13:00');
+  assert.deepEqual({ ...fila }, { bloqueado: 0, bloqueo_motivo: null });
+});
+
+test('absorberEnBloqueo: fuera del rango pero con D/A5 vigente en otro cupo, no se libera', () => {
+  const fecha = '2031-06-03';
+  insertarBloque(fecha, HORA_D_A5, 1);
+  insertarBloque(fecha, HORA_D_A5, 2, { nombre: 'PERSONA EXTRA', clase: 'D' });
+  insertarBloque(fecha, '13:00', 1, { bloqueado: 1, bloqueo_motivo: pesada.MOTIVO_AUTO });
+  pesada.absorberEnBloqueo(fecha, EXAMINADOR_ID, 'TERRENO', () => false);
+  const fila = db.prepare('SELECT bloqueado, bloqueo_motivo FROM agenda WHERE fecha = ? AND examinador_id = ? AND hora = ?')
+    .get(fecha, EXAMINADOR_ID, '13:00');
+  assert.deepEqual({ ...fila }, { bloqueado: 1, bloqueo_motivo: pesada.MOTIVO_AUTO });
+});

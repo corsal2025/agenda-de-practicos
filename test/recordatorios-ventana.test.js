@@ -49,3 +49,23 @@ test('enviarPendientes: incluye citas atrasadas de mañana y pasado, no hoy ni a
   assert.equal(marcado(ids.d1), 1);
   assert.equal(marcado(ids.d4), 0);
 });
+
+test('enviarPendientes: quien ya confirmo no recibe token y su correo no lleva links', async () => {
+  const hoy = hoyISO();
+  const id = cita(sumarDias(hoy, 1), '11:00');
+  db.prepare('UPDATE agenda SET confirmo_asistencia = 1 WHERE id = ?').run(id);
+  let recibido = null;
+  const orig = correo.recordatorio;
+  correo.habilitado = true;
+  correo.recordatorio = async (b) => { recibido = b; return true; };
+  try {
+    await enviarPendientes();
+  } finally {
+    correo.recordatorio = orig;
+    correo.habilitado = null;
+  }
+  assert.ok(recibido);
+  assert.equal(recibido.id, id);
+  assert.equal(recibido.token_confirmacion, null);
+  assert.equal(db.prepare('SELECT token_confirmacion FROM agenda WHERE id = ?').get(id).token_confirmacion, null);
+});
