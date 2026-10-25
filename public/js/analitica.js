@@ -144,6 +144,14 @@ async function renderAnalitica() {
 }
 
 /* ================= tab: POR VENCER (tramites D/A5) ================= */
+// Decide si el botón "Dar prioridad en lista de espera" se ofrece para una fila, y con qué texto.
+function estadoPrioridadVencer(r, hoy) {
+  if (r.pendiente_reagendar === 1) return { habilitado: false, texto: 'Ya en lista de espera' };
+  if (r.fecha < hoy) return { habilitado: false, texto: 'Cita pasada' };
+  if (r.confirmo_asistencia === 1) return { habilitado: false, texto: 'Confirmó asistencia' };
+  if (r.dias_restantes_tramite != null && r.dias_restantes_tramite <= 0) return { habilitado: false, texto: 'Trámite vencido' };
+  return { habilitado: true, texto: 'Dar prioridad en lista de espera' };
+}
 async function renderVencimientos() {
   view.innerHTML = `
     <div class="panel">
@@ -160,24 +168,41 @@ async function renderVencimientos() {
       <p class="muted">Citas de todas las clases desde hoy (y pasadas de los últimos 30 días sin resultado). El trámite vence 6 meses después de su inicio.</p>
       <div class="tabla-scroll"><table class="tabla-vencimientos thead-fijo"><thead><tr>
         <th class="c">Días restantes</th><th>Nombre</th><th>RUT</th><th class="c">Clase</th><th>Teléfono</th>
-        <th class="c">Fecha cita</th><th>Examinador</th><th class="c">Vence</th>
-      </tr></thead><tbody id="ven-body"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
+        <th class="c">Fecha cita</th><th>Examinador</th><th class="c">Vence</th><th class="c">Acción</th>
+      </tr></thead><tbody id="ven-body"><tr><td colspan="9">Cargando...</td></tr></tbody></table></div>
     </div>`;
   const cargar = () => cargarVista('vencimientos', `/tramites-por-vencer?filtro=${encodeURIComponent($('#ven-filtro').value)}`, pintar)
     .catch((e) => toast(e.message, 'err'));
   const pintar = (rows) => {
     const body = $('#ven-body');
     if (!body) return;
-    body.innerHTML = (rows || []).length ? rows.map((r) => `<tr role="button" tabindex="0" data-id="${r.id}">
+    body.innerHTML = (rows || []).length ? rows.map((r) => {
+      const estado = estadoPrioridadVencer(r, hoy());
+      return `<tr data-id="${r.id}">
       <td class="c">${cuentaRegresivaHtml(r.dias_restantes_tramite, r.fecha_vencimiento_tramite)}</td>
       <td>${esc(nom(r.nombre) || '—')}</td><td class="num">${esc(r.rut || '—')}</td><td class="c">${esc(r.clase || '—')}</td>
       <td class="num">${esc(fTel(r.contacto) || '—')}</td><td class="num c">${esc(fFecha(r.fecha))} · ${esc(r.hora)}</td>
-      <td>${esc(r.examinador || '—')}</td><td class="num c">${esc(fFecha(r.fecha_vencimiento_tramite))}</td></tr>`).join('')
-      : licoVacioFila(8, 'explica', 'Nada por vencer', 'No hay trámites D/A5 en este filtro.');
-    body.querySelectorAll('tr[data-id]').forEach((tr) => {
-      const abrir = () => abrirSlotPorId(Number(tr.dataset.id), cargar).catch((e) => toast(e.message, 'err'));
-      tr.onclick = abrir;
-      tr.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrir(); } };
+      <td>${esc(r.examinador || '—')}</td><td class="num c">${esc(fFecha(r.fecha_vencimiento_tramite))}</td>
+      <td class="c"><button class="btn chico" data-prioridad="${r.id}" ${estado.habilitado ? '' : 'disabled'}>${esc(estado.texto)}</button></td></tr>`;
+    }).join('')
+      : licoVacioFila(9, 'explica', 'Nada por vencer', 'No hay trámites D/A5 en este filtro.');
+    body.querySelectorAll('button[data-prioridad]').forEach((btn) => {
+      if (btn.disabled) return;
+      const r = (rows || []).find((x) => x.id === Number(btn.dataset.prioridad));
+      btn.onclick = async () => {
+        const vence = fFecha(r.fecha_vencimiento_tramite);
+        if (!confirm(`¿Dar prioridad en Lista de espera a ${nom(r.nombre) || r.rut || 'esta persona'} (RUT ${r.rut || '—'})?\n\nSu trámite vence el ${vence}.`)) return;
+        btn.disabled = true;
+        try {
+          await api(`/agenda/${r.id}/pendiente`, { method: 'POST', body: { valor: true, nota: `Prioridad: trámite vence el ${vence} (Por vencer)` } });
+          toast('Prioridad otorgada en Lista de espera');
+          actualizarBadgeEspera();
+          cargar();
+        } catch (e) {
+          toast(e.message, 'err');
+          btn.disabled = false;
+        }
+      };
     });
   };
   $('#ven-filtro').onchange = cargar;

@@ -216,12 +216,12 @@ const PASOS_TOUR = [
   {
     seccion: 'Por vencer',
     tab: 'vencimientos',
-    target: '#ven-body tr[data-id]',
+    target: '#ven-body button[data-prioridad]',
     fallback: '#ven-body',
     listo: tourSinCargando('#ven-body'),
-    titulo: 'Abrir la ficha desde la lista',
+    titulo: 'Dar prioridad en Lista de espera',
     icono: '🖱️',
-    descripcion: 'Haz <b>clic en una fila</b> para abrir la ficha del postulante y actualizar sus datos o la fecha de inicio del trámite.'
+    descripcion: 'Usa el botón <b>Dar prioridad en lista de espera</b> de cada fila para que ese postulante aparezca de inmediato en la pestaña <b>Lista de espera</b> y se le pueda asignar un cupo libre.'
   },
 
   /* ---------- Estadísticas ---------- */
