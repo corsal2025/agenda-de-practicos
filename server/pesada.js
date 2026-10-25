@@ -78,6 +78,29 @@ function ocupadosDependientes(fecha, examinador_id) {
   ).all(fecha, examinador_id, ...HORAS_A_BLOQUEAR);
 }
 
+// Al bloquear un dia (o un rango de horas) con el ocupante D/A5 de las 12:30 de por medio: los
+// bloques automaticos (13:00/13:30) que caen dentro del rango bloqueado pasan a usar el motivo
+// del bloqueo del dia y quedan cerrados igual; los que caen fuera del rango se liberan, pero solo
+// si no queda ningun D/A5 en el 12:30 de ese examinador/fecha (puede haber otro cupo ocupado).
+// `enRango(hora)` decide si una hora cae dentro del bloqueo que se esta aplicando.
+function absorberEnBloqueo(fecha, examinador_id, motivo, enRango) {
+  if (!HORAS_A_BLOQUEAR.length) return;
+  const placeholders = HORAS_A_BLOQUEAR.map(() => '?').join(',');
+  const dependientes = db.prepare(
+    `SELECT * FROM agenda WHERE fecha = ? AND examinador_id = ? AND bloqueo_motivo = ? AND hora IN (${placeholders})`
+  ).all(fecha, examinador_id, MOTIVO_AUTO, ...HORAS_A_BLOQUEAR);
+  // Sin tx propia: quien llama (por ejemplo /api/bloquear-dia) ya envuelve esto en su transaccion.
+  for (const b of dependientes) {
+    if (enRango(b.hora)) {
+      db.prepare(`UPDATE agenda SET bloqueo_motivo = ?, actualizado_en = datetime('now','localtime') WHERE id = ?`)
+        .run(motivo, b.id);
+    } else if (!bloqueoAutoVigente(b)) {
+      db.prepare(`UPDATE agenda SET bloqueado = 0, bloqueo_motivo = NULL, actualizado_en = datetime('now','localtime') WHERE id = ?`)
+        .run(b.id);
+    }
+  }
+}
+
 // Recorre toda la agenda y aplica la regla a las citas pesadas ya existentes
 // (por ejemplo, las que llegaron por una importacion de Excel y nunca
 // pasaron por el flujo de agendar/editar de la app).
@@ -95,4 +118,5 @@ function sincronizarTodo() {
 
 module.exports = {
   MOTIVO_AUTO, esPesadaEnHoraValida, aplicar, liberar, bloqueoAutoVigente, ocupadosDependientes, sincronizarTodo,
+  absorberEnBloqueo,
 };

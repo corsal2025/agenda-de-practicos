@@ -3,6 +3,7 @@
 // y el procesamiento automatico de respuestas por correo (server/respuestas-correo.js).
 const { db, log } = require('./db');
 const correo = require('./correo');
+const { hoyISO } = require('./fechas');
 
 const SELECT_BLOQUE = `
   SELECT a.*, e.nombre AS examinador, f.nombre AS funcionario,
@@ -46,6 +47,12 @@ async function enviarConfirmacionSiFalta(id) {
   }
 }
 
+// Regla: quien confirmo asistencia no se reagenda hasta que pase el dia del examen
+// (si no se presenta se marca No asistio). La usan tanto el reagendar interno como el publico.
+function confirmadaBloqueaReagendar(cita, hoy = hoyISO()) {
+  return Number(cita.confirmo_asistencia) === 1 && cita.fecha >= hoy;
+}
+
 // Deriva la cita a "pendiente de reagendar" (sin destino).
 function marcarPendienteReagendar(id, motivo, actor) {
   const mot = String(motivo || 'POSTULANTE SOLICITA CAMBIO').trim();
@@ -55,4 +62,7 @@ function marcarPendienteReagendar(id, motivo, actor) {
   return r.changes > 0;
 }
 
-module.exports = { SELECT_BLOQUE, traer, marcarConfirmacionEnviada, registrarAsistencia, enviarConfirmacionSiFalta, marcarPendienteReagendar };
+module.exports = {
+  SELECT_BLOQUE, traer, marcarConfirmacionEnviada, registrarAsistencia, enviarConfirmacionSiFalta,
+  marcarPendienteReagendar, confirmadaBloqueaReagendar,
+};

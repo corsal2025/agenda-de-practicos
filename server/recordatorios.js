@@ -24,11 +24,17 @@ async function enviarPendientes() {
   const filas = db.prepare(SELECT).all(hoyISO(), fechaObjetivo);
   let enviados = 0;
   for (const bloque of filas) {
-    if (!bloque.token_confirmacion) {
+    // Quien ya confirmo no necesita (ni debe recibir) links de confirmar/reagendar en este
+    // recordatorio: se le envia una copia sin token, sin tocar el token real del bloque.
+    const yaConfirmo = Number(bloque.confirmo_asistencia) === 1;
+    let envioBloque = bloque;
+    if (yaConfirmo) {
+      envioBloque = { ...bloque, token_confirmacion: null };
+    } else if (!bloque.token_confirmacion) {
       bloque.token_confirmacion = crypto.randomBytes(16).toString('hex');
       db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').run(bloque.token_confirmacion, bloque.id);
     }
-    const ok = await correo.recordatorio(bloque);
+    const ok = await correo.recordatorio(envioBloque);
     if (ok) {
       // Solo si el bloque sigue con el mismo ocupante/token (el SMTP pudo tardar y reasignarse).
       db.prepare('UPDATE agenda SET correo_recordatorio_enviado = 1 WHERE id = ? AND token_confirmacion IS ? AND rut IS ?')

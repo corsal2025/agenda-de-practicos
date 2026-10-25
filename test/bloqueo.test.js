@@ -55,6 +55,23 @@ test('leerRangoBloqueo acepta horas especificas', () => {
   );
 });
 
+test('horaEnRango: sin horas especificas, bloquea el dia completo', () => {
+  assert.equal(require('../server/bloqueo').horaEnRango({}, '09:00'), true);
+});
+
+test('horaEnRango: respeta la lista de horas especificas', () => {
+  const rango = { horas: ['09:00', '09:30'] };
+  assert.equal(require('../server/bloqueo').horaEnRango(rango, '09:00'), true);
+  assert.equal(require('../server/bloqueo').horaEnRango(rango, '10:00'), false);
+});
+
+test('horaEnRango: respeta hora_desde/hora_hasta', () => {
+  const rango = { hora_desde: '09:00', hora_hasta: '12:30' };
+  assert.equal(require('../server/bloqueo').horaEnRango(rango, '09:00'), true);
+  assert.equal(require('../server/bloqueo').horaEnRango(rango, '12:30'), true);
+  assert.equal(require('../server/bloqueo').horaEnRango(rango, '13:00'), false);
+});
+
 test('filtroBloqueo incluye horas si estan presentes', () => {
   assert.deepEqual(
     filtroBloqueo({ desde: '2026-10-05', hasta: '2026-10-05', examinador_id: 1, horas: ['09:00', '09:30'] }, { bloqueado: 0, incluirOcupados: true }),

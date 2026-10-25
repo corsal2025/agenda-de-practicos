@@ -65,4 +65,12 @@ function filtroBloqueo({ desde, hasta, examinador_id, horas, hora_desde, hora_ha
   return { where: cond.join(' AND '), params };
 }
 
-module.exports = { MOTIVOS_BLOQUEO, leerRangoBloqueo, filtroBloqueo };
+// true si `hora` cae dentro del rango de horas del bloqueo (horas especificas, hora_desde/hora_hasta,
+// o el dia completo si no se especifico ninguna hora).
+function horaEnRango(rango, hora) {
+  if (rango.horas && rango.horas.length) return rango.horas.includes(hora);
+  if (rango.hora_desde && rango.hora_hasta) return hora >= rango.hora_desde && hora <= rango.hora_hasta;
+  return true;
+}
+
+module.exports = { MOTIVOS_BLOQUEO, leerRangoBloqueo, filtroBloqueo, horaEnRango };

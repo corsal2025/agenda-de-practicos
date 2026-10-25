@@ -35,6 +35,8 @@ const intentos = require('./intentos');
 const asistencia = require('./asistencia');
 const { SELECT_BLOQUE, traer, marcarConfirmacionEnviada } = asistencia;
 const respuestasCorreo = require('./respuestas-correo');
+const enlacePublico = require('./enlace-publico');
+const historial = require('./historial');
 
 const app = express();
 app.disable('x-powered-by');
@@ -80,12 +82,6 @@ function fFecha(iso) {
   return (d && m && y) ? `${d}/${m}/${y}` : String(iso);
 }
 
-function tokenValido(bloque, token) {
-  if (!bloque || !bloque.token_confirmacion || !token) return false;
-  const a = Buffer.from(bloque.token_confirmacion);
-  const b = Buffer.from(String(token));
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
 // Los correos traen links GET, pero abrirlos NO ejecuta nada: los escaneres de correo
 // (Outlook SafeLinks, antivirus) visitan los links y confirmarian solos. El GET muestra un
 // boton y solo el POST (click real de la persona) realiza la accion y consume el token.
@@ -94,11 +90,17 @@ function botonPost(accion, id, token, texto, color) {
     <button type="submit" style="background:${color};color:#fff;border:none;padding:.7rem 1.4rem;border-radius:6px;font-weight:700;font-size:.95rem;cursor:pointer">${texto}</button>
   </form>`;
 }
-function bloquePorToken(req) {
+// Evalua el enlace (token, fecha pasada, resultado ya registrado) y responde con el motivo
+// honesto si no es valido. Devuelve el bloque solo si el enlace sigue siendo valido.
+function bloquePorEnlace(req, res) {
   const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(Number(req.params.id));
-  return tokenValido(bloque, req.params.token) ? bloque : null;
+  const ev = enlacePublico.evaluarEnlace(bloque, req.params.token);
+  if (!ev.ok) {
+    res.status(ev.status).send(paginaPublica('Link no válido', ev.mensaje, false));
+    return null;
+  }
+  return bloque;
 }
-const linkInvalido = (res) => res.status(404).send(paginaPublica('Link no válido', 'Este link ya se usó o no es válido.', false));
 const errorPublico = (res, e, contexto) => {
   console.error(`[PUBLICO] ${contexto}:`, e);
   res.status(500).send(paginaPublica('Ocurrió un error', 'No pudimos procesar tu solicitud. Contacta a la oficina.', false));
@@ -106,8 +108,8 @@ const errorPublico = (res, e, contexto) => {
 
 app.get('/confirmar/:id/:token', (req, res) => {
   try {
-    const bloque = bloquePorToken(req);
-    if (!bloque) return linkInvalido(res);
+    const bloque = bloquePorEnlace(req, res);
+    if (!bloque) return;
     res.send(paginaPublica('Confirma tu asistencia',
       `Examen práctico el <b>${esc(fFecha(bloque.fecha))}</b> a las <b>${esc(bloque.hora)}</b> hrs.`,
       true, botonPost('confirmar', bloque.id, req.params.token, '✔ Confirmo mi asistencia', '#15803d')));
@@ -115,8 +117,8 @@ app.get('/confirmar/:id/:token', (req, res) => {
 });
 app.post('/confirmar/:id/:token', (req, res) => {
   try {
-    const bloque = bloquePorToken(req);
-    if (!bloque) return linkInvalido(res);
+    const bloque = bloquePorEnlace(req, res);
+    if (!bloque) return;
     db.prepare("UPDATE agenda SET confirmo_asistencia = 1, token_confirmacion = NULL, actualizado_en = datetime('now','localtime') WHERE id = ?").run(bloque.id);
     log(bloque.id, 'confirmar', `${bloque.fecha} ${bloque.hora} confirmado por correo`);
     res.send(paginaPublica('¡Listo, tu hora quedó confirmada!', 'Te esperamos el día y la hora agendada. Gracias por confirmar.', true));
@@ -124,8 +126,8 @@ app.post('/confirmar/:id/:token', (req, res) => {
 });
 app.get('/rechazar/:id/:token', (req, res) => {
   try {
-    const bloque = bloquePorToken(req);
-    if (!bloque) return linkInvalido(res);
+    const bloque = bloquePorEnlace(req, res);
+    if (!bloque) return;
     res.send(paginaPublica('¿No puedes asistir?',
       `Tu examen práctico es el <b>${esc(fFecha(bloque.fecha))}</b> a las <b>${esc(bloque.hora)}</b> hrs. Si no puedes asistir, avísanos para reagendar.`,
       false, botonPost('rechazar', bloque.id, req.params.token, 'No puedo asistir', '#b91c1c')));
@@ -133,8 +135,8 @@ app.get('/rechazar/:id/:token', (req, res) => {
 });
 app.post('/rechazar/:id/:token', (req, res) => {
   try {
-    const bloque = bloquePorToken(req);
-    if (!bloque) return linkInvalido(res);
+    const bloque = bloquePorEnlace(req, res);
+    if (!bloque) return;
     db.prepare(`
       UPDATE agenda SET confirmo_asistencia = 0, pendiente_reagendar = 1,
         pendiente_nota = 'No puede asistir (avisado por correo automatico)',
@@ -170,10 +172,15 @@ function opcionesReagendar(bloque) {
     .slice(0, 25);
 }
 
+const SIN_REAGENDAR_CONFIRMADA = (fecha) => `Ya confirmaste tu asistencia para el <b>${esc(fFecha(fecha))}</b>. `
+  + 'Puedes reagendar después de esa fecha; si no vas a poder asistir, avísanos para que te contactemos.';
+
 app.get('/reagendar/:id/:token', (req, res) => { try {
   const bloque = db.prepare('SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id WHERE a.id = ?').get(Number(req.params.id));
-  if (!tokenValido(bloque, req.params.token)) {
-    return res.status(404).send(paginaPublica('Link no válido', 'Este enlace ya fue utilizado o ha expirado.', false));
+  const ev = enlacePublico.evaluarEnlace(bloque, req.params.token);
+  if (!ev.ok) return res.status(ev.status).send(paginaPublica('Link no válido', ev.mensaje, false));
+  if (asistencia.confirmadaBloqueaReagendar(bloque)) {
+    return res.status(409).send(paginaPublica('Todavía no puedes reagendar', SIN_REAGENDAR_CONFIRMADA(bloque.fecha), false));
   }
 
   const disponibles = opcionesReagendar(bloque);
@@ -225,16 +232,23 @@ app.get('/reagendar/:id/:token', (req, res) => { try {
 
 app.post('/reagendar/:id/:token/elegir', express.urlencoded({ extended: true }), (req, res) => { try {
   const bloque = db.prepare('SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id WHERE a.id = ?').get(Number(req.params.id));
-  if (!tokenValido(bloque, req.params.token)) {
-    return res.status(404).send(paginaPublica('Link no válido', 'Este enlace ya fue utilizado o ha expirado.', false));
+  const ev = enlacePublico.evaluarEnlace(bloque, req.params.token);
+  if (!ev.ok) return res.status(ev.status).send(paginaPublica('Link no válido', ev.mensaje, false));
+  if (asistencia.confirmadaBloqueaReagendar(bloque)) {
+    return res.status(409).send(paginaPublica('Todavía no puedes reagendar', SIN_REAGENDAR_CONFIRMADA(bloque.fecha), false));
   }
 
   const nuevoId = Number((req.body || {}).nuevo_slot_id);
   const nuevoToken = crypto.randomBytes(16).toString('hex');
 
-  // Todo en una transaccion: se relee y valida el destino y se mueve la cita sin dejar
-  // el estado a medias si algo falla.
+  // Todo en una transaccion: se relee y valida el origen y el destino, y se mueve la cita
+  // sin dejar el estado a medias si algo falla (seguridad ante carreras).
   const nuevoSlot = tx(() => {
+    const origenActual = db.prepare('SELECT * FROM agenda WHERE id = ?').get(bloque.id);
+    const evTx = enlacePublico.evaluarEnlace(origenActual, req.params.token);
+    if (!evTx.ok) throw bad(evTx.mensaje, evTx.status);
+    if (asistencia.confirmadaBloqueaReagendar(origenActual)) throw bad(SIN_REAGENDAR_CONFIRMADA(origenActual.fecha).replace(/<\/?b>/g, ''), 409);
+
     const destino = db.prepare('SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id WHERE a.id = ?').get(nuevoId);
     const noDisponible = () => bad('Ese horario ya no está disponible. Por favor regresa y selecciona otra fecha.');
     if (!destino || destino.bloqueado || destino.rut || destino.nombre) throw noDisponible();
@@ -1051,7 +1065,7 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
   if (!(origen.rut || origen.nombre)) throw bad('El bloque de origen no tiene una cita.');
   // Regla: quien confirmo asistencia no se reagenda hasta que pase el dia del examen
   // (si no se presenta se marca No asistio). forzar_confirmada es la salida excepcional.
-  if (Number(origen.confirmo_asistencia) === 1 && origen.fecha >= hoyISO() && !(req.body && req.body.forzar_confirmada === true)) {
+  if (asistencia.confirmadaBloqueaReagendar(origen) && !(req.body && req.body.forzar_confirmada === true)) {
     const f = String(origen.fecha).split('-').reverse().join('/');
     throw bad(`La persona confirmó asistencia para el ${f}: se puede reagendar después de esa fecha (o márcala como No asistió)`, 409);
   }
@@ -1153,12 +1167,14 @@ app.post('/api/bloquear-dia', wrap((req, res) => {
         papelera.guardar(b, 'bloquear-dia', actor);
         cola.encolar(b, rango.motivo, actor);
         aReagendar++;
-        if (pesada.esPesadaEnHoraValida(b)) {
-          pesada.liberar(b.fecha, b.examinador_id);
-        }
       }
       db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL.replace('bloqueado=0, bloqueo_motivo=NULL', 'bloqueado=1, bloqueo_motivo=@m')} WHERE id=@id`)
         .run({ id: b.id, m: rango.motivo });
+      // Clase pesada (D/A5) a las 12:30: los bloques automaticos de 13:00/13:30 pasan al
+      // motivo del bloqueo si caen dentro del rango bloqueado, en vez de quedar liberados.
+      if (pesada.esPesadaEnHoraValida(b)) {
+        pesada.absorberEnBloqueo(b.fecha, b.examinador_id, rango.motivo, (hora) => bloqueo.horaEnRango(rango, hora));
+      }
     }
   });
 
@@ -1499,6 +1515,16 @@ app.get('/api/buscar-historial', wrap((req, res) => {
 
 app.get('/api/movimientos', wrap((req, res) => {
   res.json(db.prepare('SELECT * FROM movimientos ORDER BY id DESC LIMIT 300').all());
+}));
+
+// Borra todo el historial de movimientos (respaldo previo, confirmacion exacta obligatoria).
+// Pendiente: restringir a un rol de administrador cuando exista login de la app padre (hoy no hay login).
+app.post('/api/movimientos/borrar', wrap((req, res) => {
+  if ((req.body && req.body.confirmacion) !== historial.FRASE_CONFIRMACION) {
+    throw bad(`Escribe exactamente "${historial.FRASE_CONFIRMACION}" para confirmar.`);
+  }
+  const r = historial.borrarTodo(actorDe(req));
+  res.json({ ok: true, eliminados: r.eliminados, backup: r.backup });
 }));
 
 // ---------- errores ----------
