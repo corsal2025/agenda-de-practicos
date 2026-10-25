@@ -97,6 +97,15 @@ test('config: entradas invalidas hacen fallar el arranque nombrando la variable'
     assert.throws(() => crear({ origenes: mala }), /AGENDA_ORIGENES_PERMITIDOS/, mala);
   }
 });
+test('config: caracteres que no forman parte de un origen hacen fallar el arranque', () => {
+  for (const mala of ['https://a.com;script-src', 'https://a.com script-src', "https://a.com'", 'https://a.com\nX: y']) {
+    assert.throws(() => crear({ origenes: mala }), /AGENDA_ORIGENES_PERMITIDOS/, JSON.stringify(mala));
+  }
+});
+test('config: origenes validos siguen pasando', () => {
+  const s = crear({ origenes: 'https://padre.ejemplo.test, https://padre.ejemplo.test/ ,HTTP://127.0.0.1:4932' });
+  assert.equal(s.frameAncestors, "'self' https://padre.ejemplo.test http://127.0.0.1:4932");
+});
 test('config: AGENDA_URL_PUBLICA ilegible hace fallar el arranque nombrando la variable', () => {
   assert.throws(() => crear({ urlPublica: 'no es una url' }), /AGENDA_URL_PUBLICA/);
   assert.throws(() => crear({ urlPublica: 'ftp://x.ejemplo.test' }), /AGENDA_URL_PUBLICA/);
@@ -275,6 +284,14 @@ test('rutas publicas: frame-ancestors none y X-Frame-Options DENY en GET, POST y
   }
   assert.equal(resp[0][1].status, 200);
   assert.equal(resp[5][1].status, 200);
+});
+
+test('rutas publicas con otras mayusculas tambien llevan frame-ancestors none y DENY', async () => {
+  for (const ruta of ['/CONFIRMAR/1/tokenfalso', '/Rechazar/1/tokenfalso', '/REAGENDAR/1/tokenfalso']) {
+    const r = await pedir('GET', ruta);
+    assert.equal(r.headers['content-security-policy'], "frame-ancestors 'none'", ruta);
+    assert.equal(r.headers['x-frame-options'], 'DENY', ruta);
+  }
 });
 
 // ---------- 10. limites ----------

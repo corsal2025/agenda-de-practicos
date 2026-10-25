@@ -9,6 +9,8 @@ const express = require('express');
 const METODOS_SEGUROS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const HOSTS_LOCALES = ['localhost', '127.0.0.1', '[::1]'];
 const RUTAS_SIN_IFRAME = new Set(['confirmar', 'rechazar', 'reagendar']);
+// Esquema + host (nombre, IPv4 o IPv6 entre corchetes) + puerto opcional: nada que pueda colarse en una CSP.
+const ORIGEN_SIMPLE = /^https?:\/\/(\[[0-9a-f:.]+\]|[a-z0-9]([a-z0-9.-]*[a-z0-9])?)(:\d{1,5})?$/i;
 const RUTA_IMPORT = '/api/import';
 const LIMITE_JSON = '1mb';
 const LIMITE_IMPORT = '25mb'; // mismo tope que multer: el navegador manda las hojas del Excel como JSON
@@ -32,6 +34,12 @@ function normalizarOrigen(texto, variable, { admiteRuta }) {
   }
   if (!admiteRuta && (u.pathname !== '/' || u.search || u.hash)) {
     throw new Error(`${variable}: "${texto}" debe ser solo el origen, sin ruta (ejemplo: https://dominio.ejemplo.cl).`);
+  }
+  // Lo escrito debe ser el origen normalizado (salvo barra final y mayusculas): `URL` tolera
+  // basura como ";script-src" en el host, que luego quedaria pegada dentro de frame-ancestors.
+  const escrito = texto.replace(/\/$/, '').toLowerCase();
+  if (!admiteRuta && (!ORIGEN_SIMPLE.test(u.origin) || escrito !== u.origin.toLowerCase())) {
+    throw new Error(`${variable}: "${paraLog(texto)}" contiene caracteres que no pertenecen a un origen (ejemplo: https://dominio.ejemplo.cl).`);
   }
   return u.origin;
 }
@@ -81,7 +89,8 @@ function crear({ host = null, urlPublica = null, origenes = null } = {}) {
     return null; // same-origin, none o sin cabeceras de navegador (curl, scripts, tests)
   }
 
-  const primerSegmento = (url) => String(url || '').split('?')[0].split('/')[1] || '';
+  // En minusculas: Express enruta sin distinguir mayusculas, asi que /CONFIRMAR llega al mismo handler.
+  const primerSegmento = (url) => (String(url || '').split('?')[0].split('/')[1] || '').toLowerCase();
 
   function acceso(req, res, next) {
     const rechazo = decidir({
