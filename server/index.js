@@ -1202,7 +1202,7 @@ app.get('/api/historial', wrap((req, res) => {
 // ---------- DIA / IMPRESION ----------
 app.get('/api/dia', wrap((req, res) => {
   const fecha = req.query.fecha || hoyISO();
-  const rows = db.prepare(`${SELECT_BLOQUE} WHERE a.fecha = ? ORDER BY e.nombre, a.hora`).all(fecha);
+  const rows = db.prepare(`${SELECT_BLOQUE} WHERE a.fecha = ? ORDER BY e.nombre, a.hora, a.cupo`).all(fecha);
   const porExaminador = {};
   for (const r of rows) (porExaminador[r.examinador] ||= []).push(r);
   res.json({ fecha, examinadores: porExaminador });
