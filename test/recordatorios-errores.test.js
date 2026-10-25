@@ -46,22 +46,32 @@ test('un correo con formato invalido se salta sin intentar y sin gastar la marca
   assert.equal(marca(bueno), 1);
 });
 
-test('rechazo inmediato (EENVELOPE) marca 2 y no se reintenta', async () => {
+test('rechazo del destinatario (EENVELOPE en RCPT TO 550) marca 2 y no se reintenta', async () => {
   limpiar();
   const id = cita(1);
-  const rechazar = () => { correo.ultimoError = error('EENVELOPE'); return false; };
+  const rechazar = () => { correo.ultimoError = error('EENVELOPE', { command: 'RCPT TO', responseCode: 550 }); return false; };
   assert.deepEqual(await correr(rechazar), [id]);
   assert.equal(marca(id), 2);
   assert.deepEqual(await correr(rechazar), [], 'ya no se vuelve a intentar');
 });
 
-test('rechazo SMTP 550-553 (responseCode) tambien marca 2', async () => {
+test('rechazo SMTP 550-553 en RCPT TO tambien marca 2', async () => {
   limpiar();
   const ids = [550, 553].map(() => cita(1));
   const codigos = [550, 553];
   let i = 0;
-  await correr(() => { correo.ultimoError = error('EMESSAGE', { responseCode: codigos[i++] }); return false; });
+  await correr(() => { correo.ultimoError = error('EENVELOPE', { command: 'RCPT TO', responseCode: codigos[i++] }); return false; });
   assert.deepEqual(ids.map(marca), [2, 2]);
+});
+
+test('cuota o remitente (EENVELOPE en MAIL FROM) no marca la cita y corta la tanda', async () => {
+  limpiar();
+  const a = cita(1);
+  const b = cita(2);
+  const intentados = await correr(() => { correo.ultimoError = error('EENVELOPE', { command: 'MAIL FROM', responseCode: 452 }); return false; });
+  assert.equal(intentados.length, 1);
+  assert.equal(marca(a), 0);
+  assert.equal(marca(b), 0);
 });
 
 test('error general (EAUTH) no marca la cita y corta la tanda', async () => {
@@ -114,10 +124,10 @@ test('aplicarContacto con un correo nuevo devuelve la marca a 0', () => {
 
 test('correo.js centraliza los errores generales y el rechazo inmediato', () => {
   for (const code of ['EAUTH', 'ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EOUTLOOK']) assert.equal(correo.esErrorGeneral(error(code)), true, code);
-  assert.equal(correo.esErrorGeneral(error('EENVELOPE')), false);
+  assert.equal(correo.esErrorGeneral(error('EENVELOPE', { command: 'RCPT TO', responseCode: 550 })), false);
   assert.equal(correo.esErrorGeneral(null), false);
-  assert.equal(correo.esRechazoInmediato(error('EENVELOPE')), true);
-  assert.equal(correo.esRechazoInmediato(error('EMESSAGE', { responseCode: 552 })), true);
+  assert.equal(correo.esRechazoInmediato(error('EENVELOPE', { command: 'RCPT TO', responseCode: 552 })), true);
+  assert.equal(correo.esRechazoInmediato(error('EENVELOPE')), false);
   assert.equal(correo.esRechazoInmediato(error('EMESSAGE', { responseCode: 421 })), false);
   assert.equal(correo.esRechazoInmediato(error('EAUTH')), false);
 });

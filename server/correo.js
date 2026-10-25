@@ -11,12 +11,15 @@ const MODOS = new Set(['smtp', 'outlook', 'auto']);
 const MODO_CONFIG = MODOS.has(String(process.env.CORREO_MODO || '').toLowerCase())
   ? String(process.env.CORREO_MODO).toLowerCase() : 'auto';
 const ERRORES_CAMBIO_OUTLOOK = new Set(['EAUTH', 'ECONNECTION']);
+// Solo el rechazo del destinatario es definitivo: fase RCPT TO con SMTP 550-553. Nodemailer usa
+// EENVELOPE para cualquier respuesta no-2xx (MAIL FROM, RCPT TO, DATA, 4xx): el resto se reintenta.
+const esRechazoInmediato = (e) => Boolean(e) && e.code === 'EENVELOPE' && e.command === 'RCPT TO'
+  && Number(e.responseCode) >= 550 && Number(e.responseCode) <= 553;
 // Fallas del canal completo (no de un destinatario): fallaran todos los envios siguientes.
+// Un EENVELOPE que no es rechazo del destinatario (cuota, remitente, 4xx) tambien lo es.
 const ERRORES_GENERALES = new Set(['EAUTH', 'ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EOUTLOOK']);
-const esErrorGeneral = (e) => Boolean(e) && ERRORES_GENERALES.has(e.code);
-// El servidor rechazo el destinatario o el mensaje (EENVELOPE o SMTP 550-553): reintentar no sirve.
-const esRechazoInmediato = (e) => Boolean(e)
-  && (e.code === 'EENVELOPE' || (Number(e.responseCode) >= 550 && Number(e.responseCode) <= 553));
+const esErrorGeneral = (e) => Boolean(e)
+  && (ERRORES_GENERALES.has(e.code) || (e.code === 'EENVELOPE' && !esRechazoInmediato(e)));
 const baseUrl = URL_PUBLICA || `http://localhost:${PUERTO}`;
 
 function fFecha(iso) {
