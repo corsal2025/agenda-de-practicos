@@ -248,14 +248,6 @@ function fFechaDia(v) {
   return `${dias[d.getDay()]} ${fFecha(v)}`;
 }
 
-// Mantener la posicion del scroll cuando una accion vuelve a dibujar la vista.
-let _scrollY = null;
-const guardarScroll = () => { _scrollY = window.scrollY; };
-function restaurarScroll() {
-  if (_scrollY == null) return;
-  const y = _scrollY; _scrollY = null;
-  requestAnimationFrame(() => window.scrollTo(0, y));
-}
 // Envuelve un callback para que, tras redibujar, la pantalla quede donde estaba.
 const recargar = (fn) => async () => {
   const y = window.scrollY;

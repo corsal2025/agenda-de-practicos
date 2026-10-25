@@ -1,4 +1,4 @@
-/* ================= Agenda: impresion del dia y cierre del dia ================= */
+/* ================= Agenda: impresion del dia ================= */
 const ESCUDO_SVG = `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="34" height="34">
   <path d="M20 2l15 5v11c0 9.5-6.2 16.8-15 20-8.8-3.2-15-10.5-15-20V7l15-5z" fill="#1b3a75"></path>
   <path d="M13 21l4.5 4.5L27 15" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
@@ -47,22 +47,38 @@ function disenoDia() {
   catch (_) { return 'unica'; }
 }
 
+// "25/10/2026 23:30" con la hora local del PC (toISOString entrega UTC y de noche ya es otro dia).
+function generadoLocal(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 // Una sola hoja (horizontal): filas = horas, columnas = examinadores. Cada
-// celda trae solo nombre, RUT y clase, o el motivo si esta bloqueado.
+// celda trae solo nombre, RUT y clase, o el motivo si esta bloqueado. Si la hora
+// tiene varias personas (cupos), se apilan todas ordenadas por cupo.
 function hojaUnicaDia(data, exs, largaFecha, generado) {
   const horas = [...new Set(exs.flatMap((ex) => data.examinadores[ex].map((r) => r.hora)))].sort();
-  const celda = (r) => {
-    if (!r) return '<td class="hu-vacio">—</td>';
-    if (r.bloqueado) return `<td class="hu-bloq">${esc(r.bloqueo_motivo || 'BLOQUEADO')}</td>`;
-    if (!(r.rut || r.nombre)) return '<td class="hu-libre">Disponible</td>';
+  const ocupada = (r) => Boolean(r.rut || r.nombre);
+  const contenido = (r) => {
     const claseTag = r.clase ? `<span class="hu-tag-clase">${esc(r.clase)}</span>` : '<span class="hu-tag-clase s-clase">s/c</span>';
-    return `<td class="hu-celda">
-      <div class="hu-nom">${esc(nom(r.nombre))}</div>
+    return `<div class="hu-nom">${esc(nom(r.nombre))}</div>
       <div class="hu-meta">
         <span class="hu-rut">${esc(r.rut || '-')}</span>
         <span class="hu-badges">${claseTag}</span>
-      </div>
-    </td>`;
+      </div>`;
+  };
+  const apilada = (r) => {
+    if (r.bloqueado) return `<div class="hu-fila hu-bloq-f">${esc(r.bloqueo_motivo || 'BLOQUEADO')}</div>`;
+    if (!ocupada(r)) return '<div class="hu-fila hu-libre-f">Disponible</div>';
+    return `<div class="hu-fila">${contenido(r)}</div>`;
+  };
+  const celda = (rows) => {
+    if (!rows.length) return '<td class="hu-vacio">—</td>';
+    if (rows.length > 1) return `<td class="hu-celda hu-multi">${[...rows].sort((a, b) => (a.cupo || 1) - (b.cupo || 1)).map(apilada).join('')}</td>`;
+    const r = rows[0];
+    if (r.bloqueado) return `<td class="hu-bloq">${esc(r.bloqueo_motivo || 'BLOQUEADO')}</td>`;
+    if (!ocupada(r)) return '<td class="hu-libre">Disponible</td>';
+    return `<td class="hu-celda">${contenido(r)}</td>`;
   };
   const tot = exs.map((ex) => data.examinadores[ex].filter((r) => !r.bloqueado && (r.rut || r.nombre)).length);
   return `<article class="hoja-dia hoja-unica">
@@ -75,7 +91,7 @@ function hojaUnicaDia(data, exs, largaFecha, generado) {
     <table class="hd-tabla hu-tabla">
       <thead><tr><th class="hu-hora">Hora</th>${exs.map((ex, i) => `<th>${esc(nom(ex))}<span class="hu-det">${tot[i]} citas</span></th>`).join('')}</tr></thead>
       <tbody>${horas.map((h) => `<tr><td class="hu-hora num">${esc(h)}</td>${
-        exs.map((ex) => celda(data.examinadores[ex].find((r) => r.hora === h))).join('')}</tr>`).join('')}</tbody>
+        exs.map((ex) => celda(data.examinadores[ex].filter((r) => r.hora === h))).join('')}</tr>`).join('')}</tbody>
     </table>
     <div class="hd-pie"><div class="hd-firmas">
       ${exs.map((ex) => `<div class="hd-firma"><div class="hd-linea"></div><span>${esc(nom(ex))}</span></div>`).join('')}
@@ -160,7 +176,7 @@ async function imprimirAgendaDia(fecha, examinadorId) {
   const ex = examinadorId && META.examinadores.find((e) => String(e.id) === String(examinadorId));
   if (ex) exs = exs.filter((n) => n === ex.nombre);
   if (!exs.length) { toast(`No hay bloques para ${fFecha(fecha)}`, 'err'); return; }
-  const generado = fFechaHora(new Date().toISOString());
+  const generado = generadoLocal();
   const largaFecha = fFechaLarga(fecha);
   let cont = document.getElementById('impresion-dia');
   if (!cont) {

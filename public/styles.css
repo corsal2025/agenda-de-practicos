@@ -1134,6 +1134,10 @@ tbody tr:first-child td { border-top: 0; }
 .hu-tabla .hu-libre, .hu-tabla .hu-vacio { color: #94a3b8; font-style: italic; text-align: center; font-size: 9px; }
 .hu-tabla .hu-bloq { background: #fbf2e6; color: #9a6a1a; font-size: 9px; font-weight: 700; text-align: center; }
 .hoja-unica .hd-firmas { display: flex; gap: 16px; flex-wrap: wrap; }
+/* Varias personas en la misma hora: se apilan con una linea separadora visible */
+.hu-tabla .hu-fila + .hu-fila { border-top: 1px dashed #8a97ab; margin-top: 3px; padding-top: 3px; }
+.hu-tabla .hu-libre-f { color: #94a3b8; font-style: italic; text-align: center; font-size: 9px; }
+.hu-tabla .hu-bloq-f { color: #9a6a1a; font-size: 9px; font-weight: 700; text-align: center; }
 @media print {
   .hoja-unica { font-size: 8.5pt; break-after: auto; page-break-after: auto; }
   .hoja-unica .hu-titulo { font-size: 11pt; margin: 2mm 0 3mm; }

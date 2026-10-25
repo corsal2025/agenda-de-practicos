@@ -202,3 +202,22 @@ test('vaciar correos invalidos: exige confirmar, respalda y deja NULL solo los i
   assert.equal(leer(bueno.id).correo, 'ok@ok.cl');
   assert.ok(fs.readdirSync(tmpBackups).some((f) => f.includes('pre-limpieza')), 'debe existir backup pre-limpieza');
 });
+
+// ---------- recordatorio fallido: se reintenta si el personal corrige el correo ----------
+test('PATCH contacto: corregir el correo devuelve a 0 la marca de recordatorio fallido', async () => {
+  const b = slot(diaNuevo(), '09:00', { rut: '11.111.111-1', nombre: 'REBOTA', correo: 'mal@dominio.cl', correo_recordatorio_enviado: 2 });
+  const r = await api('PATCH', `/agenda/${b.id}/contacto`, { correo: 'bien@dominio.cl' });
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(leer(b.id).correo_recordatorio_enviado, 0);
+});
+
+test('GET /api/limpieza: recordatorio fallido de una cita futura aparece como CORREO_FALLIDO', async () => {
+  const b = slot(diaNuevo(), '09:00', { rut: '11.111.111-1', nombre: 'REBOTADO', correo: 'x@dominio.cl', correo_recordatorio_enviado: 2 });
+  const fila = (await api('GET', '/limpieza')).datos.filas.find((f) => f.id === b.id);
+  assert.deepEqual(fila.problemas, ['CORREO_FALLIDO']);
+});
+
+test('la pantalla de Correccion rapida rotula CORREO_FALLIDO como "Recordatorio no entregado"', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'public', 'limpieza.js'), 'utf8');
+  assert.match(src, /CORREO_FALLIDO: 'Recordatorio no entregado'/);
+});

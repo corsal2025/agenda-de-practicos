@@ -68,7 +68,7 @@ function pintarGrilla(cont, filas, fecha) {
   pintarTablaAgenda(cont, filas, fecha, exs);
 }
 // Marca (o borra, con resultado=null) el resultado de una cita preservando
-// el resto de sus datos. Compartido entre la grilla y el check-in del dia.
+// el resto de sus datos. Lo usa la grilla.
 async function marcarResultado(id, resultado) {
   await api(`/agenda/${id}/resultado`, { method: 'POST', body: { resultado } });
 }

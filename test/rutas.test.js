@@ -533,13 +533,17 @@ test('editar comentarios o la capitalizacion del nombre con el mismo RUT no rese
   assert.equal(llamadas.length, 0);
 });
 
-test('sin RUT, el mismo nombre normalizado es la misma persona; otro RUT es otra persona', async () => {
+test('sin RUT, el mismo nombre normalizado es la misma persona; corregir solo el RUT es una correccion', async () => {
   const a = ocupado(diaNuevo(), '09:00', { rut: null, nombre: 'JUAN PEREZ' });
   await api('PUT', `/agenda/${a.id}`, { nombre: 'Juan  Perez', clase: 'B' });
   assert.equal(leer(a.id).token_confirmacion, 'tokenviejo');
+  // Regla nueva (invierte la segunda mitad de la prueba anterior): cambiar SOLO el RUT, con el
+  // mismo nombre, es corregir un dato mal escrito y ya no se trata como otra persona.
   const b = ocupado(diaNuevo(), '09:00');
   await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'JUAN PEREZ', clase: 'B', correo: 'juan2@x.cl' });
-  tokenRenovado(leer(b.id), 'tokenviejo');
+  const x = leer(b.id);
+  assert.equal(x.rut, '22.222.222-2');
+  assert.equal(x.token_confirmacion, 'tokenviejo');
 });
 
 test('el flag de correo enviado no se marca si el bloque fue reasignado durante el envio', async () => {
@@ -614,11 +618,15 @@ test('corregir el nombre de una cita antigua sin correo no pide correo', async (
   assert.equal(r.status, 200, r.texto);
 });
 
-test('cambiar el RUT de una cita sin correo sí pide correo', async () => {
+test('cambiar RUT y nombre a la vez en una cita sin correo sí pide correo; solo el RUT (correccion) no', async () => {
   const b = ocupado(diaNuevo(), '10:00', { correo: null });
-  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'JUAN PEREZ', clase: 'B' });
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'OTRA PERSONA', clase: 'B' });
   assert.equal(r.status, 400);
   assert.match(r.datos.error, /Falta el correo/);
+  // Regla nueva: corregir solo el RUT ya no se trata como otra persona, asi que no exige correo.
+  const c = ocupado(diaNuevo(), '10:30', { correo: null });
+  const r2 = await api('PUT', `/agenda/${c.id}`, { rut: '22.222.222-2', nombre: 'JUAN PEREZ', clase: 'B' });
+  assert.equal(r2.status, 200, r2.texto);
 });
 
 // ---------- sin login ----------
@@ -841,6 +849,26 @@ test('correo/confirmacion-masiva: aborta tras el primer error sistemico (EAUTH)'
   } finally { correo.solicitudConfirmacion = original; correo.ultimoError = null; }
 });
 
+test('correo/confirmacion-masiva: un destinatario rechazado en RCPT TO 554 cuenta fallido y no aborta', async () => {
+  const d = diaNuevo();
+  const ids = ['09:00', '10:00', '11:00'].map((h, i) => slot(d, h, { rut: `7-${i}`, nombre: 'X', correo: `y${i}@test.cl` }).id);
+  const original = correo.solicitudConfirmacion;
+  const intentados = [];
+  correo.solicitudConfirmacion = async (b) => {
+    intentados.push(b.id);
+    if (b.id !== ids[0]) return true;
+    correo.ultimoError = { code: 'EENVELOPE', command: 'RCPT TO', responseCode: 554, message: 'politica' };
+    return false;
+  };
+  try {
+    const r = await api('POST', '/correo/confirmacion-masiva', { ids });
+    assert.equal(r.status, 200);
+    assert.equal(r.datos.abortado, undefined);
+    assert.deepEqual(intentados, ids);
+    assert.deepEqual([r.datos.enviados, r.datos.fallidos], [2, 1]);
+  } finally { correo.solicitudConfirmacion = original; correo.ultimoError = null; }
+});
+
 // ---------- Avisos al postulante (telefono / whatsapp / correo) ----------
 test('aviso POST marca y desmarca medios, valida medio y bloque, y se limpia al liberar', async () => {
   const dia = diaNuevo();
@@ -875,4 +903,124 @@ test('POST /movimientos/borrar exige la frase exacta y borra todo el historial c
   const restantes = db.prepare('SELECT * FROM movimientos').all();
   assert.equal(restantes.length, 1);
   assert.equal(restantes[0].accion, 'borrar_historial');
+});
+
+// ---------- /api/dia ordena por cupo; /api/meta trae los motivos de bloqueo ----------
+test('/api/dia ordena por cupo dentro de la hora', async () => {
+  const dia = diaNuevo();
+  const ins = db.prepare('INSERT INTO agenda (fecha, hora, examinador_id, cupo, nombre) VALUES (?, ?, 1, ?, ?)');
+  ins.run(dia, '09:00', 3, 'TERCERO');
+  ins.run(dia, '09:00', 1, 'PRIMERO');
+  ins.run(dia, '09:00', 2, 'SEGUNDO');
+  const r = await api('GET', `/dia?fecha=${dia}`);
+  assert.equal(r.status, 200, r.texto);
+  const filas = Object.values(r.datos.examinadores).flat().filter((f) => f.hora === '09:00');
+  assert.deepEqual(filas.map((f) => f.cupo), [1, 2, 3]);
+});
+
+test('/api/meta incluye motivos_bloqueo desde el servidor', async () => {
+  const { MOTIVOS_BLOQUEO } = require('../server/bloqueo');
+  const r = await api('GET', '/meta');
+  assert.deepEqual(r.datos.motivos_bloqueo, MOTIVOS_BLOQUEO);
+});
+
+// ---------- guardar cita nueva espera y devuelve el resultado del correo ----------
+const NUEVA = { rut: '22.222.222-2', nombre: 'Maria', clase: 'B', correo: 'm@x.cl' };
+
+test('PUT cita nueva: devuelve correo.estado = enviado cuando el envio resulta', async () => {
+  const b = slot(diaNuevo(), '09:00');
+  const r = await api('PUT', `/agenda/${b.id}`, NUEVA);
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.datos.correo.estado, 'enviado');
+  assert.equal(leer(b.id).correo_confirmacion_enviado, 1, 'el envio ya terminó cuando responde');
+});
+
+test('PUT cita nueva: correo fallido informa el motivo real', async () => {
+  const b = slot(diaNuevo(), '09:00');
+  const original = confirmacionReal;
+  confirmacionReal = async () => { correo.ultimoError = Object.assign(new Error('Invalid login'), { code: 'EAUTH' }); return false; };
+  try {
+    const r = await api('PUT', `/agenda/${b.id}`, NUEVA);
+    assert.equal(r.status, 200, r.texto);
+    assert.equal(r.datos.correo.estado, 'fallido');
+    assert.match(r.datos.correo.motivo, /EAUTH/);
+    assert.equal(leer(b.id).correo_confirmacion_enviado, 0);
+  } finally { confirmacionReal = original; correo.ultimoError = null; }
+});
+
+test('PUT cita nueva: sin correo configurado informa deshabilitado y no intenta enviar', async () => {
+  const b = slot(diaNuevo(), '09:00');
+  correo.habilitado = false;
+  llamadas.length = 0;
+  try {
+    const r = await api('PUT', `/agenda/${b.id}`, NUEVA);
+    assert.equal(r.status, 200, r.texto);
+    assert.equal(r.datos.correo.estado, 'deshabilitado');
+    assert.equal(llamadas.length, 0);
+  } finally { correo.habilitado = true; }
+});
+
+test('PUT que no cambia de persona no intenta correo (correo = null)', async () => {
+  const b = ocupado(diaNuevo(), '09:00');
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '11.111.111-1', nombre: 'JUAN PEREZ', clase: 'B', comentarios: 'x' });
+  assert.equal(r.status, 200, r.texto);
+  assert.equal(r.datos.correo, null);
+});
+
+test('enviarConfirmacionNueva: bloque sin correo -> sin_correo', async () => {
+  const asistencia = require('../server/asistencia');
+  assert.deepEqual(await asistencia.enviarConfirmacionNueva({ id: 1, correo: null }), { estado: 'sin_correo' });
+});
+
+// ---------- corregir RUT o nombre = correccion; solo RUT y nombre a la vez = otra persona ----------
+const papeleraDe = (id) => db.prepare('SELECT COUNT(*) n FROM papelera WHERE agenda_id = ?').get(id).n;
+const confirmada = (fecha) => ocupado(fecha, '09:00', { confirmo_asistencia: 1 });
+
+for (const [titulo, cambio] of [
+  ['solo el RUT', { rut: '22.222.222-2', nombre: 'JUAN PEREZ' }],
+  ['solo el nombre', { rut: '11.111.111-1', nombre: 'JUAN PEREZ SOTO' }],
+]) {
+  test(`corregir ${titulo} de una cita ocupada conserva token, marcas y confirmacion, sin correo ni papelera`, async () => {
+    const b = confirmada(diaNuevo());
+    llamadas.length = 0;
+    const r = await api('PUT', `/agenda/${b.id}`, { ...cambio, clase: 'B', correo: 'juan@x.cl' });
+    assert.equal(r.status, 200, r.texto);
+    const x = leer(b.id);
+    assert.equal(x.token_confirmacion, 'tokenviejo');
+    assert.equal(x.correo_confirmacion_enviado, 1);
+    assert.equal(x.correo_recordatorio_enviado, 1);
+    assert.equal(x.confirmo_asistencia, 1);
+    assert.equal(x.rut, cambio.rut);
+    assert.equal(x.nombre, cambio.nombre);
+    assert.equal(llamadas.length, 0, 'no se reenvia correo');
+    assert.equal(papeleraDe(b.id), 0, 'no se guarda copia en papelera');
+    assert.equal(r.datos.correo, null);
+  });
+}
+
+test('la correccion queda en el historial como "correccion: antes -> despues"', async () => {
+  const b = confirmada(diaNuevo());
+  await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'JUAN PEREZ', clase: 'B', correo: 'juan@x.cl' });
+  const mov = db.prepare("SELECT detalle FROM movimientos WHERE agenda_id = ? AND accion = 'editar' ORDER BY id DESC").get(b.id);
+  assert.match(mov.detalle, /corrección/);
+  assert.match(mov.detalle, /11\.111\.111-1 → 22\.222\.222-2/);
+});
+
+test('cambiar RUT y nombre a la vez resetea, reenvia el correo y guarda papelera', async () => {
+  const b = confirmada(diaNuevo());
+  llamadas.length = 0;
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'Otra Persona', clase: 'B', correo: 'otra@x.cl' });
+  assert.equal(r.status, 200, r.texto);
+  tokenRenovado(leer(b.id), 'tokenviejo');
+  assert.equal(llamadas.length, 1);
+  assert.equal(papeleraDe(b.id), 1);
+});
+
+test('PUT que cambia el correo de la misma persona devuelve a 0 la marca del recordatorio', async () => {
+  const b = ocupado(diaNuevo(), '09:00', { correo_recordatorio_enviado: 2 });
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '11.111.111-1', nombre: 'JUAN PEREZ', clase: 'B', correo: 'nuevo@x.cl' });
+  assert.equal(r.status, 200, r.texto);
+  const x = leer(b.id);
+  assert.equal(x.correo_recordatorio_enviado, 0);
+  assert.equal(x.token_confirmacion, 'tokenviejo');
 });

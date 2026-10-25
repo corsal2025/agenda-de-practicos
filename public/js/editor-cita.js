@@ -66,6 +66,25 @@ function formularioCita(b, alGuardar) {
   abrirFormularioCita(b, alGuardar, actual);
 }
 
+// Aviso tras guardar una cita nueva, segun lo que el servidor informa del correo de confirmacion:
+// { estado: 'enviado' | 'fallido' (con motivo) | 'deshabilitado' | 'sin_correo' } o null si no hubo intento.
+function avisoCorreoCita(correoRes) {
+  const ok = 'Cita agendada exitosamente';
+  if (!correoRes) return { texto: ok, tipo: 'ok' };
+  switch (correoRes.estado) {
+    case 'enviado':
+      return { texto: `${ok} · Comprobante e instrucciones enviados por correo`, tipo: 'ok' };
+    case 'fallido':
+      return { texto: `Cita agendada, pero el correo NO se pudo enviar (${correoRes.motivo || 'causa desconocida'}). Avisa a la persona por otro medio.`, tipo: 'alerta' };
+    case 'deshabilitado':
+      return { texto: 'Cita agendada. El correo no está configurado en este equipo: no se envió el comprobante.', tipo: 'alerta' };
+    case 'sin_correo':
+      return { texto: 'Cita agendada sin correo: no se envió el comprobante.', tipo: 'alerta' };
+    default:
+      return { texto: ok, tipo: 'ok' };
+  }
+}
+
 function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
   const c = META.catalogos;
   const fAsignado = (b.funcionario_id && (META.funcionarios || []).find((f) => f.id === b.funcionario_id))
@@ -229,7 +248,7 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
     if ($('#f-fecha-inicio') && !$('#f-fecha-inicio').value) { toast('La fecha de inicio de trámite es obligatoria', 'err'); $('#f-fecha-inicio').focus(); return; }
 
     $('#btn-guardar').disabled = true;
-    $('#btn-guardar').textContent = 'Guardando...';
+    $('#btn-guardar').textContent = 'Guardando y enviando correo...';
 
     const comun = { visto_en: b.actualizado_en, comentarios: $('#f-coment') ? ($('#f-coment').value.trim() || null) : (b.comentarios || null) };
     try {
@@ -270,7 +289,8 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
         r = await api(`/agenda/${b.id}`, { method: 'PUT', body: { ...body, autorizar_tercer_intento: { motivo } } });
       }
       (r.avisos || []).forEach((a) => toast(a, 'err'));
-      toast('Cita agendada exitosamente · Comprobante e instrucciones enviadas por correo', 'ok');
+      const aviso = avisoCorreoCita(r.correo);
+      toast(aviso.texto, aviso.tipo);
       cerrarModal();
       alGuardar && alGuardar();
     } catch (e) {

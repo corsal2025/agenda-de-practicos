@@ -11,6 +11,16 @@ const MODOS = new Set(['smtp', 'outlook', 'auto']);
 const MODO_CONFIG = MODOS.has(String(process.env.CORREO_MODO || '').toLowerCase())
   ? String(process.env.CORREO_MODO).toLowerCase() : 'auto';
 const ERRORES_CAMBIO_OUTLOOK = new Set(['EAUTH', 'ECONNECTION']);
+// Solo el rechazo del destinatario es definitivo: fase RCPT TO con SMTP 550-553. Nodemailer usa
+// EENVELOPE para cualquier respuesta no-2xx (MAIL FROM, RCPT TO, DATA, 4xx): el resto se reintenta.
+const esRechazoInmediato = (e) => Boolean(e) && e.code === 'EENVELOPE' && e.command === 'RCPT TO'
+  && Number(e.responseCode) >= 550 && Number(e.responseCode) <= 553;
+// Fallas del canal completo (no de un destinatario): fallaran todos los envios siguientes.
+// Un EENVELOPE fuera de la fase RCPT TO (MAIL FROM, DATA, sin comando) tambien lo es. Un
+// EENVELOPE en RCPT TO siempre es sobre UN destinatario (451, 452, 501, 554...): no es del canal.
+const ERRORES_GENERALES = new Set(['EAUTH', 'ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EOUTLOOK']);
+const esErrorGeneral = (e) => Boolean(e)
+  && (ERRORES_GENERALES.has(e.code) || (e.code === 'EENVELOPE' && e.command !== 'RCPT TO'));
 const baseUrl = URL_PUBLICA || `http://localhost:${PUERTO}`;
 
 function fFecha(iso) {
@@ -92,6 +102,9 @@ INSTRUCCIONES OBLIGATORIAS (Ley de Tránsito N° 18.290):
         <a href="${esc(links.reagendar)}" style="display:inline-block;padding:11px 20px;background:#0284c7;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;font-size:13px;box-shadow:0 2px 6px rgba(2,132,199,0.3)">
           🔄 Reagendar mi Hora (Ver Próximas Fechas)
         </a>
+        <a href="${esc(links.rechazar)}" style="display:inline-block;padding:11px 20px;background:#b91c1c;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;font-size:13px;box-shadow:0 2px 6px rgba(185,28,28,0.3)">
+          ✖ No puedo asistir
+        </a>
       </div>
       <p style="font-size:11.5px;color:#64748b;margin:6px 0 0">
         Si no puedes asistir en esta fecha, presiona "Reagendar mi Hora" para elegir de inmediato otro día disponible en el sistema.
@@ -99,7 +112,7 @@ INSTRUCCIONES OBLIGATORIAS (Ley de Tránsito N° 18.290):
     : '';
 
   const botonesTexto = links
-    ? `\nConfirmar asistencia: ${links.confirmar}\nReagendar a otra fecha disponible: ${links.reagendar}\n`
+    ? `\nConfirmar asistencia: ${links.confirmar}\nReagendar a otra fecha disponible: ${links.reagendar}\nNo puedo asistir: ${links.rechazar}\n`
     : '';
 
   return {
@@ -152,7 +165,8 @@ function crearSelector({ modo, smtpConfigurado, smtpEnviar, outlook, avisar = ()
     if (modo === 'smtp') return { ok: false, error: null, via: 'ninguno' };
     return porOutlook(msg);
   }
-  return { enviar, modoActual };
+  const estado = () => ({ modo: modoActual(), smtp_caido: smtpCaido });
+  return { enviar, modoActual, estado };
 }
 
 const selector = crearSelector({
@@ -165,15 +179,27 @@ const selector = crearSelector({
 // Chequeo de Outlook asincrono y perezoso (correo-outlook no hace nada en test ni fuera de Windows).
 if (MODO_CONFIG !== 'smtp') outlook.disponible().catch(() => {});
 
+// Resultado del ultimo envio (para mostrar el estado del correo en pantalla). Sin datos sensibles.
+let ultimoEnvio = null;
+function anotarEnvio(r) {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  ultimoEnvio = {
+    ok: Boolean(r.ok), via: r.via,
+    codigo: r.ok ? null : (r.error && r.error.code) || (r.error ? 'ERROR' : 'SIN_CANAL'),
+    hora: `${p(d.getHours())}:${p(d.getMinutes())}`,
+  };
+}
+
 async function enviar(destinatario, asunto, cuerpo) {
   if (!destinatario) return false;
   const r = await selector.enviar({ to: destinatario, subject: asunto, text: cuerpo.text, html: cuerpo.html });
+  anotarEnvio(r);
   if (r.ok) { module.exports.ultimoError = null; return true; }
-  if (r.error) {
-    // Expuesto para que los envios masivos detecten errores sistemicos (EAUTH, ECONNECTION...).
-    module.exports.ultimoError = r.error;
-    log(null, 'correo_error', `${destinatario}: ${r.error.message}`);
-  }
+  // Expuesto para que los envios masivos detecten errores sistemicos (EAUTH, ECONNECTION...).
+  // Sin error (no hay canal configurado) queda en null: quien llama lo trata como "sin canal".
+  module.exports.ultimoError = r.error || null;
+  if (r.error) log(null, 'correo_error', `${destinatario}: ${r.error.message}`);
   return false;
 }
 
@@ -235,6 +261,8 @@ module.exports = {
   get habilitado() { return habilitadoForzado !== null ? habilitadoForzado : selector.modoActual() !== 'ninguno'; },
   set habilitado(v) { habilitadoForzado = v; },
   modo: () => selector.modoActual(),
+  estado: () => ({ ...selector.estado(), ultimo_envio: ultimoEnvio }),
+  esErrorGeneral, esRechazoInmediato, armarLinks,
   enviarPrueba: enviar,
   crearSelector,
   confirmacion, recordatorio, solicitudConfirmacion, plantilla, ultimoError: null,

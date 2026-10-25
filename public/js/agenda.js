@@ -225,7 +225,6 @@ async function renderAgenda() {
     const libres = filas.filter((f) => !f.rut && !f.nombre && !f.bloqueado).length;
     $('#a-libres').textContent = `${libres} ${libres === 1 ? 'bloque libre' : 'bloques libres'}`;
     pintarGrilla($('#a-grid'), filas, fechaRef);
-    restaurarScroll();
     setTimeout(ajustarOffsetsFijos, 0);
   });
 

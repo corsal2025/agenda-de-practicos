@@ -7,6 +7,7 @@ const Limpieza = (() => {
   const ETQ = {
     CORREO_INVALIDO: 'Correo inválido', TELEFONO_INCOMPLETO: 'Teléfono incompleto',
     NOMBRE: 'Nombre mal escrito', RUT_INVALIDO: 'RUT inválido',
+    CORREO_FALLIDO: 'Recordatorio no entregado',
   };
   const MAX_VISIBLES = 300;
   let filtro = '';

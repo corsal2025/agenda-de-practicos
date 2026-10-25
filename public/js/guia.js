@@ -1,4 +1,24 @@
 let tourKeyHandler = null;
+let tourHashHandler = null;
+let tourTabEsperada = null; // pestaña a la que la propia guía acaba de navegar
+
+// Navega a la pestaña de un paso registrando antes cuál espera, para distinguir
+// el cambio de pestaña de la guía del que hace el usuario por fuera (Atrás, URL).
+function tourNavegar(tab) {
+  tourTabEsperada = tab;
+  irA(tab);
+}
+
+// Si la pestaña cambia a algo distinto de lo que la guía espera, la guía se cierra sola
+// (sin devolver al usuario a la pestaña de origen). Al cerrarse deja de escuchar.
+function tourVigilarPestana() {
+  tourTabEsperada = tourTabActual();
+  tourHashHandler = () => {
+    if (!document.getElementById('tour-overlay')) return;
+    if (tourTabActual() !== tourTabEsperada) cerrarGuiaInteractiva(false);
+  };
+  window.addEventListener('hashchange', tourHashHandler);
+}
 
 function iniciarGuiaInteractiva() {
   const tip = document.getElementById('tooltip-flotante');
@@ -56,6 +76,7 @@ function iniciarGuiaInteractiva() {
     else if (e.key === 'ArrowLeft') ir(-1);
   };
   window.addEventListener('keydown', tourKeyHandler);
+  tourVigilarPestana();
 
   $('#tour-prev').onclick = () => ir(-1);
   $('#tour-next').onclick = () => {
@@ -126,7 +147,7 @@ async function renderPasoTour(esPrimerRender = false) {
   // Cambio de pestaña si el paso lo pide (y no estamos ya en ella)
   if (paso.tab && tourTabActual() !== paso.tab) {
     spot.classList.remove('visible');
-    irA(paso.tab);
+    tourNavegar(paso.tab);
     await tourPausa(140);
     if (token !== tourToken) return;
   }
@@ -250,6 +271,11 @@ function cerrarGuiaInteractiva(restaurar = true) {
     window.removeEventListener('keydown', tourKeyHandler);
     tourKeyHandler = null;
   }
+  if (tourHashHandler) {
+    window.removeEventListener('hashchange', tourHashHandler);
+    tourHashHandler = null;
+  }
+  tourTabEsperada = null;
   const o = document.getElementById('tour-overlay');
   if (o) o.remove();
   // Volver a la pestaña desde la que se abrió la guía
