@@ -210,14 +210,7 @@ async function actualizarBadgePorConfirmar() {
   }
 }
 
-async function actualizarBadgeReagendar() {
-  try {
-    const [cola, pend] = await Promise.all([
-      apiReciente('/cola-reagendar', 30e3).catch(() => []),
-      apiReciente('/agenda?estado=pendiente', 30e3).catch(() => [])
-    ]);
-    pintarBadge('badge-reagendar', (cola.length || 0) + (pend.length || 0));
-  } catch (_) { pintarBadge('badge-reagendar', 0); }
+function actualizarBadgeEspera() {
   if (window.ListaEspera) window.ListaEspera.badge();
 }
 

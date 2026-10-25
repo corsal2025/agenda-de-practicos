@@ -229,13 +229,6 @@ const hoy = () => {
   const d = new Date(); // fecha LOCAL (toISOString usa UTC y adelanta el dia en la noche)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
-// Cita con asistencia confirmada y examen hoy o futuro: no se reagenda hasta que pase el dia.
-// Devuelve el texto del tooltip si aplica la regla, o null.
-const bloqueoReagendarConfirmada = (b) => {
-  if (!b || Number(b.confirmo_asistencia) !== 1 || !b.fecha || b.fecha < hoy()) return null;
-  return `Confirmó asistencia: se podrá reagendar después del examen (${String(b.fecha).split('-').reverse().join('/')})`;
-};
-
 // Fecha en formato dia/mes/año para MOSTRAR. Los <input type="date"> siguen usando ISO.
 function fFecha(v) {
   if (!v) return '';
@@ -392,19 +385,10 @@ if (typeof ResizeObserver === 'function') {
   else observarOffsets();
 }
 // Pestañas eliminadas que redirigen a otra (enlaces o marcadores antiguos).
-function asegurarBuscadorHome() {
-  const bq = document.getElementById('buscador');
-  const home = document.getElementById('top-buscador-home');
-  if (bq && home && bq.parentElement !== home) {
-    home.appendChild(bq);
-    bq.classList.remove('en-filtros');
-  }
-}
 const ALIAS_TABS = { dia: 'agenda', reagendar: 'espera' };
 function ruta() {
   if (!META) return;
   cerrarModal();
-  asegurarBuscadorHome();
   const tab = (location.hash.slice(1) || 'disponibles').split('?')[0];
   if (ALIAS_TABS[tab]) { history.replaceState(null, '', `#${ALIAS_TABS[tab]}`); ruta(); return; }
   document.querySelectorAll('#nav button[data-tab]').forEach((b) => b.classList.toggle('activo', b.dataset.tab === tab));

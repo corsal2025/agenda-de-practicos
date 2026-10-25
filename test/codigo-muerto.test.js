@@ -50,14 +50,14 @@ test('ningun nombre/selector muerto queda bajo public/ (fuera de vendor/)', () =
   }
 });
 
-test('FICHA_CSS aparece exactamente una vez (estadisticas.js sigue usandola)', () => {
+test('FICHA_CSS se usa (interpolada) exactamente una vez: solo en estadisticas.js', () => {
   const archivos = archivosPublic();
-  let apariciones = 0;
+  let usos = 0;
   for (const abs of archivos) {
-    const m = leer(abs).match(/FICHA_CSS/g);
-    if (m) apariciones += m.length;
+    const m = leer(abs).match(/\$\{FICHA_CSS\}/g);
+    if (m) usos += m.length;
   }
-  assert.equal(apariciones, 1);
+  assert.equal(usos, 1);
 });
 
 test('cada <script src="..."> de index.html apunta a un archivo que existe', () => {

@@ -122,7 +122,6 @@ async function renderPorConfirmar() {
 
     $('#pc-tbody').innerHTML = filtradas.map((r) => {
       const telWa = telWaDe(r.contacto);
-      const mensajeWa = mensajeWaCita(r, r.examinador, 'Por favor confírmanos si podrás asistir o si necesitas reagendar tu hora para otra fecha.');
       const mensajeSms = mensajeSmsCita(r, r.examinador, 'Por favor confírmanos si podrás asistir o si necesitas reagendar tu hora.');
       const correoTxt = String(r.correo || '').trim();
 
@@ -177,7 +176,7 @@ async function renderPorConfirmar() {
           citasCargadas = citasCargadas.filter((c) => c.id !== id);
           pintarLista();
           actualizarBadgePorConfirmar();
-          actualizarBadgeReagendar();
+          actualizarBadgeEspera();
           toast('Postulante derivado a Lista de Espera con alta prioridad', 'ok');
           sessionStorage.setItem('le_destacado', String(id));
           irA('espera');

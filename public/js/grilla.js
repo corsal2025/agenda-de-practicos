@@ -4,56 +4,7 @@ function problemaDatos(b) {
   if (b.contacto && b.contacto.replace(/\D/g, '').length !== 9) return 'Teléfono incompleto';
   return null;
 }
-// Historial del solicitante dentro del panel lateral de la ficha. Cada cita se puede abrir.
-async function cargarHistorialCita(b, alGuardar) {
-  const cont = $('#zona-hist-cita .hist-lista');
-  if (!cont) return;
-  const params = new URLSearchParams();
-  if (b.rut) params.set('rut', b.rut);
-  if (b.nombre) params.set('nombre', b.nombre);
-  try {
-    const rows = await api(`/buscar-historial?${params.toString()}`);
-    if (!document.body.contains(cont)) return;
-    if (!Array.isArray(rows) || !rows.length) { cont.textContent = 'Sin citas registradas'; return; }
-    pintarAvisoIntento(b, rows);
-    cont.innerHTML = rows.map((r) => {
-      const actual = r.id === b.id;
-      return `<div class="hist-item ${actual ? 'actual' : ''}" ${actual ? '' : `role="button" tabindex="0" data-id="${r.id}"`}>
-        <div class="hist-fila"><b>${esc(fFecha(r.fecha))}</b> · ${esc(r.hora)} hrs${actual ? '<span class="badge reag">Cita actual</span>' : ''}<span class="hist-clase">${esc(r.clase || '-')}</span></div>
-        <div class="hist-sub">Examinador: ${esc(r.examinador || '-')}</div>
-        <div class="hist-sub">Resultado: <b>${esc(r.resultado || 'Sin resultado')}</b></div>
-        <div class="hist-sub">Inicio trámite: <b>${r.fecha_inicio_tramite ? esc(fFecha(r.fecha_inicio_tramite)) : 'Sin registrar'}</b>${r.fecha_vencimiento_tramite ? ` · Vence: <b>${esc(fFecha(r.fecha_vencimiento_tramite))}</b>` : ''}</div>
-        ${r.dias_restantes_tramite != null ? `<div class="hist-sub">${cuentaRegresivaHtml(r.dias_restantes_tramite, r.fecha_vencimiento_tramite)}</div>` : ''}
-        ${r.escuela_conductores ? `<div class="hist-sub">Escuela: ${esc(r.escuela_conductores)}</div>` : ''}
-        ${r.tipo_reagendamiento ? `<div class="hist-sub">Reagendamiento: ${esc(r.tipo_reagendamiento)}</div>` : ''}
-        ${(r.alerts || []).length ? `<div class="hist-sub">${alertasHtml(r)}</div>` : ''}
-      </div>`;
-    }).join('');
-    cont.querySelectorAll('.hist-item[data-id]').forEach((el) => {
-      const abrir = () => abrirSlotPorId(Number(el.dataset.id), alGuardar).catch((e) => toast(e.message, 'err'));
-      el.onclick = abrir;
-      el.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); abrir(); } };
-    });
-  } catch (e) {
-    if (document.body.contains(cont)) cont.textContent = 'No se pudo cargar el historial';
-  }
-}
-
 // Reprobaciones previas (mismo RUT, alguna clase en comun) antes de esta cita.
-// Casillas "Avisado por": medios por los que se aviso al postulante (telefono, whatsapp, correo).
-const MEDIOS_AVISO = [['telefono', 'Teléfono'], ['whatsapp', 'WhatsApp'], ['correo', 'Correo']];
-function avisosHtml(b) {
-  const on = new Set(String(b.avisado_por || '').split(',').filter(Boolean));
-  const hay = { telefono: !!b.contacto, whatsapp: !!b.contacto, correo: !!b.correo };
-  const disp = MEDIOS_AVISO.filter(([m]) => hay[m]);
-  const todos = disp.length > 0 && disp.every(([m]) => on.has(m));
-  const casilla = ([m, etq]) => `<label class="aviso-chk${hay[m] ? '' : ' sin'}" title="${hay[m] ? 'Marcar si se avisó por ' + etq : 'Sin ' + (m === 'correo' ? 'correo' : 'teléfono') + ' registrado'}">
-      <input type="checkbox" data-aviso="${m}" ${on.has(m) ? 'checked' : ''} ${hay[m] ? '' : 'disabled'}>${etq}</label>`;
-  return `<div class="slot-avisos" data-id="${b.id}" onclick="event.stopPropagation()"><span class="aviso-tit">Avisado:</span>
-    ${MEDIOS_AVISO.map(casilla).join('')}
-    <label class="aviso-chk aviso-todos" title="Marcar o desmarcar todos los medios disponibles"><input type="checkbox" data-aviso="todos" ${todos ? 'checked' : ''} ${disp.length ? '' : 'disabled'}>Todos</label></div>`;
-}
-
 const RESULTADOS_REPROBADO = ['REPROBADO', 'REPROBADO INASISTENCIA'];
 function reprobacionesPrevias(b, rows) {
   if (!b.rut) return 0;
@@ -72,30 +23,7 @@ function pintarAvisoIntento(b, rows) {
   zona.hidden = false;
 }
 
-// Ficha imprimible: documento municipal con datos del postulante + historial, en una ventana aparte.
-const siNo = (v) => (v === 1 ? 'SÍ' : v === 0 ? 'NO' : '');
-function estadoTramiteTxt(b) {
-  const d = b.dias_restantes_tramite;
-  if (d == null) return b.fecha_inicio_tramite ? '' : 'Sin fecha de inicio registrada';
-  return d <= 0 ? `VENCIDO (hace ${diasTxt(-d)})` : `Vigente · quedan ${diasTxt(d)}`;
-}
-const FICHA_SECCIONES = [
-  ['Datos personales', [
-    ['Nombre', (b) => nom(b.nombre)], ['RUT', (b) => b.rut],
-    ['Teléfono', (b) => fTel(b.contacto)], ['Correo', (b) => b.correo],
-  ]],
-  ['Trámite', [
-    ['Clase(s)', (b) => b.clase], ['Escuela de conductores', (b) => b.escuela_conductores],
-    ['Fecha de inicio', (b) => (b.fecha_inicio_tramite ? fFecha(b.fecha_inicio_tramite) : '')],
-    ['Fecha de vencimiento', (b) => (b.fecha_vencimiento_tramite ? fFecha(b.fecha_vencimiento_tramite) : '')],
-    ['Estado / días restantes', estadoTramiteTxt], ['Intento', (b) => b.intento],
-    ['Tipo de cita', (b) => b.tipo_cita], ['Tipo de reagendamiento', (b) => b.tipo_reagendamiento],
-  ]],
-  ['Resultado', [
-    ['Confirmó asistencia', (b) => siNo(b.confirmo_asistencia)], ['Resultado', (b) => b.resultado],
-    ['Comentarios', (b) => b.comentarios, true],
-  ]],
-];
+// CSS de la ficha imprimible; estadisticas.js la reutiliza para su propia impresion.
 const FICHA_CSS = `@page{size:A4;margin:16mm 15mm 18mm}
 *{box-sizing:border-box}body{font:10.5pt/1.4 "Segoe UI",Arial,Helvetica,sans-serif;color:#000;background:#fff;margin:0}
 .doc-hd{display:flex;align-items:center;gap:14px;border-bottom:2px solid #000;padding-bottom:10px}
@@ -115,53 +43,6 @@ tr{break-inside:avoid;page-break-inside:avoid}thead{display:table-header-group}
 .firmas{display:flex;gap:60px;margin-top:60px;break-inside:avoid}.firmas div{flex:1;border-top:1px solid #000;text-align:center;padding-top:4px;font-size:9pt}
 .pie{margin-top:24px;border-top:1px solid #999;padding-top:4px;font-size:8pt;color:#444;display:flex;justify-content:space-between}
 @media print{*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}`;
-function fichaImprimibleHtml(b, rows, logoUrl) {
-  const ahora = new Date();
-  const emitido = `${fFecha(hoy())} ${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')} hrs`;
-  const celda = (t, v, ancho) => `<div${ancho ? ' class="ancho"' : ''}><span class="lbl">${esc(t)}</span><span class="val">${esc(v || '—')}</span></div>`;
-  const cita = [['Fecha', fFecha(b.fecha)], ['Hora', b.hora ? `${b.hora} hrs` : ''], ['Examinador/a', b.examinador], ['Funcionario/a', b.funcionario]]
-    .map(([t, v]) => celda(t, v)).join('');
-  const secciones = FICHA_SECCIONES.map(([titulo, campos]) => `<h2>${esc(titulo)}</h2>
-    <div class="grid">${campos.map(([t, f, ancho]) => celda(t, f(b), ancho)).join('')}</div>`).join('');
-  const hist = rows.length ? rows.map((r) => `<tr>
-    <td>${esc(fFecha(r.fecha))} ${esc(r.hora || '')}</td><td>${esc(r.clase || '—')}</td><td>${r.fecha_inicio_tramite ? esc(fFecha(r.fecha_inicio_tramite)) : '—'}</td><td>${r.fecha_vencimiento_tramite ? esc(fFecha(r.fecha_vencimiento_tramite)) : '—'}</td><td>${esc(r.examinador || '—')}</td>
-    <td>${esc(r.resultado || 'Sin resultado')}</td><td>${esc(r.escuela_conductores || '—')}</td><td>${esc(r.comentarios || '')}</td></tr>`).join('')
-    : '<tr><td colspan="8">Sin citas registradas</td></tr>';
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Ficha ${esc(nom(b.nombre))}</title>
-    <style>${FICHA_CSS}</style></head><body>
-    <header class="doc-hd"><img id="ficha-logo" src="${esc(logoUrl)}" alt="${esc(MARCA.organismo)}">
-      <div class="org"><b>Ilustre ${esc(MARCA.organismo)}</b><span>Dirección de Tránsito y Transporte Público · ${esc(MARCA.unidad)}</span></div>
-      <div class="emi">Emitido el<br>${esc(emitido)}</div></header>
-    <h1>Ficha del Postulante — Examen Práctico de Conducir</h1>
-    <p class="sub">Dirección de Tránsito y Transporte Público — Ilustre ${esc(MARCA.organismo)}</p>
-    <div class="cita">${cita}</div>
-    ${secciones}
-    <h2>Historial de citas</h2>
-    <table><thead><tr><th>Fecha</th><th>Clase</th><th>Inicio trámite</th><th>Término trámite</th><th>Examinador/a</th><th>Resultado</th><th>Escuela</th><th>Comentarios</th></tr></thead>
-    <tbody>${hist}</tbody></table>
-    <div class="firmas"><div>Firma funcionario/a</div><div>Firma postulante</div></div>
-    <footer class="pie"><span>Documento generado por Agenda de Prácticos</span></footer>
-    </body></html>`;
-}
-async function imprimirFicha(b) {
-  const params = new URLSearchParams();
-  if (b.rut) params.set('rut', b.rut);
-  if (b.nombre) params.set('nombre', b.nombre);
-  const rows = await api(`/buscar-historial?${params.toString()}`);
-  const w = window.open('', '_blank');
-  if (!w) { toast('El navegador bloqueó la ventana de impresión', 'err'); return; }
-  w.document.write(fichaImprimibleHtml(b, Array.isArray(rows) ? rows : [], `${location.origin}/logo.png`));
-  w.document.close();
-  w.focus();
-  // Espera a que cargue el logo (o falle) antes de imprimir, con tope de 3 s.
-  const img = w.document.getElementById('ficha-logo');
-  let impreso = false;
-  const imprimir = () => { if (!impreso) { impreso = true; w.print(); } };
-  if (!img || img.complete) { imprimir(); return; }
-  img.addEventListener('load', imprimir);
-  img.addEventListener('error', () => { img.remove(); imprimir(); });
-  setTimeout(imprimir, 3000);
-}
 
 // Esc cierra el panel lateral de la ficha.
 document.addEventListener('keydown', (e) => {
@@ -453,7 +334,6 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     const pesada = b.hora === META.hora_d_a5;
     const esConfirmado = b.confirmo_asistencia === 1;
     const telWa = telWaDe(b.contacto);
-    const mensajeWa = mensajeWaCita(b, examNombre);
     const mensajeSms = mensajeSmsCita(b, examNombre);
     const problema = problemaDatos(b);
     const noAsiste = b.resultado === 'NO ASISTIO' || b.resultado === 'REPROBADO INASISTENCIA';
@@ -761,22 +641,6 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         const str = (tr.textContent || '').toLowerCase();
         tr.style.display = str.includes(q) ? '' : 'none';
       });
-      cont.querySelectorAll('.fila-separador-fecha').forEach((sep) => {
-        if (!q) {
-          sep.style.display = '';
-          return;
-        }
-        let next = sep.nextElementSibling;
-        let hasVisible = false;
-        while (next && !next.classList.contains('fila-separador-fecha')) {
-          if (next.classList.contains('fila-agenda-tabla') && next.style.display !== 'none') {
-            hasVisible = true;
-            break;
-          }
-          next = next.nextElementSibling;
-        }
-        sep.style.display = hasVisible ? '' : 'none';
-      });
       reubicarFechas(cont);
     };
     inpBusc.oninput = filtrarBuscador;
@@ -966,7 +830,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         await api(`/agenda/${id}/reagendar`, { method: 'POST', body: { motivo: 'POSTULANTE SOLICITA CAMBIO' } });
         toast('Postulante enviado a Lista de Espera con alta prioridad', 'ok');
         sessionStorage.setItem('le_destacado', String(id));
-        actualizarBadgeReagendar();
+        actualizarBadgeEspera();
         irA('espera');
       } catch (e) { toast(e.message, 'err'); }
     };

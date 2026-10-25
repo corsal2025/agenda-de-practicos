@@ -232,7 +232,7 @@ async function renderAgenda() {
   actualizarBadgePapelera();
   if (window.ListaEspera) window.ListaEspera.badge();
   actualizarBadgeErrores();
-  actualizarBadgeReagendar();
+  actualizarBadgeEspera();
   actualizarBadgePorConfirmar();
 }
 
