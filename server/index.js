@@ -40,7 +40,9 @@ const historial = require('./historial');
 
 const app = express();
 app.disable('x-powered-by');
-app.use(express.json({ limit: '50mb' }));
+// Host, Origin, cabeceras y limite de cuerpo JSON (1 MB; /api/import 25 MB): antes de static y de las rutas.
+const seguridad = require('./seguridad-acceso').desdeEntorno();
+app.use(seguridad.cabeceras, seguridad.acceso, seguridad.json);
 app.use((req, res, next) => {
   if (req.url.startsWith('/api/')) {
     const t0 = Date.now();
