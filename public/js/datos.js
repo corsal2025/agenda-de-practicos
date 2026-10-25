@@ -1,4 +1,33 @@
 /* ================= tab: DATOS ================= */
+// Acciones de la pestaña: si el servidor falla se avisa con un toast de error (nunca una promesa rechazada).
+async function crearBackup() {
+  try {
+    const r = await api('/backup', { method: 'POST' });
+    toast('Backup: ' + r.archivo.split(/[\\/]/).pop());
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function generarBloques(desde, hasta) {
+  try {
+    const r = await api('/agenda/generar', { method: 'POST', body: { desde, hasta } });
+    toast(`${r.creados} bloques nuevos en ${r.dias} dias habiles`);
+    META = await api('/meta');
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function agregarFeriado(fecha, nombre) {
+  try {
+    await api('/feriados', { method: 'POST', body: { fecha, nombre } });
+    META = await api('/meta');
+  } catch (e) { toast(e.message, 'err'); return; }
+  renderDatos();
+}
+async function borrarFeriado(fecha) {
+  try {
+    await api(`/feriados?fecha=${fecha}`, { method: 'DELETE' });
+    META = await api('/meta');
+  } catch (e) { toast(e.message, 'err'); return; }
+  renderDatos();
+}
+
 async function renderDatos() {
   view.innerHTML = `
     <div class="panel"><h2>Importar / Exportar</h2>
@@ -101,22 +130,17 @@ async function renderDatos() {
       toast('Importacion completada');
     } catch (e) { $('#im-res').innerHTML = `<div class="aviso">${esc(e.message)}</div>`; }
   };
-  $('#bk-btn').onclick = async () => {
-    const r = await api('/backup', { method: 'POST' });
-    toast('Backup: ' + r.archivo.split(/[\\/]/).pop());
-  };
-  $('#gb-btn').onclick = async () => {
+  $('#bk-btn').onclick = crearBackup;
+  $('#gb-btn').onclick = () => {
     if (!$('#gb-desde').value || !$('#gb-hasta').value) return toast('Indica el rango', 'err');
-    const r = await api('/agenda/generar', { method: 'POST', body: { desde: $('#gb-desde').value, hasta: $('#gb-hasta').value } });
-    toast(`${r.creados} bloques nuevos en ${r.dias} dias habiles`);
-    META = await api('/meta');
+    return generarBloques($('#gb-desde').value, $('#gb-hasta').value);
   };
 
   // feriados
   const fe = $('#fe-cont');
   fe.innerHTML = (META.feriados || []).map((f) => `<span class="chip">${esc(fFecha(f.fecha))}${f.nombre ? ' · ' + esc(f.nombre) : ''}<button data-f="${esc(f.fecha)}">&times;</button></span>`).join('') || '<span class="muted">Sin feriados</span>';
   fe.querySelectorAll('button[data-f]').forEach((b) => {
-    b.onclick = async () => { await api(`/feriados?fecha=${b.dataset.f}`, { method: 'DELETE' }); META = await api('/meta'); renderDatos(); };
+    b.onclick = () => borrarFeriado(b.dataset.f);
   });
   $('#fe-sync').onclick = async (e) => {
     const b = e.currentTarget;
@@ -132,10 +156,9 @@ async function renderDatos() {
       b.disabled = false; b.textContent = txt;
     }
   };
-  $('#fe-add').onclick = async () => {
+  $('#fe-add').onclick = () => {
     if (!$('#fe-fecha').value) return;
-    await api('/feriados', { method: 'POST', body: { fecha: $('#fe-fecha').value, nombre: $('#fe-nombre').value } });
-    META = await api('/meta'); renderDatos();
+    return agregarFeriado($('#fe-fecha').value, $('#fe-nombre').value);
   };
 
   // catalogos
