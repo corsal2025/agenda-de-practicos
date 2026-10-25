@@ -41,7 +41,9 @@ async function renderDatos() {
         <div class="fila"><input id="fu-nuevo" placeholder="Nombre"><button class="btn chico" id="fu-add">Agregar</button></div></div>
     </div>
 
-    <div class="panel"><h2>Ultimos movimientos</h2><div class="tabla-scroll"><table>
+    <div class="panel"><h2>Ultimos movimientos</h2>
+      <div class="fila"><button class="btn peligro sec" id="mov-borrar-btn">Borrar historial</button></div>
+      <div class="tabla-scroll"><table>
       <thead><tr><th class="c">Fecha</th><th>Acción</th><th>Por</th><th>Detalle</th></tr></thead><tbody id="mov-body"></tbody></table></div></div>`;
 
   // El .xlsx se lee ACA en el navegador (via vendor/xlsx.full.min.js) y se manda
@@ -56,7 +58,10 @@ async function renderDatos() {
     if (!(v instanceof Date) || isNaN(v)) return v;
     return `${v.getFullYear()}-${pad2(v.getMonth() + 1)}-${pad2(v.getDate())} ${pad2(v.getHours())}:${pad2(v.getMinutes())}:${pad2(v.getSeconds())}`;
   }
-  const HOJAS_IMPORTAR = ['AGO-DIC', 'ENE-JUN 2027', 'AGENDA', 'CITAS DISPONIBLES'];
+  // Hojas que reconoce el importador: AGENDA, CITAS DISPONIBLES, ENE-JUN/JUL-DIC/AGO-DIC con
+  // año opcional (mismo criterio que esHojaMaestra en server/migrate.js).
+  const RE_HOJA_IMPORTAR = /^(AGENDA|ENE-JUN|JUL-DIC|AGO-DIC)(\s+\d{4})?$/i;
+  const esHojaImportar = (nombre) => nombre === 'CITAS DISPONIBLES' || RE_HOJA_IMPORTAR.test(String(nombre || '').trim());
   $('#im-btn').onclick = async () => {
     const f = $('#im-file').files[0];
     if (!f) return toast('Elige un archivo .xlsx o .xls', 'err');
@@ -65,7 +70,7 @@ async function renderDatos() {
       const buf = await f.arrayBuffer();
       const wb = XLSX.read(buf, { type: 'array', cellDates: true });
       const hojas = {};
-      for (const nombre of HOJAS_IMPORTAR) {
+      for (const nombre of (wb.SheetNames || []).filter(esHojaImportar)) {
         const ws = wb.Sheets[nombre];
         if (!ws) continue;
         const filas = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, cellDates: true, defval: null });
@@ -200,4 +205,16 @@ async function renderDatos() {
   const mov = await api('/movimientos');
   $('#mov-body').innerHTML = mov.map((m) => `<tr><td class="num c">${esc(fFechaHora(m.ts))}</td><td>${esc(m.accion)}</td><td>${esc(m.actor)}</td><td>${esc(m.detalle)}</td></tr>`).join('');
 
+  // Borrar historial: exige escribir la frase exacta (evita un borrado accidental con un solo clic).
+  const FRASE_BORRAR_HISTORIAL = 'BORRAR HISTORIAL';
+  $('#mov-borrar-btn').onclick = async () => {
+    const escrita = prompt(`Esto borra TODO el historial de movimientos (se respalda antes). Escribe exactamente "${FRASE_BORRAR_HISTORIAL}" para confirmar:`);
+    if (escrita === null) return; // cancelado: no se llama a nada
+    if (escrita !== FRASE_BORRAR_HISTORIAL) return toast('Texto de confirmación incorrecto: no se borró nada', 'err');
+    try {
+      const r = await api('/movimientos/borrar', { method: 'POST', body: { confirmacion: escrita } });
+      toast(`Historial borrado: ${r.eliminados} registro(s)`);
+      renderDatos();
+    } catch (e) { toast(e.message, 'err'); }
+  };
 }
