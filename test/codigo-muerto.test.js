@@ -38,6 +38,9 @@ const NOMBRES_MUERTOS = [
   'dialogoCierreDia', 'pintarCierreDia', 'CIERRE_RESULTADOS',
   'btn-sugerir', 'actualizarBadgeReagendar',
   'd-buscador-slot', 'id="bq"', 'id="buscador"',
+  'TOUR_GRILLA_LISTA', 'guardarScroll', 'restaurarScroll', 'MOTIVOS_BLOQUEO_DEF',
+  // Comentarios que nombraban funciones ya eliminadas.
+  'cierre del dia', 'check-in del dia',
 ];
 
 test('ningun nombre/selector muerto queda bajo public/ (fuera de vendor/)', () => {
@@ -119,4 +122,24 @@ test('cada #id que referencia la guia existe en index.html o en algun .js', () =
       }
     }
   }
+});
+
+// ---------- servidor ----------
+const SERVER = path.join(__dirname, '..', 'server');
+
+test('el manejador de errores ya no copia campos que nadie asigna (login, sugerencia, accion_recomendada)', () => {
+  const index = leer(path.join(SERVER, 'index.js'));
+  for (const campo of ['err.login', 'err.sugerencia', 'err.accion_recomendada']) {
+    assert.ok(!index.includes(campo), `${campo} no debe aparecer en server/index.js`);
+  }
+});
+
+test('server/fix-telefonos.js (script suelto sin uso) fue eliminado', () => {
+  assert.ok(!fs.existsSync(path.join(SERVER, 'fix-telefonos.js')));
+});
+
+test('los motivos de bloqueo viven solo en el servidor y el cliente los recibe por /api/meta', () => {
+  const bloqueos = leer(path.join(PUBLIC, 'js', 'bloqueos.js'));
+  assert.ok(!/const MOTIVOS_BLOQUEO/.test(bloqueos));
+  assert.ok(bloqueos.includes('META.motivos_bloqueo'));
 });
