@@ -618,11 +618,15 @@ test('corregir el nombre de una cita antigua sin correo no pide correo', async (
   assert.equal(r.status, 200, r.texto);
 });
 
-test('cambiar el RUT de una cita sin correo sí pide correo', async () => {
+test('cambiar RUT y nombre a la vez en una cita sin correo sí pide correo; solo el RUT (correccion) no', async () => {
   const b = ocupado(diaNuevo(), '10:00', { correo: null });
-  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'JUAN PEREZ', clase: 'B' });
+  const r = await api('PUT', `/agenda/${b.id}`, { rut: '22.222.222-2', nombre: 'OTRA PERSONA', clase: 'B' });
   assert.equal(r.status, 400);
   assert.match(r.datos.error, /Falta el correo/);
+  // Regla nueva: corregir solo el RUT ya no se trata como otra persona, asi que no exige correo.
+  const c = ocupado(diaNuevo(), '10:30', { correo: null });
+  const r2 = await api('PUT', `/agenda/${c.id}`, { rut: '22.222.222-2', nombre: 'JUAN PEREZ', clase: 'B' });
+  assert.equal(r2.status, 200, r2.texto);
 });
 
 // ---------- sin login ----------

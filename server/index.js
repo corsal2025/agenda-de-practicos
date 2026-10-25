@@ -33,7 +33,7 @@ const limpieza = require('./limpieza');
 const vistas = require('./vistas');
 const intentos = require('./intentos');
 const asistencia = require('./asistencia');
-const { SELECT_BLOQUE, traer, marcarConfirmacionEnviada } = asistencia;
+const { SELECT_BLOQUE, traer, marcarConfirmacionEnviada, motivoCorreo } = asistencia;
 const respuestasCorreo = require('./respuestas-correo');
 const enlacePublico = require('./enlace-publico');
 const historial = require('./historial');
@@ -371,6 +371,7 @@ app.get('/api/meta', wrap((req, res) => {
     rango_agenda: db.prepare('SELECT MIN(fecha) desde, MAX(fecha) hasta FROM agenda').get(),
     logo: logoDisponible(),
     correo: { modo: correo.modo() },
+    motivos_bloqueo: bloqueo.MOTIVOS_BLOQUEO,
     organismo: process.env.AGENDA_ORGANISMO || 'Municipalidad de Valparaíso',
     unidad: process.env.AGENDA_UNIDAD || 'Departamento de Licencias de Conducir',
   });
@@ -516,7 +517,7 @@ function verificarTercerIntento(body, bloque, rutFmt, clase) {
   return { clase: b.clase, reprobados: b.reprobados, motivo };
 }
 
-app.put('/api/agenda/:id', wrap((req, res) => {
+app.put('/api/agenda/:id', wrap(async (req, res) => {
   const id = Number(req.params.id);
   const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
   if (!bloque) throw bad('Bloque no encontrado', 404);
@@ -575,24 +576,24 @@ app.put('/api/agenda/:id', wrap((req, res) => {
   const nombre = body.nombre ? String(body.nombre).trim().replace(/\s+/g, ' ').toUpperCase() : null;
   const estabaOcupada = Boolean(bloque.rut || bloque.nombre);
   const quedaOcupada = Boolean(rutFmt || nombre);
-  // Es otra persona solo si cambia el RUT (comparado normalizado); sin RUT en ninguno de los
-  // dos, se compara el nombre sin mayusculas ni espacios de mas. Corregir la capitalizacion
-  // del nombre del mismo RUT no cuenta como cambio.
+  // Es otra persona solo si cambian a la vez el RUT y el nombre (comparados normalizados), o si
+  // el bloque pasa de vacio a ocupado o de ocupado a vacio. Corregir uno solo de los dos
+  // (un RUT o un nombre mal escrito) es una correccion: conserva token, marcas y confirmacion.
   const normNombre = (n) => String(n || '').toUpperCase().replace(/\s+/g, ' ').trim();
-  const rutAntes = rut.limpiar(bloque.rut);
-  const rutAhora = rut.limpiar(rutFmt);
-  const otraPersona = (rutAntes || rutAhora)
-    ? rutAntes !== rutAhora
-    : normNombre(bloque.nombre) !== normNombre(nombre);
-  const cambiaPersona = estabaOcupada !== quedaOcupada || (estabaOcupada && otraPersona);
+  const cambiaRut = rut.limpiar(bloque.rut) !== rut.limpiar(rutFmt);
+  const cambiaNombre = normNombre(bloque.nombre) !== normNombre(nombre);
+  const cambiaPersona = estabaOcupada !== quedaOcupada || (cambiaRut && cambiaNombre);
+  const esCorreccion = estabaOcupada && quedaOcupada && !cambiaPersona && (cambiaRut || cambiaNombre);
   // Dar hora (bloque libre -> ocupado) o cambiar de persona exige correo valido.
-  // Corregir el nombre o editar otros campos de una cita antigua sin correo no lo exige.
+  // Corregir un dato o editar otros campos de una cita antigua sin correo no lo exige.
   if (quedaOcupada && cambiaPersona) exigirCorreo(body.correo);
   else if (body.correo && String(body.correo).trim().toLowerCase() !== (bloque.correo || '').toLowerCase()
     && !correoValido(body.correo)) throw bad(`Correo con formato inválido: ${String(body.correo).trim()}`);
+  const correoNuevo = body.correo ? String(body.correo).trim().toLowerCase() : null;
+  const cambiaCorreo = Boolean(correoNuevo) && correoNuevo !== (bloque.correo || '').toLowerCase();
 
   // Si se va a pisar una cita distinta, guardar la anterior en papelera.
-  if (estabaOcupada && (bloque.rut !== rutFmt || (bloque.nombre || '') !== (nombre || ''))) {
+  if (estabaOcupada && cambiaPersona) {
     papelera.guardar(bloque, 'sobrescribir', actorDe(req));
   }
 
@@ -623,7 +624,7 @@ app.put('/api/agenda/:id', wrap((req, res) => {
       pendiente_reagendar = @pendiente, pendiente_nota = @pnota,
       token_confirmacion = CASE WHEN @cambia = 1 THEN NULL ELSE token_confirmacion END,
       correo_confirmacion_enviado = CASE WHEN @cambia = 1 THEN 0 ELSE correo_confirmacion_enviado END,
-      correo_recordatorio_enviado = CASE WHEN @cambia = 1 THEN 0 ELSE correo_recordatorio_enviado END,
+      correo_recordatorio_enviado = CASE WHEN @cambia = 1 OR @cambiaCorreo = 1 THEN 0 ELSE correo_recordatorio_enviado END,
       agendado_en = CASE WHEN @quedaOcupada = 1 THEN COALESCE(agendado_en, @agendado_en) ELSE NULL END,
       actualizado_en = datetime('now','localtime')
     WHERE id = @id
@@ -633,7 +634,7 @@ app.put('/api/agenda/:id', wrap((req, res) => {
     nombre,
     clase,
     contacto: tel.valor,
-    correo: body.correo ? String(body.correo).trim().toLowerCase() : null,
+    correo: correoNuevo,
     tipo_cita: body.tipo_cita || null,
     motivo_reagendamiento: body.motivo_reagendamiento ? String(body.motivo_reagendamiento).trim() : null,
     lista_espera: body.lista_espera || null,
@@ -650,12 +651,18 @@ app.put('/api/agenda/:id', wrap((req, res) => {
     pnota: pendiente && body.pendiente_nota ? String(body.pendiente_nota).trim() : null,
     quedaOcupada: quedaOcupada ? 1 : 0,
     cambia: cambiaPersona ? 1 : 0,
+    cambiaCorreo: cambiaCorreo ? 1 : 0,
     agendado_en: `${hoyISO()} ${new Date().toTimeString().slice(0, 8)}`,
   });
 
   const accion = !estabaOcupada && quedaOcupada ? 'agendar'
     : estabaOcupada && !quedaOcupada ? 'liberar' : 'editar';
-  logReq(req, id, accion, `${bloque.fecha} ${bloque.hora} ${nombre || bloque.nombre || ''}`);
+  const cambios = [];
+  if (cambiaRut) cambios.push(`RUT ${bloque.rut || '—'} → ${rutFmt || '—'}`);
+  if (cambiaNombre) cambios.push(`nombre ${bloque.nombre || '—'} → ${nombre || '—'}`);
+  logReq(req, id, accion, esCorreccion
+    ? `corrección ${bloque.fecha} ${bloque.hora}: ${cambios.join('; ')}`
+    : `${bloque.fecha} ${bloque.hora} ${nombre || bloque.nombre || ''}`);
   if (autorizacion) {
     logReq(req, id, 'autorizar_tercer_intento',
       `${rutFmt} clase ${autorizacion.clase} (${autorizacion.reprobados} reprobados): ${autorizacion.motivo}`);
@@ -672,17 +679,18 @@ app.put('/api/agenda/:id', wrap((req, res) => {
   }
 
   const bloqueFinal = traer(id);
-  if (quedaOcupada && cambiaPersona && bloqueFinal.correo) {
-    if (!bloqueFinal.token_confirmacion) {
+  // Cita nueva o de otra persona: se ESPERA el resultado del correo (puede tardar hasta ~40-60 s)
+  // para mostrarle a quien agenda lo que realmente pasó.
+  let resultadoCorreo = null;
+  if (quedaOcupada && cambiaPersona) {
+    if (bloqueFinal.correo && !bloqueFinal.token_confirmacion) {
       bloqueFinal.token_confirmacion = crypto.randomBytes(16).toString('hex');
       db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').run(bloqueFinal.token_confirmacion, id);
     }
-    correo.confirmacion(bloqueFinal)
-      .then((ok) => { if (ok) marcarConfirmacionEnviada(bloqueFinal); })
-      .catch((e) => console.error('Correo de confirmacion fallo:', e.message));
+    resultadoCorreo = await asistencia.enviarConfirmacionNueva(bloqueFinal);
   }
 
-  res.json({ ok: true, avisos, bloque: bloqueFinal });
+  res.json({ ok: true, avisos, bloque: traer(id), correo: resultadoCorreo });
 }));
 
 const LIMPIAR_SQL = `
@@ -873,11 +881,14 @@ app.post('/api/agenda/enviar-correos-pendientes', wrap(async (req, res) => {
     // Sin token: el correo de prueba no lleva links vivos de la cita real.
     const muestra = { ...base, correo: destino, token_confirmacion: null };
     let enviado = false;
+    let motivo = null;
     if (correo.habilitado) {
+      correo.ultimoError = null;
       try { enviado = Boolean(await correo.confirmacion(muestra)); }
-      catch (e) { console.error('Error enviando correo de prueba:', e.message); }
+      catch (e) { console.error('Error enviando correo de prueba:', e.message); motivo = e.message; }
+      if (!enviado && !motivo) motivo = motivoCorreo(correo.ultimoError);
     }
-    return res.json({ ok: true, prueba: true, enviado, enviados: enviado ? 1 : 0, smtp_habilitado: correo.habilitado });
+    return res.json({ ok: true, prueba: true, enviado, enviados: enviado ? 1 : 0, smtp_habilitado: correo.habilitado, motivo });
   }
 
   const filas = db.prepare(`
@@ -923,7 +934,9 @@ app.post('/api/agenda/enviar-correos-pendientes', wrap(async (req, res) => {
 
 // Solicitud de confirmacion masiva para las citas elegidas en "Por confirmar".
 const MAX_IDS_MASIVO = 500;
-const ERRORES_SMTP_SISTEMICOS = new Set(['EAUTH', 'ECONNECTION', 'ETIMEDOUT', 'ESOCKET']);
+// Estado del correo para la etiqueta de "Por confirmar": solo lectura, sin credenciales.
+app.get('/api/correo/estado', wrap((req, res) => res.json(correo.estado())));
+
 app.post('/api/correo/confirmacion-masiva', wrap(async (req, res) => {
   const ids = (req.body || {}).ids;
   if (!Array.isArray(ids) || !ids.length || ids.length > MAX_IDS_MASIVO || !ids.every((n) => Number.isInteger(n) && n > 0)) {
@@ -958,7 +971,7 @@ app.post('/api/correo/confirmacion-masiva', wrap(async (req, res) => {
     fallidos++;
     // Error de autenticacion o conexion: fallaran todos los demas; se corta para no esperar timeouts.
     err = err || correo.ultimoError;
-    if (err && ERRORES_SMTP_SISTEMICOS.has(err.code)) {
+    if (correo.esErrorGeneral(err)) {
       return res.json({ ok: false, habilitado: true, abortado: true, motivo: `${err.code}: ${err.message || 'error de servidor de correo'}`, enviados, sin_correo: sinCorreo, fallidos });
     }
   }
@@ -1448,9 +1461,6 @@ app.use((err, req, res, next) => {
   }
   const cuerpo = { error: err.status ? (err.message || 'Error') : 'Error interno del servidor' };
   if (err.bloque) cuerpo.bloque = err.bloque;
-  if (err.login) cuerpo.login = true;
-  if (err.sugerencia) cuerpo.sugerencia = err.sugerencia;
-  if (err.accion_recomendada) cuerpo.accion_recomendada = err.accion_recomendada;
   if (err.codigo) {
     cuerpo.codigo = err.codigo;
     if (err.clase) cuerpo.clase = err.clase;

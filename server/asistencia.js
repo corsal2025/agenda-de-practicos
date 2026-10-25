@@ -47,6 +47,30 @@ async function enviarConfirmacionSiFalta(id) {
   }
 }
 
+// Texto corto con la causa de un envio fallido (sin datos sensibles).
+function motivoCorreo(err) {
+  if (!err) return 'no hay un canal de correo disponible';
+  return `${err.code || 'ERROR'}: ${err.message || 'error del servidor de correo'}`;
+}
+
+// Envia el correo de confirmacion de una cita recien agendada y ESPERA el resultado real:
+// { estado: 'enviado' | 'fallido' (con motivo) | 'deshabilitado' | 'sin_correo' }.
+async function enviarConfirmacionNueva(bloque) {
+  if (!bloque.correo) return { estado: 'sin_correo' };
+  if (!correo.habilitado) return { estado: 'deshabilitado' };
+  correo.ultimoError = null;
+  try {
+    if (await correo.confirmacion(bloque)) {
+      marcarConfirmacionEnviada(bloque);
+      return { estado: 'enviado' };
+    }
+  } catch (e) {
+    console.error('Correo de confirmacion fallo:', e.message);
+    return { estado: 'fallido', motivo: motivoCorreo(e) };
+  }
+  return { estado: 'fallido', motivo: motivoCorreo(correo.ultimoError) };
+}
+
 // Regla: quien confirmo asistencia no se reagenda hasta que pase el dia del examen
 // (si no se presenta se marca No asistio). La usan tanto el reagendar interno como el publico.
 function confirmadaBloqueaReagendar(cita, hoy = hoyISO()) {
@@ -64,5 +88,5 @@ function marcarPendienteReagendar(id, motivo, actor) {
 
 module.exports = {
   SELECT_BLOQUE, traer, marcarConfirmacionEnviada, registrarAsistencia, enviarConfirmacionSiFalta,
-  marcarPendienteReagendar, confirmadaBloqueaReagendar,
+  marcarPendienteReagendar, confirmadaBloqueaReagendar, motivoCorreo, enviarConfirmacionNueva,
 };
