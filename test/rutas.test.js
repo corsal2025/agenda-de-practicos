@@ -317,7 +317,7 @@ test('confirmar/rechazar con token invalido responde 404 (GET y POST)', async ()
 const MOTIVO_AUTO = require('../server/pesada').MOTIVO_AUTO;
 
 test('reagendar publico: una clase D solo ve bloques de 12:30', async () => {
-  const dia = hoyMas(7);
+  const dia = hoyMas(8); // evita feriados de la semilla (1 y 2 de noviembre caen cerca de +7)
   const origen = ocupado(hoyMas(40), '12:30', { clase: 'D', token_confirmacion: 'tkd' });
   const libre0900 = slot(dia, '09:00');
   const libre1230 = slot(dia, '12:30');
@@ -375,7 +375,7 @@ test('reagendar publico: horario ya ocupado se rechaza y la cita original queda 
 test('reagendar publico: escapa el nombre del examinador y no filtra errores internos', async () => {
   const exId = Number(db.prepare("INSERT INTO examinadores (nombre) VALUES ('<i>EXAM</i>')").run().lastInsertRowid);
   const origen = ocupado(hoyMas(45), '09:00', { token_confirmacion: 'tke' });
-  const destino = slot(hoyMas(6), '09:00', {}, exId);
+  const destino = slot(hoyMas(9), '09:00', {}, exId); // evita feriados de la semilla cerca de +6/+7
   const lista = await http('GET', `/reagendar/${origen.id}/tke`);
   assert.ok(!lista.texto.includes('<i>EXAM</i>'));
   const r = await http('POST', `/reagendar/${origen.id}/tke/elegir`, { form: { nuevo_slot_id: destino.id } });
