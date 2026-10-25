@@ -167,7 +167,9 @@ function opcionesReagendar(bloque) {
     ORDER BY a.fecha ASC, a.hora ASC
     LIMIT 300
   `).all(sumarDias(hoy, 1), sumarDias(hoy, VENTANA_REAGENDAR_DIAS), ...(pesadaCita ? [HORA_D_A5] : []));
+  const feriadosSet = feriados.set();
   return filas
+    .filter((f) => !feriadosSet.has(f.fecha))
     .filter((f) => !pesadaCita || !pesada.ocupadosDependientes(f.fecha, f.examinador_id).length)
     .slice(0, 25);
 }
@@ -252,9 +254,10 @@ app.post('/reagendar/:id/:token/elegir', express.urlencoded({ extended: true }),
     const destino = db.prepare('SELECT a.*, e.nombre AS examinador FROM agenda a JOIN examinadores e ON e.id = a.examinador_id WHERE a.id = ?').get(nuevoId);
     const noDisponible = () => bad('Ese horario ya no está disponible. Por favor regresa y selecciona otra fecha.');
     if (!destino || destino.bloqueado || destino.rut || destino.nombre) throw noDisponible();
-    // Mismas reglas que el listado: ventana de fechas y regla D/A5.
+    // Mismas reglas que el listado: ventana de fechas, feriados y regla D/A5.
     const hoy = hoyISO();
     if (destino.fecha < sumarDias(hoy, 1) || destino.fecha > sumarDias(hoy, VENTANA_REAGENDAR_DIAS)) throw noDisponible();
+    if (feriados.set().has(destino.fecha)) throw noDisponible();
     if (tieneClasePesada(bloque.clase)) {
       if (destino.hora !== HORA_D_A5) throw noDisponible();
       if (pesada.ocupadosDependientes(destino.fecha, destino.examinador_id).length) throw noDisponible();
@@ -1170,7 +1173,7 @@ app.post('/api/desbloquear-dia', wrap((req, res) => {
 // ---------- DISPONIBLES ----------
 app.get('/api/disponibles', wrap((req, res) => {
   const { desde, hasta, clase, examinador_id } = req.query;
-  const cond = ['a.rut IS NULL', 'a.nombre IS NULL', 'a.bloqueado = 0'];
+  const cond = ['a.rut IS NULL', 'a.nombre IS NULL', 'a.bloqueado = 0', 'a.fecha NOT IN (SELECT fecha FROM feriados)'];
   const p = [];
   if (desde) { cond.push('a.fecha >= ?'); p.push(desde); }
   if (hasta) { cond.push('a.fecha <= ?'); p.push(hasta); }
