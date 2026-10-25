@@ -8,7 +8,7 @@ const CAMPOS = [
   'rut', 'nombre', 'clase', 'contacto', 'correo', 'tipo_cita', 'motivo_reagendamiento',
   'lista_espera', 'intento', 'funcionario_id', 'fecha_inicio_tramite', 'confirmo_asistencia',
   'resultado', 'comentarios', 'bloqueado', 'bloqueo_motivo', 'pendiente_reagendar',
-  'pendiente_nota', 'agendado_en', 'avisado_por',
+  'pendiente_nota', 'agendado_en', 'avisado_por', 'escuela_conductores', 'tipo_reagendamiento',
 ];
 
 // Guarda el contenido actual de un bloque ocupado/bloqueado antes de borrarlo.
@@ -33,7 +33,7 @@ function listar(limite = 50) {
     try { d = JSON.parse(r.datos); } catch (_) { /* ignore */ }
     return {
       id: r.id, agenda_id: r.agenda_id, motivo: r.motivo, actor: r.actor, ts: r.ts,
-      fecha: d._fecha, hora: d._hora, rut: d.rut, nombre: d.nombre, bloqueo_motivo: d.bloqueo_motivo,
+      fecha: d._fecha, hora: d._hora, rut: d.rut, nombre: d.nombre, clase: d.clase, bloqueo_motivo: d.bloqueo_motivo,
     };
   });
 }

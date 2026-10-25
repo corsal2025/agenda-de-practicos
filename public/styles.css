@@ -691,6 +691,11 @@ input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:f
 .btn.peligro { background: var(--error); background-image: none; border-color: var(--error); }
 .btn.peligro:hover { background: var(--error); background-image: none; filter: brightness(.93); }
 .btn.chico { height: 30px; padding: 0 11px; font-size: 12px; }
+.btn:disabled {
+  background: var(--elev); background-image: none; color: var(--tinta-3); border-color: var(--linea);
+  cursor: not-allowed; transform: none; box-shadow: none;
+}
+.btn:disabled:hover { background: var(--elev); background-image: none; transform: none; }
 
 .pastilla {
   display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 13px;
