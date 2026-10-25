@@ -171,8 +171,14 @@ function upsertExaminador(nombre) {
 }
 
 // node:sqlite no trae helper de transacciones: lo implementamos a mano.
+// Reentrante: un tx() llamado desde dentro de otro tx() (por ejemplo migrate.js llamando a
+// generar(), que tiene su propio tx) no abre una segunda transaccion (SQLite no permite anidarlas
+// en la misma conexion): se ejecuta dentro de la que ya esta abierta y la cierra quien la abrio.
+let txAnidado = 0;
 function tx(fn) {
+  if (txAnidado > 0) return fn();
   db.exec('BEGIN');
+  txAnidado++;
   try {
     const r = fn();
     db.exec('COMMIT');
@@ -180,6 +186,8 @@ function tx(fn) {
   } catch (e) {
     try { db.exec('ROLLBACK'); } catch (_) { /* ignore */ }
     throw e;
+  } finally {
+    txAnidado--;
   }
 }
 

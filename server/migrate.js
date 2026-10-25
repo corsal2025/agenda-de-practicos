@@ -7,6 +7,7 @@ const { generar } = require('./slots');
 const pesada = require('./pesada');
 const { reservarCupoLibre } = require('./cupos');
 const N = require('./normalizar');
+const rut = require('./rut');
 const { aISO, aHora } = require('./fechas');
 const { RAIZ } = require('./config');
 
@@ -15,22 +16,42 @@ const COL = {
   fecha: 0, hora: 1, rut: 2, nombre: 3, clase: 4, contacto: 5, correo: 6,
   tipo_cita: 7, motivo: 8, lista_espera: 9, intento: 10, funcionario: 11,
   fecha_tramite: 12, confirmo: 13, examinador: 14, resultado: 15, comentarios: 16,
+  // Columnas extendidas (las agrega el export de este dashboard): -1 = no presentes en el archivo.
+  cupo: -1, escuela: -1, tipo_reagendamiento: -1, avisado_por: -1, pendiente_reagendar: -1, pendiente_nota: -1,
 };
 
 // AGO-DIC / ENE-JUN 2027: formato original (Google Sheets). AGENDA: formato que exporta este dashboard.
 const HOJAS_MAESTRAS = ['AGO-DIC', 'ENE-JUN 2027', 'AGENDA'];
+// Nombres de hoja que reconoce el importador (ver matchHojaMaestra mas abajo):
+// AGENDA, CITAS DISPONIBLES, ENE-JUN <año>, JUL-DIC <año> y el nombre antiguo AGO-DIC <año>,
+// con el año siempre opcional.
+const RE_HOJA_MAESTRA = /^(AGENDA|ENE-JUN|JUL-DIC|AGO-DIC)(\s+\d{4})?$/i;
+function esHojaMaestra(nombre) {
+  return RE_HOJA_MAESTRA.test(String(nombre || '').trim());
+}
+
+// Cabeceras exactas que agrega el export de este dashboard (ver server/export.js): se detectan
+// antes que las heuristicas de abajo para no confundirlas con columnas de otro origen.
+const COLUMNAS_EXACTAS = {
+  CUPO: 'cupo',
+  'ESCUELA CONDUCTORES': 'escuela',
+  'TIPO REAGENDAMIENTO': 'tipo_reagendamiento',
+  'AVISADO POR': 'avisado_por',
+  'PENDIENTE REAGENDAR': 'pendiente_reagendar',
+  'NOTA PENDIENTE': 'pendiente_nota',
+};
 
 // Las filas con fecha anterior a esta se descartan al importar. Una fecha mal digitada (por ejemplo 2001)
 // haria que la grilla se generara desde ese anio y crearia cientos de miles de bloques vacios.
 const FECHA_MINIMA = '2020-01-01';
 
-
 function detectarColumnas(filaEncabezado) {
   if (!Array.isArray(filaEncabezado)) return COL;
-  const normalizar = (s) => String(s || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const normalizar = (s) => String(s || '').trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const encabezados = filaEncabezado.map(normalizar);
   const map = { ...COL };
   encabezados.forEach((h, idx) => {
+    if (COLUMNAS_EXACTAS[h]) { map[COLUMNAS_EXACTAS[h]] = idx; return; }
     if (h.includes('FECHA') && !h.includes('TRAMITE') && !h.includes('INICIO')) map.fecha = idx;
     else if (h.includes('HORA') && !h.includes('INICIO')) map.hora = idx;
     else if (h === 'RUT') map.rut = idx;
@@ -50,6 +71,13 @@ function detectarColumnas(filaEncabezado) {
     else if (h.includes('COMENTARIO') || h.includes('OBSERVACION')) map.comentarios = idx;
   });
   return map;
+}
+
+// Cupo real de la fila: sin columna o en blanco significa 1 (nunca se fuerza a otro valor).
+function cupoDesdeFila(v) {
+  if (v == null || String(v).trim() === '') return 1;
+  const n = Math.trunc(Number(v));
+  return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
 function filaABloque(fila, colMap = COL) {
@@ -82,6 +110,20 @@ function filaABloque(fila, colMap = COL) {
   const nombreRaw = N.nombre(fila[c.nombre]);
   const motivoBloqueo = !r.valor ? N.bloqueo(nombreRaw) : null;
 
+  // Columnas extendidas (export de este dashboard): se leen igual este de bloqueos u ocupadas.
+  const cupo = cupoDesdeFila(fila[c.cupo]);
+  const presente = {
+    escuela: c.escuela !== -1, tipo_reagendamiento: c.tipo_reagendamiento !== -1,
+    avisado_por: c.avisado_por !== -1, pendiente_reagendar: c.pendiente_reagendar !== -1,
+    pendiente_nota: c.pendiente_nota !== -1,
+  };
+  const escuela_conductores = N.s(fila[c.escuela]) || null;
+  const tipoReag = N.s(fila[c.tipo_reagendamiento]);
+  const tipo_reagendamiento = tipoReag ? tipoReag.toUpperCase() : null;
+  const avisado_por = N.s(fila[c.avisado_por]) || null;
+  const pendiente_reagendar = N.siNoBool(fila[c.pendiente_reagendar]) ? 1 : 0;
+  const pendiente_nota = N.s(fila[c.pendiente_nota]) || null;
+
   if (motivoBloqueo) {
     return {
       fecha, hora, examinadorNom, bloqueado: 1, bloqueo_motivo: motivoBloqueo,
@@ -89,6 +131,8 @@ function filaABloque(fila, colMap = COL) {
       tipo_cita: null, motivo_reagendamiento: null, lista_espera: null, intento: null,
       funcionarioNom: null, fecha_inicio_tramite: null, confirmo_asistencia: null,
       resultado: null, comentarios: comentarioBase || null,
+      cupo, presente, escuela_conductores: null, tipo_reagendamiento: null, avisado_por: null,
+      pendiente_reagendar: 0, pendiente_nota: null,
     };
   }
 
@@ -108,10 +152,28 @@ function filaABloque(fila, colMap = COL) {
     confirmo_asistencia: N.siNoBool(fila[c.confirmo]),
     resultado: res.valor,
     comentarios,
+    cupo, presente, escuela_conductores, tipo_reagendamiento, avisado_por,
+    pendiente_reagendar, pendiente_nota,
   };
 }
 
 const ocupado = (b) => Boolean(b.rut || b.nombre);
+
+// Mismo ocupante: si alguno de los dos trae RUT, se comparan los RUT normalizados; sin RUT en
+// ninguno, se compara el nombre normalizado (mismas reglas que usa el PUT de la agenda).
+const normNombre = (n) => String(n || '').toUpperCase().replace(/\s+/g, ' ').trim();
+function mismaPersona(a, b) {
+  const ra = rut.limpiar(a.rut);
+  const rb = rut.limpiar(b.rut);
+  if (ra || rb) return ra === rb;
+  return normNombre(a.nombre) === normNombre(b.nombre);
+}
+
+function errorImport(msg) {
+  const e = new Error(msg);
+  e.status = 400;
+  return e;
+}
 
 const UPSERT = `
   INSERT INTO agenda (
@@ -121,7 +183,7 @@ const UPSERT = `
   ) VALUES (
     @fecha, @hora, @examinador_id, @rut, @nombre, @clase, @contacto, @correo, @tipo_cita,
     @motivo_reagendamiento, @lista_espera, @intento, @funcionario_id, @fecha_inicio_tramite,
-    @confirmo_asistencia, @resultado, @comentarios, @bloqueado, @bloqueo_motivo, @agendado_en, 1
+    @confirmo_asistencia, @resultado, @comentarios, @bloqueado, @bloqueo_motivo, @agendado_en, @cupo
   )
   ON CONFLICT (fecha, hora, examinador_id, cupo) DO UPDATE SET
     bloqueado = excluded.bloqueado,
@@ -141,7 +203,24 @@ const UPSERT = `
     resultado = excluded.resultado,
     comentarios = excluded.comentarios,
     agendado_en = COALESCE(agenda.agendado_en, excluded.agendado_en),
-    actualizado_en = datetime('now','localtime')
+    actualizado_en = datetime('now','localtime'),
+    -- Cambia el ocupante (otro RUT/nombre): el token y las banderas de correo del ocupante
+    -- anterior no deben pasar al nuevo. Re-importar al MISMO ocupante no los toca.
+    token_confirmacion = CASE WHEN @resetear = 1 THEN NULL ELSE agenda.token_confirmacion END,
+    correo_confirmacion_enviado = CASE WHEN @resetear = 1 THEN 0 ELSE agenda.correo_confirmacion_enviado END,
+    correo_recordatorio_enviado = CASE WHEN @resetear = 1 THEN 0 ELSE agenda.correo_recordatorio_enviado END,
+    -- Columnas extendidas: si el archivo trae la columna se usa su valor (aunque venga en
+    -- blanco); si no la trae, se mantiene el valor actual salvo que cambie el ocupante.
+    escuela_conductores = CASE WHEN @escuela_presente = 1 THEN @escuela_conductores
+      WHEN @resetear = 1 THEN NULL ELSE agenda.escuela_conductores END,
+    tipo_reagendamiento = CASE WHEN @tipo_reagendamiento_presente = 1 THEN @tipo_reagendamiento
+      WHEN @resetear = 1 THEN NULL ELSE agenda.tipo_reagendamiento END,
+    avisado_por = CASE WHEN @avisado_por_presente = 1 THEN @avisado_por
+      WHEN @resetear = 1 THEN NULL ELSE agenda.avisado_por END,
+    pendiente_reagendar = CASE WHEN @pendiente_reagendar_presente = 1 THEN @pendiente_reagendar
+      WHEN @resetear = 1 THEN 0 ELSE agenda.pendiente_reagendar END,
+    pendiente_nota = CASE WHEN @pendiente_nota_presente = 1 THEN @pendiente_nota
+      WHEN @resetear = 1 THEN NULL ELSE agenda.pendiente_nota END
 `;
 
 function importar(fuente, { limpiar = false } = {}) {
@@ -149,7 +228,8 @@ function importar(fuente, { limpiar = false } = {}) {
   if (typeof fuente === 'string') {
     if (!fs.existsSync(fuente)) throw new Error(`No existe el archivo: ${fuente}`);
     const wb = XLSX.readFile(fuente, { cellDates: true });
-    for (const nombre of [...HOJAS_MAESTRAS, 'CITAS DISPONIBLES']) {
+    for (const nombre of wb.SheetNames) {
+      if (nombre !== 'CITAS DISPONIBLES' && !esHojaMaestra(nombre)) continue;
       const ws = wb.Sheets[nombre];
       if (!ws) continue;
       hojas[nombre] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, cellDates: true, defval: null });
@@ -160,17 +240,15 @@ function importar(fuente, { limpiar = false } = {}) {
     throw new Error('Fuente de importación inválida');
   }
 
-  if (limpiar) {
-    db.exec('DELETE FROM agenda; DELETE FROM movimientos; DELETE FROM cola_reagendar; DELETE FROM papelera;');
-  }
-
-  // 1) Reunir bloques de las hojas maestras, deduplicando por (fecha,hora,examinador).
+  // 1) Reunir bloques de las hojas maestras, deduplicando por (fecha,hora,examinador,cupo).
+  //    Todo esto es lectura pura (sin tocar la base): si el archivo tiene un conflicto, se
+  //    detecta y se avisa ANTES de borrar o escribir nada (ni siquiera con limpiar=true).
   const porSlot = new Map();
   let leidas = 0;
   let saltadas = 0;
   let fueraDeRango = 0;
 
-  const hojasAProcesar = HOJAS_MAESTRAS.filter((h) => hojas[h]);
+  const hojasAProcesar = Object.keys(hojas).filter((h) => h !== 'CITAS DISPONIBLES' && esHojaMaestra(h));
   const listaHojas = hojasAProcesar.length > 0 ? hojasAProcesar : Object.keys(hojas).filter((h) => h !== 'CITAS DISPONIBLES');
 
   for (const hoja of listaHojas) {
@@ -182,11 +260,18 @@ function importar(fuente, { limpiar = false } = {}) {
       if (!b) { if (filas[i] && filas[i].some((c) => c != null && c !== '')) saltadas++; continue; }
       if (b.fecha < FECHA_MINIMA) { fueraDeRango++; continue; }
       leidas++;
-      const key = `${b.fecha}|${b.hora}|${b.examinadorNom}`;
+      const key = `${b.fecha}|${b.hora}|${b.examinadorNom}|${b.cupo}`;
       const prev = porSlot.get(key);
+      if (prev && ocupado(prev) && ocupado(b) && !mismaPersona(prev, b)) {
+        throw errorImport(
+          `Dos personas distintas para la misma hora y cupo: "${prev.nombre || prev.rut}" `
+          + `(hoja "${prev._hoja}", fila ${prev._fila}) y "${b.nombre || b.rut}" (hoja "${hoja}", fila ${i + 1}) `
+          + `coinciden en ${b.fecha} ${b.hora}, examinador "${b.examinadorNom}", cupo ${b.cupo}.`
+        );
+      }
       const conten = (x) => Boolean(x.rut || x.nombre || x.bloqueado);
       if (!prev || ocupado(b) || (conten(b) && !conten(prev))) {
-        porSlot.set(key, b);
+        porSlot.set(key, { ...b, _hoja: hoja, _fila: i + 1 });
       }
     }
   }
@@ -195,15 +280,20 @@ function importar(fuente, { limpiar = false } = {}) {
   const fechas = [...porSlot.values()].map((b) => b.fecha).sort();
   const desde = fechas[0] || '2026-08-01';
   const hasta = fechas[fechas.length - 1] || '2027-06-30';
-  const gen = generar(desde, hasta);
 
-  // 3) Upsert.
+  // 3) Limpiar (si se pidio), generar la grilla y hacer el upsert: todo en una sola transaccion,
+  //    ya validado el archivo arriba. limpiar ya NO borra movimientos (ver server/historial.js).
   const stmt = db.prepare(UPSERT);
+  const existente = db.prepare('SELECT rut, nombre FROM agenda WHERE fecha=? AND hora=? AND examinador_id=? AND cupo=?');
   let ocupadas = 0;
-  tx(() => {
+  const gen = tx(() => {
+    if (limpiar) db.exec('DELETE FROM agenda; DELETE FROM cola_reagendar; DELETE FROM papelera;');
+    const generado = generar(desde, hasta);
     for (const b of porSlot.values()) {
       const examinador_id = upsertExaminador(b.examinadorNom);
       const funcionario_id = upsertFuncionario(b.funcionarioNom);
+      const previo = existente.get(b.fecha, b.hora, examinador_id, b.cupo);
+      const resetear = previo && !mismaPersona(previo, b) ? 1 : 0;
       stmt.run({
         fecha: b.fecha, hora: b.hora, examinador_id,
         rut: b.rut, nombre: b.nombre, clase: b.clase, contacto: b.contacto, correo: b.correo,
@@ -215,9 +305,17 @@ function importar(fuente, { limpiar = false } = {}) {
         bloqueado: b.bloqueado || 0,
         bloqueo_motivo: b.bloqueo_motivo || null,
         agendado_en: ocupado(b) ? (b.fecha_inicio_tramite || b.fecha) : null,
+        cupo: b.cupo,
+        resetear,
+        escuela_conductores: b.escuela_conductores, escuela_presente: b.presente.escuela ? 1 : 0,
+        tipo_reagendamiento: b.tipo_reagendamiento, tipo_reagendamiento_presente: b.presente.tipo_reagendamiento ? 1 : 0,
+        avisado_por: b.avisado_por, avisado_por_presente: b.presente.avisado_por ? 1 : 0,
+        pendiente_reagendar: b.pendiente_reagendar, pendiente_reagendar_presente: b.presente.pendiente_reagendar ? 1 : 0,
+        pendiente_nota: b.pendiente_nota, pendiente_nota_presente: b.presente.pendiente_nota ? 1 : 0,
       });
       if (ocupado(b)) ocupadas++;
     }
+    return generado;
   });
 
   // 4) Rescatar reservas sueltas de CITAS DISPONIBLES (solo si el bloque esta libre).
@@ -256,7 +354,7 @@ function importar(fuente, { limpiar = false } = {}) {
   return resumen;
 }
 
-module.exports = { importar };
+module.exports = { importar, esHojaMaestra };
 
 // --- CLI ---
 if (require.main === module) {
