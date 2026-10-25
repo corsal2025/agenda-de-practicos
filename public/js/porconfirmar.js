@@ -1,4 +1,23 @@
 /* ================= tab: POR CONFIRMAR ================= */
+// Etiqueta del estado del correo a partir de GET /correo/estado ({ modo, smtp_caido, ultimo_envio }).
+function textoEstadoCorreo(e) {
+  const ult = e && e.ultimo_envio;
+  if (ult && !ult.ok) return `Correo: último envío falló (${ult.codigo || 'ERROR'}, ${ult.hora})`;
+  const modo = (e && e.modo) || 'ninguno';
+  if (modo === 'outlook') return e.smtp_caido ? 'Correo: vía Outlook (SMTP falló)' : 'Correo: vía Outlook';
+  if (modo === 'smtp') return 'Correo: vía SMTP';
+  return 'Correo: no configurado';
+}
+
+// Texto del aviso tras "Prueba a mi correo" segun lo que respondio el servidor.
+function textoResultadoPrueba(res, email) {
+  if (res.enviados > 0) return { texto: `¡Éxito! Se envió el correo de prueba a ${email}.`, tipo: 'ok' };
+  if (!res.smtp_habilitado) {
+    return { texto: `El correo no está configurado en este equipo: no se envió la prueba a ${email}. Configura SMTP (SMTP_HOST en el archivo .env) u Outlook.`, tipo: 'alerta' };
+  }
+  return { texto: `No se pudo enviar la prueba a ${email}${res.motivo ? `: ${res.motivo}` : '.'}`, tipo: 'err' };
+}
+
 async function renderPorConfirmar() {
   view.innerHTML = `
     <div class="panel">
@@ -20,7 +39,7 @@ async function renderPorConfirmar() {
           <button class="btn sec chico" id="pc-refrescar" title="Actualizar lista">↻ Actualizar</button>
           <button class="btn chico" id="btn-enviar-correos-masivos" title="Enviar enlace de confirmación por correo a todos los pendientes">✉ Enviar correos a pendientes</button>
           <button class="btn chico sec" id="btn-correo-prueba" style="color:var(--azul);font-weight:600" title="Enviar correos de prueba dirigidos a tu correo">🧪 Prueba a mi correo</button>
-          <span class="muted" id="pc-correo-modo" style="font-size:12px">${(() => { const m = (META && META.correo && META.correo.modo) || 'ninguno'; return m === 'outlook' ? 'Correo: vía Outlook' : m === 'smtp' ? 'Correo: vía SMTP' : 'Correo: no configurado'; })()}</span>
+          <span class="muted" id="pc-correo-modo" style="font-size:12px">${textoEstadoCorreo({ modo: (META && META.correo && META.correo.modo) || 'ninguno' })}</span>
         </div>
       </div>
       <div class="fila" style="margin-top:1rem;gap:12px;align-items:flex-end">
@@ -80,6 +99,15 @@ async function renderPorConfirmar() {
       </div>
     </div>
   `;
+
+  // Pide el estado real del correo y actualiza la etiqueta (al entrar, al actualizar y tras cada envio).
+  const actualizarEstadoCorreo = async () => {
+    try {
+      const e = await api('/correo/estado');
+      const el = $('#pc-correo-modo');
+      if (el) el.textContent = textoEstadoCorreo(e);
+    } catch (_) { /* la etiqueta inicial (de META) queda como estaba */ }
+  };
 
   let citasCargadas = [];
   let visibles = [];
@@ -250,14 +278,16 @@ async function renderPorConfirmar() {
     } catch (e) {
       toast(e.message, 'err');
     }
+    actualizarEstadoCorreo();
   };
 
   $('#pc-wa-sel').onclick = () => colaWhatsApp(objetivo());
 
   $('#pc-q').oninput = pintarLista;
   $('#pc-rango').onchange = cargarDatos;
-  $('#pc-refrescar').onclick = () => { cargarDatos(); cargarRespuestasCorreo(); };
+  $('#pc-refrescar').onclick = () => { cargarDatos(); cargarRespuestasCorreo(); actualizarEstadoCorreo(); };
   cargarRespuestasCorreo();
+  actualizarEstadoCorreo();
 
   if ($('#btn-enviar-correos-masivos')) {
     $('#btn-enviar-correos-masivos').onclick = async () => {
@@ -275,6 +305,7 @@ async function renderPorConfirmar() {
       } catch (e) {
         toast('Error al enviar correos: ' + e.message, 'err');
       }
+      actualizarEstadoCorreo();
     };
   }
 
@@ -286,16 +317,12 @@ async function renderPorConfirmar() {
       try {
         toast('Enviando correos de prueba a ' + email + '...', 'info');
         const res = await api('/agenda/enviar-correos-pendientes', { method: 'POST', body: { correo_prueba: email.trim() } });
-        if (res.enviados > 0) {
-          toast(`¡Éxito! Se enviaron ${res.enviados} correos de prueba a ${email}.`, 'ok');
-        } else if (!res.smtp_habilitado) {
-          toast(`Tokens generados. Nota: para envío real hacia ${email} hay que configurar el correo SMTP (SMTP_HOST en el archivo .env).`, 'alerta');
-        } else {
-          toast('No se encontraron citas pendientes para enviar.', 'info');
-        }
+        const aviso = textoResultadoPrueba(res, email.trim());
+        toast(aviso.texto, aviso.tipo);
       } catch (e) {
         toast('Error en prueba de correo: ' + e.message, 'err');
       }
+      actualizarEstadoCorreo();
     };
   }
 
