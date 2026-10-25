@@ -59,15 +59,6 @@ const SugerenciasCupo = (() => {
     });
   }
 
-  // Botón "Sugerir" en las tarjetas libres de la Agenda.
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.btn-sugerir');
-    if (!btn) return;
-    e.preventDefault();
-    e.stopPropagation();
-    abrir(Number(btn.dataset.id), () => { if ($('#a-grid') && typeof renderAgenda === 'function') renderAgenda(); });
-  }, true);
-
   return { abrir };
 })();
 window.SugerenciasCupo = SugerenciasCupo;
@@ -204,7 +195,7 @@ const ListaEspera = (() => {
           cerrarModal();
           toast(`Cupo asignado a ${nom(p.nombre)}`);
           ((r && r.avisos) || []).forEach((a) => toast(a, 'err'));
-          if (typeof actualizarBadgeReagendar === 'function') actualizarBadgeReagendar();
+          if (typeof actualizarBadgeEspera === 'function') actualizarBadgeEspera();
           recargar();
         } catch (e) { btn.disabled = false; toast(e.message, 'err'); }
       };

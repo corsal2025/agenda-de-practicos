@@ -20,21 +20,7 @@ const PASOS_TOUR = [
     target: '#nav',
     titulo: 'Pestañas y módulos principales',
     icono: '🧭',
-    descripcion: 'Desde aquí accedes a todos los módulos: <b>Citas disponibles</b>, <b>Agenda</b>, <b>Reagendar</b>, <b>Por confirmar</b>, <b>Estadísticas</b> y el menú <b>Más ▾</b>. Los números de color junto a algunas pestañas son avisos pendientes. Esta guía los recorre uno por uno.'
-  },
-  {
-    seccion: 'Entorno general',
-    target: '#nav-mas-btn',
-    titulo: 'Menú «Más»',
-    icono: '☰',
-    descripcion: 'Las pestañas de uso ocasional están en <b>Más ▾</b>: <b>Jefatura</b>, <b>Papelera</b>, <b>Datos</b> y <b>Reporte de errores</b>. El número sobre <b>Más</b> suma los avisos de esas pestañas. Con el teclado: <b>↓</b> abre el menú, <b>↑ ↓</b> recorren las opciones y <b>Esc</b> lo cierra.'
-  },
-  {
-    seccion: 'Entorno general',
-    target: '#bq',
-    titulo: 'Buscador global',
-    icono: '🔎',
-    descripcion: 'Escribe un <b>RUT, nombre o teléfono</b> (mínimo 3 caracteres). Navega los resultados con las flechas <b>↑ ↓</b> y elige con <b>Enter</b> o con clic: se abre el <b>historial completo</b> de esa persona, con un botón <b>Abrir</b> en cada cita para ver su ficha. <b>Esc</b> cierra la lista. Al escribir un RUT, este se <b>formatea solo</b> (puntos y guion). En el historial, el botón <b>Ir a la agenda</b> te lleva al día de la cita con su tarjeta <b>resaltada</b>.'
+    descripcion: 'Desde aquí accedes a todos los módulos: <b>Citas disponibles</b>, <b>Agenda</b>, <b>Lista de espera</b>, <b>Por confirmar</b>, <b>Estadísticas</b>, <b>Jefatura</b>, <b>Papelera</b>, <b>Datos</b> y <b>Reporte de errores</b>. Los números de color junto a algunas pestañas son avisos pendientes. Esta guía los recorre uno por uno.'
   },
   {
     seccion: 'Entorno general',
@@ -105,7 +91,7 @@ const PASOS_TOUR = [
     target: '#a-bloqdia',
     titulo: 'Bloquear días u horas',
     icono: '🔐',
-    descripcion: 'Inhabilita franjas por licencias, feriados, capacitaciones o terreno. En el diálogo eliges <b>Día(s) completo(s)</b> (con <i>Ajustar a semanas completas lun–vie</i>) o <b>Por horas / bloques</b> (chips por hora, rango rápido, Mañana, Mediodía y aplicar a varios días), el <b>examinador</b> (o todos) y el <b>motivo</b>. Con la casilla <b>Incluir bloques que ya tienen cita</b> activa, esos postulantes pasan automáticamente a <b>Reagendar</b> para proteger su cupo.',
+    descripcion: 'Inhabilita franjas por licencias, feriados, capacitaciones o terreno. En el diálogo eliges <b>Día(s) completo(s)</b> (con <i>Ajustar a semanas completas lun–vie</i>) o <b>Por horas / bloques</b> (chips por hora, rango rápido, Mañana, Mediodía y aplicar a varios días), el <b>examinador</b> (o todos) y el <b>motivo</b>. Con la casilla <b>Incluir bloques que ya tienen cita</b> activa, esos postulantes pasan automáticamente a <b>Lista de espera</b> para proteger su cupo.',
     pose: 'alerta'
   },
   {
@@ -123,56 +109,6 @@ const PASOS_TOUR = [
     titulo: 'Imprimir el día',
     icono: '🖨️',
     descripcion: '<b>Imprimir día</b> genera el informe de la fecha y el examinador seleccionados, ordenado por hora (eliges formato, orientación y diseño: una hoja o una por examinador/a).'
-  },
-
-  /* ---------- Reagendar ---------- */
-  {
-    seccion: 'Reagendar',
-    tab: 'reagendar',
-    target: '#r-filtros-origen',
-    listo: tourSinCargando('#r-filtros-origen'),
-    titulo: 'Reagendar: origen y prioridad',
-    icono: '🚨',
-    descripcion: 'Reúne a quienes necesitan una nueva hora, ordenados por prioridad: primero los afectados por un <b>bloqueo</b> (urgentes) y luego las <b>solicitudes de cambio</b>. Filtra con <b>Todos</b>, <b>Por bloqueo</b> o <b>Solicitud de cambio</b>; cada botón muestra su contador.'
-  },
-  {
-    seccion: 'Reagendar',
-    tab: 'reagendar',
-    target: '#r-detalle',
-    listo: '#r-detalle .panel',
-    titulo: 'Búsqueda de cupos libres',
-    icono: '🧭',
-    descripcion: 'Define el rango de destino (<b>Destino desde / Hasta</b>) y el <b>examinador</b>, y pulsa <b>Ver bloques libres</b> para explorar qué cupos hay. Al seleccionar a un postulante, este mismo panel pasa a mostrar su cita actual y los cupos donde puede ir.'
-  },
-  {
-    seccion: 'Reagendar',
-    tab: 'reagendar',
-    target: '#r-tabla-unificada button[data-id]',
-    fallback: '#r-tabla-unificada',
-    listo: tourSinCargando('#r-tabla-unificada'),
-    titulo: 'Reagendar una solicitud de cambio',
-    icono: '🔁',
-    descripcion: 'Con <b>Reagendar</b> seleccionas al postulante: se abre el panel <b>Reagendamiento en curso</b>. Elige el rango y el examinador, pulsa <b>Ver bloques libres</b> y usa <b>Mover aquí</b> sobre el cupo deseado. <b>Cancelar selección</b> deshace la elección. Si no hay filas, la lista está vacía y no hay nadie pendiente.'
-  },
-  {
-    seccion: 'Reagendar',
-    tab: 'reagendar',
-    target: '#r-tabla-unificada button[data-cola]',
-    fallback: '#r-tabla-unificada',
-    listo: tourSinCargando('#r-tabla-unificada'),
-    titulo: 'Asignar hora por bloqueo',
-    icono: '📌',
-    descripcion: 'Para quienes perdieron su cita por un bloqueo: <b>Asignar hora</b> abre la búsqueda de cupos, con un <b>correo opcional</b> para enviar la confirmación. Elige <b>Asignar este cupo</b> y confirma. Las clases pesadas solo ven bloques D/A5.'
-  },
-  {
-    seccion: 'Reagendar',
-    tab: 'reagendar',
-    target: '#r-tabla-unificada button[data-desc]',
-    fallback: '#r-tabla-unificada',
-    listo: tourSinCargando('#r-tabla-unificada'),
-    titulo: 'Descartar de la lista',
-    icono: '🗑️',
-    descripcion: '<b>Descartar</b> retira a un postulante de la lista de reagendamiento (pide confirmación). Úsalo cuando ya no corresponde reagendarlo.'
   },
 
   /* ---------- Lista de espera ---------- */
@@ -216,12 +152,12 @@ const PASOS_TOUR = [
   {
     seccion: 'Por confirmar',
     tab: 'porconfirmar',
-    target: '#pc-tbody .btn-wa',
+    target: '#pc-tbody .btn-sms',
     fallback: '#pc-tbody',
     listo: tourSinCargando('#pc-total-badge'),
     titulo: 'Contactar al postulante',
     icono: '📞',
-    descripcion: 'En cada fila tienes el <b>teléfono</b>, el enlace de <b>WhatsApp</b> con un mensaje que pide confirmar o reagendar, y el <b>correo</b>. Si falta el dato, la fila indica <i>Sin teléfono</i> o <i>Sin correo</i>.'
+    descripcion: 'En cada fila tienes el <b>teléfono</b>, el enlace de <b>SMS</b> con un mensaje que pide confirmar o reagendar, y el <b>correo</b>. Si falta el dato, la fila indica <i>Sin teléfono</i> o <i>Sin correo</i>.'
   },
   {
     seccion: 'Por confirmar',
@@ -239,9 +175,9 @@ const PASOS_TOUR = [
     target: '#pc-tbody button[data-reag]',
     fallback: '#pc-tbody',
     listo: tourSinCargando('#pc-total-badge'),
-    titulo: 'Derivar a Reagendar',
+    titulo: 'Derivar a Lista de espera',
     icono: '🔄',
-    descripcion: '<b>🔄 Reagendar</b> envía al postulante a la lista de Reagendar y abre su panel para asignarle un nuevo cupo.'
+    descripcion: '<b>🔄 Reagendar</b> envía al postulante a la Lista de espera y abre su panel para asignarle un nuevo cupo.'
   },
   {
     seccion: 'Por confirmar',
@@ -496,7 +432,7 @@ const PASOS_TOUR = [
     listo: tourSinCargando('#e-body'),
     titulo: 'Abrir y corregir la cita',
     icono: '🛠️',
-    descripcion: '<b>Abrir</b> muestra la ficha de la cita para corregir sus datos o usar <b>Liberar bloque</b> y <b>Reagendar postulante</b>. Si la tabla dice <i>Nada que mostrar</i>, no hay errores. ¡Eso es lo ideal!',
+    descripcion: '<b>✏️ Editar</b> corrige los datos en la misma planilla, <b>🗑️ Liberar</b> deja el cupo libre y <b>🔄 Espera</b> envía al postulante a la Lista de espera. Si la tabla dice <i>Nada que mostrar</i>, no hay errores. ¡Eso es lo ideal!',
     pose: 'celebra'
   }
 ];

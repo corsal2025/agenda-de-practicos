@@ -785,10 +785,6 @@ app.get('/api/cola-reagendar', wrap((req, res) => {
   res.json(cola.listarPendientes());
 }));
 
-app.get('/api/cola-reagendar/:id/sugerencias', wrap((req, res) => {
-  res.json(cola.sugerencias(req.params.id));
-}));
-
 app.post('/api/cola-reagendar/:id/asignar', wrap((req, res) => {
   const item = cola.traerPendiente(req.params.id);
   if (!item) throw bad('Esta persona ya no está pendiente de reagendar.', 404);
@@ -1018,45 +1014,6 @@ app.post('/api/agenda/:id/aviso', wrap((req, res) => {
   res.json({ ok: true, avisado_por: lista });
 }));
 
-// ---------- CIERRE DEL DIA ----------
-const RE_FECHA_ISO = /^\d{4}-\d{2}-\d{2}$/;
-const MAX_CIERRE = 200;
-const SIN_RESULTADO = "(a.rut IS NOT NULL OR a.nombre IS NOT NULL) AND a.bloqueado = 0 AND (a.resultado IS NULL OR a.resultado = '')";
-app.get('/api/cierre-dia', wrap((req, res) => {
-  const fecha = req.query.fecha || hoyISO();
-  if (!RE_FECHA_ISO.test(fecha)) throw bad('Fecha invalida (YYYY-MM-DD)');
-  const filas = db.prepare(`SELECT a.id, a.fecha, a.hora, a.rut, a.nombre, a.clase, a.contacto,
-      a.confirmo_asistencia, a.examinador_id, e.nombre AS examinador
-    FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
-    WHERE a.fecha = ? AND ${SIN_RESULTADO} ORDER BY e.nombre, a.hora`).all(fecha);
-  const grupos = [];
-  for (const f of filas) {
-    let g = grupos[grupos.length - 1];
-    if (!g || g.examinador_id !== f.examinador_id) { g = { examinador_id: f.examinador_id, examinador: f.examinador, citas: [] }; grupos.push(g); }
-    g.citas.push(f);
-  }
-  res.json({ fecha, total: filas.length, grupos });
-}));
-app.post('/api/cierre-dia', wrap((req, res) => {
-  const { fecha, ids, resultado } = req.body || {};
-  if (!RE_FECHA_ISO.test(fecha || '')) throw bad('Fecha invalida (YYYY-MM-DD)');
-  if (!resultado || !catalogo('resultado').includes(resultado)) throw bad(`Resultado no valido: ${resultado}`);
-  if (!Array.isArray(ids) || !ids.length) throw bad('Debes indicar al menos una cita.');
-  if (ids.length > MAX_CIERRE) throw bad(`Maximo ${MAX_CIERRE} citas por vez.`);
-  const limpios = [...new Set(ids.map(Number))];
-  if (limpios.some((n) => !Number.isInteger(n) || n <= 0)) throw bad('Ids invalidos.');
-  const upd = db.prepare(`UPDATE agenda AS a SET resultado = ?, actualizado_en = datetime('now','localtime')
-    WHERE a.id = ? AND a.fecha = ? AND ${SIN_RESULTADO}`);
-  const actualizados = tx(() => {
-    let n = 0;
-    for (const id of limpios) {
-      if (upd.run(resultado, id, fecha).changes) { n++; logReq(req, id, 'editar', `resultado = ${resultado} (cierre del dia)`); }
-    }
-    return n;
-  });
-  res.json({ ok: true, actualizados, omitidos: limpios.length - actualizados });
-}));
-
 app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
   const origenId = Number(req.params.id);
   const { destino_id, motivo, forzar } = req.body || {};
@@ -1210,38 +1167,6 @@ app.post('/api/desbloquear-dia', wrap((req, res) => {
   res.json({ ok: true, desbloqueados: objetivo.length });
 }));
 
-app.get('/api/bloqueos', wrap((req, res) => {
-  const { desde, hasta, examinador_id, motivo, historico } = req.query || {};
-  const cond = ['a.bloqueado = 1'];
-  const params = [];
-  if (desde) {
-    cond.push('a.fecha >= ?');
-    params.push(desde);
-  } else if (!historico || historico === '0' || historico === 'false') {
-    // Por defecto solo mostrar bloqueos activos/vigentes desde hoy en adelante (no meses pasados)
-    cond.push('a.fecha >= ?');
-    params.push(hoyISO());
-  }
-  if (hasta) { cond.push('a.fecha <= ?'); params.push(hasta); }
-  if (examinador_id) { cond.push('a.examinador_id = ?'); params.push(Number(examinador_id)); }
-  if (motivo) { cond.push('a.bloqueo_motivo = ?'); params.push(motivo); }
-
-  const rows = db.prepare(`
-    SELECT a.fecha, a.examinador_id, COALESCE(e.nombre, 'Sin examinador') as examinador,
-           COALESCE(a.bloqueo_motivo, 'BLOQUEADO') as motivo,
-           COUNT(*) as cant_bloques,
-           MIN(a.hora) as desde_hora,
-           MAX(a.hora) as hasta_hora
-    FROM agenda a
-    LEFT JOIN examinadores e ON e.id = a.examinador_id
-    WHERE ${cond.join(' AND ')}
-    GROUP BY a.fecha, a.examinador_id, a.bloqueo_motivo
-    ORDER BY a.fecha ASC, e.nombre ASC, desde_hora ASC
-  `).all(...params);
-
-  res.json(rows);
-}));
-
 // ---------- DISPONIBLES ----------
 app.get('/api/disponibles', wrap((req, res) => {
   const { desde, hasta, clase, examinador_id } = req.query;
@@ -1259,25 +1184,7 @@ app.get('/api/disponibles', wrap((req, res) => {
   })));
 }));
 
-// ---------- BUSCAR / HISTORIAL ----------
-app.get('/api/buscar', wrap((req, res) => {
-  const q = String(req.query.q || '').trim();
-  if (q.length < 3) return res.json([]);
-  const like = `%${q}%`;
-  const rutLimpio = `%${rut.limpiar(q)}%`;
-  // Telefono por digitos: el buscador formatea numeros como RUT mientras se escribe.
-  const digitos = q.replace(/\D/g, '');
-  const telLike = digitos.length >= 3 ? `%${digitos}%` : like;
-  const rows = db.prepare(`
-    ${SELECT_BLOQUE}
-    WHERE (a.rut IS NOT NULL OR a.nombre IS NOT NULL)
-      AND (REPLACE(REPLACE(a.rut,'.',''),'-','') LIKE ? OR UPPER(a.nombre) LIKE UPPER(?) OR a.contacto LIKE ?
-        OR REPLACE(REPLACE(REPLACE(REPLACE(a.contacto,' ',''),'+',''),'-',''),'.','') LIKE ?)
-    ORDER BY a.fecha DESC, a.hora LIMIT 100
-  `).all(rutLimpio, like, like, telLike);
-  res.json(rows);
-}));
-
+// ---------- HISTORIAL ----------
 app.get('/api/historial', wrap((req, res) => {
   const r = rut.limpiar(req.query.rut || '');
   if (r.length < 2) return res.json([]);
@@ -1327,7 +1234,6 @@ app.delete('/api/catalogos', wrap((req, res) => {
 }));
 
 // ---------- FERIADOS ----------
-app.get('/api/feriados', wrap((req, res) => res.json(feriados.listar())));
 app.post('/api/feriados', wrap((req, res) => {
   const { fecha, nombre } = req.body || {};
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha || '')) throw bad('Fecha invalida (YYYY-MM-DD)');

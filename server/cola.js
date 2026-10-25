@@ -1,7 +1,6 @@
 'use strict';
 const { db } = require('./db');
-const { hoyISO, ahoraTS } = require('./fechas');
-const { CLASES_PESADAS, HORA_D_A5 } = require('./config');
+const { ahoraTS } = require('./fechas');
 
 function encolar(bloque, motivo, actor) {
   const ts = ahoraTS();
@@ -36,53 +35,4 @@ function traerPendiente(id) {
   `).get(Number(id));
 }
 
-function sugerencias(id) {
-  const item = traerPendiente(id);
-  if (!item) return { mismo_examinador: [], otros_examinadores: [], origen_examinador: null };
-
-  const hoy = hoyISO();
-  const tienePesada = String(item.clase || '').toUpperCase().split(',').map((s) => s.trim())
-    .some((cl) => CLASES_PESADAS.includes(cl));
-
-  const pesadaCond = tienePesada ? `AND a.hora = '${HORA_D_A5}'` : '';
-
-  let mismo = [];
-  if (item.origen_examinador_id) {
-    mismo = db.prepare(`
-      SELECT a.id, a.fecha, a.hora, a.examinador_id, e.nombre AS examinador
-      FROM agenda a
-      JOIN examinadores e ON e.id = a.examinador_id
-      WHERE a.examinador_id = ?
-        AND a.fecha >= ?
-        AND (a.rut IS NULL OR a.rut = '')
-        AND (a.nombre IS NULL OR a.nombre = '')
-        AND a.bloqueado = 0
-        ${pesadaCond}
-      ORDER BY a.fecha ASC, a.hora ASC
-      LIMIT 4
-    `).all(item.origen_examinador_id, hoy);
-  }
-
-  const otros = db.prepare(`
-    SELECT a.id, a.fecha, a.hora, a.examinador_id, e.nombre AS examinador
-    FROM agenda a
-    JOIN examinadores e ON e.id = a.examinador_id
-    WHERE a.examinador_id != ?
-      AND a.fecha >= ?
-      AND (a.rut IS NULL OR a.rut = '')
-      AND (a.nombre IS NULL OR a.nombre = '')
-      AND a.bloqueado = 0
-      ${pesadaCond}
-    ORDER BY a.fecha ASC, a.hora ASC
-    LIMIT 6
-  `).all(item.origen_examinador_id || 0, hoy);
-
-  return {
-    mismo_examinador: mismo,
-    otros_examinadores: otros,
-    origen_examinador: item.origen_examinador,
-    tiene_pesada: tienePesada,
-  };
-}
-
-module.exports = { encolar, listarPendientes, traerPendiente, sugerencias };
+module.exports = { encolar, listarPendientes, traerPendiente };

@@ -74,7 +74,6 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
     || { id: null, nombre: 'Sin asignar' };
   const clasesIniciales = clasesDe(b.clase);
   const esPesada = clasesIniciales.some((cl) => META.clases_pesadas.includes(cl));
-  const tieneCita = Boolean(b && (b.rut || b.nombre));
 
   modal(
     `Agendar nueva cita · ${fFecha(b.fecha)} · ${b.hora} hrs · Examinador/a: ${esc(b.examinador)}`,
@@ -126,37 +125,13 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
         ${c.escuela_conductores ? c.escuela_conductores.map((e) => `<option value="${esc(e)}" ${b.escuela_conductores === e ? 'selected' : ''}>${esc(e)}</option>`).join('') : ''}
       </select>
     </div>
-    ${tieneCita ? `<div class="campo">
-      <label for="f-conf">Confirmó asistencia</label>
-      <select id="f-conf">
-        <option value="" ${b.confirmo_asistencia == null ? 'selected' : ''}>-- Sin respuesta --</option>
-        <option value="1" ${b.confirmo_asistencia === 1 ? 'selected' : ''}>SÍ</option>
-        <option value="0" ${b.confirmo_asistencia === 0 ? 'selected' : ''}>NO</option>
-      </select>
-    </div>
-    <div class="campo">
-      <label for="f-res">Resultado</label>
-      <select id="f-res">
-        <option value="">-- Sin resultado --</option>
-        ${(c.resultado || []).map((r) => `<option value="${esc(r)}" ${b.resultado === r ? 'selected' : ''}>${esc(r)}</option>`).join('')}
-      </select>
-    </div>
-    <div class="campo ancho">
-      <label for="f-coment">Comentarios</label>
-      <textarea id="f-coment" rows="3">${esc(b.comentarios || '')}</textarea>
-    </div>` : ''}
-    ${tieneCita ? '<div class="campo ancho hist-cita" id="zona-hist-cita"><h4>Historial del solicitante</h4><div class="hist-lista">Cargando...</div></div>' : ''}
     `,
     `
-    ${(b.rut || b.nombre) ? '<button class="btn peligro sec" id="btn-liberar" title="Quita la cita del bloque">Liberar bloque</button>' : ''}
-    ${(b.rut || b.nombre) ? '<button type="button" class="btn sec" id="btn-reagendar-slot" style="color:var(--azul);font-weight:600"' + (bloqueoReagendarConfirmada(b) ? ` disabled title="${esc(bloqueoReagendarConfirmada(b))}"` : '') + '>Reagendar postulante</button>' : ''}
-    ${tieneCita ? '<button type="button" class="btn sec" id="btn-imprimir-ficha">Imprimir ficha</button>' : ''}
     <button class="btn sec" id="btn-cancel">Cancelar</button>
-    <button class="btn" id="btn-guardar" style="background:#1d4ed8;font-weight:700">${tieneCita ? "Guardar cambios" : "Confirmar y agendar cita"}</button>
+    <button class="btn" id="btn-guardar" style="background:#1d4ed8;font-weight:700">Confirmar y agendar cita</button>
     `,
     'lateral cita-c'
   );
-  if (tieneCita) cargarHistorialCita(b, alGuardar);
 
   // Autoformato de RUT en tiempo real
   $('#f-rut').addEventListener('input', () => {
@@ -189,22 +164,20 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
   });
 
   // Autocompletar datos si el RUT tiene citas anteriores
-  if (!b.rut && !b.nombre) {
-    $('#f-rut').addEventListener('blur', async () => {
-      const val = $('#f-rut').value.trim();
-      if (!val) return;
-      try {
-        const hist = await api(`/historial?rut=${encodeURIComponent(val)}`);
-        if (!hist.length) return;
-        const ultimo = hist[hist.length - 1];
-        let completo = false;
-        if (!$('#f-nombre').value && ultimo.nombre) { $('#f-nombre').value = nom(ultimo.nombre); completo = true; }
-        if (!$('#f-contacto').value && ultimo.contacto) { $('#f-contacto').value = fTel(ultimo.contacto); completo = true; }
-        if (!$('#f-correo').value && ultimo.correo) { $('#f-correo').value = ultimo.correo; completo = true; }
-        if (completo) toast('Datos autocompletados de una cita anterior', 'ok');
-      } catch (_) {}
-    });
-  }
+  $('#f-rut').addEventListener('blur', async () => {
+    const val = $('#f-rut').value.trim();
+    if (!val) return;
+    try {
+      const hist = await api(`/historial?rut=${encodeURIComponent(val)}`);
+      if (!hist.length) return;
+      const ultimo = hist[hist.length - 1];
+      let completo = false;
+      if (!$('#f-nombre').value && ultimo.nombre) { $('#f-nombre').value = nom(ultimo.nombre); completo = true; }
+      if (!$('#f-contacto').value && ultimo.contacto) { $('#f-contacto').value = fTel(ultimo.contacto); completo = true; }
+      if (!$('#f-correo').value && ultimo.correo) { $('#f-correo').value = ultimo.correo; completo = true; }
+      if (completo) toast('Datos autocompletados de una cita anterior', 'ok');
+    } catch (_) {}
+  });
 
   const clasesMarcadas = () => Array.from(document.querySelectorAll('#f-clase input:checked')).map((i) => i.value);
 
@@ -237,34 +210,6 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
       window.FuncionarioSesion.elegirModal().then((elegido) => { if (elegido) formularioCita(b, alGuardar); });
     };
   }
-  if ($('#btn-imprimir-ficha')) $('#btn-imprimir-ficha').onclick = () => imprimirFicha(b).catch((e) => toast(e.message, 'err'));
-
-  if ($('#btn-liberar')) {
-    $('#btn-liberar').onclick = async () => {
-      if (!confirm('¿Seguro que deseas liberar este bloque? La cita se moverá a la Papelera.')) return;
-      try {
-        await api(`/agenda/${b.id}/liberar`, { method: 'POST', body: { motivo: 'Liberado desde formulario' } });
-        cerrarModal(); alGuardar && alGuardar();
-        toast('Bloque liberado');
-        if (window.SugerenciasCupo) window.SugerenciasCupo.abrir(b.id, alGuardar);
-      } catch (e) { toast(e.message, 'err'); }
-    };
-  }
-
-  if ($('#btn-reagendar-slot')) {
-    $('#btn-reagendar-slot').onclick = async () => {
-      try {
-        await api(`/agenda/${b.id}/reagendar`, { method: 'POST', body: { motivo: 'POSTULANTE SOLICITA CAMBIO' } });
-        cerrarModal(); alGuardar && alGuardar();
-        sessionStorage.setItem('le_destacado', String(b.id));
-        actualizarBadgeReagendar();
-        toast('Postulante enviado a Lista de Espera con alta prioridad', 'ok');
-        irA('espera');
-      } catch (e) { toast(e.message, 'err'); }
-    };
-  }
-
-
   $('#btn-guardar').onclick = async () => {
     const btnG = $('#btn-guardar');
     if (btnG && btnG.disabled) return;
@@ -319,7 +264,7 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
         const motivo = await pedirAutorizacionTercerIntento(err.data);
         if (!motivo) {
           $('#btn-guardar').disabled = false;
-          $('#btn-guardar').textContent = tieneCita ? 'Guardar cambios' : 'Confirmar y agendar cita';
+          $('#btn-guardar').textContent = 'Confirmar y agendar cita';
           return;
         }
         r = await api(`/agenda/${b.id}`, { method: 'PUT', body: { ...body, autorizar_tercer_intento: { motivo } } });
@@ -330,7 +275,7 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
       alGuardar && alGuardar();
     } catch (e) {
       $('#btn-guardar').disabled = false;
-      $('#btn-guardar').textContent = tieneCita ? 'Guardar cambios' : 'Confirmar y agendar cita';
+      $('#btn-guardar').textContent = 'Confirmar y agendar cita';
       toast(e.message, 'err');
       if (e.status === 409 && e.data && e.data.bloque) { editorSlot(e.data.bloque, alGuardar); }
     }

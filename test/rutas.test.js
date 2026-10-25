@@ -623,6 +623,25 @@ test('las rutas que eran de administrador funcionan sin ninguna sesion', async (
   assert.equal((await api('DELETE', `/feriados?fecha=${fecha}`)).status, 200);
 });
 
+// ---------- rutas muertas eliminadas ----------
+test('rutas sin uso en el cliente fueron eliminadas: responden 404', async () => {
+  assert.equal((await api('GET', '/bloqueos')).status, 404);
+  assert.equal((await api('GET', '/buscar?q=juan')).status, 404);
+  assert.equal((await api('GET', '/feriados')).status, 404);
+  assert.equal((await api('GET', '/cola-reagendar/1/sugerencias')).status, 404);
+  assert.equal((await api('GET', '/cierre-dia')).status, 404);
+  assert.equal((await api('POST', '/cierre-dia', { fecha: diaNuevo(), ids: [1], resultado: 'NO ASISTIO' })).status, 404);
+});
+
+test('descartar y pendiente sobre un id inexistente siguen respondiendo su propio error JSON (no el 404 generico de Express)', async () => {
+  const r1 = await api('POST', '/cola-reagendar/99999999/descartar', {});
+  assert.equal(r1.status, 404);
+  assert.match(r1.datos.error, /no está pendiente de reagendar/i);
+  const r2 = await api('POST', '/agenda/99999999/pendiente', {});
+  assert.equal(r2.status, 404);
+  assert.equal(r2.datos.error, 'Bloque no encontrado');
+});
+
 // ---------- Escuela, tipo de reagendamiento, alertas de tramite e historial ----------
 test('meta: tipo_reagendamiento son exactamente PRESENCIAL, SMS, LLAMADO, CORREO', async () => {
   const r = await api('GET', '/meta');
@@ -669,13 +688,6 @@ test('GET buscar-historial: por RUT normalizado y, sin RUT, por nombre', async (
   const porNombre = await api('GET', '/buscar-historial?nombre=historia%20prueba');
   assert.ok(porNombre.datos.some((x) => x.id === b.id));
   assert.equal((await api('GET', '/buscar-historial')).status, 400);
-});
-
-test('GET buscar: encuentra por telefono aunque el texto venga con formato de RUT', async () => {
-  const b = slot(diaNuevo(), '09:30', { rut: '5.126.663-3', nombre: 'TELEFONO PRUEBA', clase: 'B', contacto: '+56 9 8123 4567' });
-  const r = await api('GET', `/buscar?q=${encodeURIComponent('98.123.456-7')}`);
-  assert.equal(r.status, 200);
-  assert.ok(r.datos.some((x) => x.id === b.id));
 });
 
 // ---------- vigencia del tramite D/A5: dias restantes ----------
@@ -812,42 +824,6 @@ test('correo/confirmacion-masiva: aborta tras el primer error sistemico (EAUTH)'
     assert.equal(llamadasFallo, 1);
     assert.deepEqual([r.datos.enviados, r.datos.fallidos], [0, 1]);
   } finally { correo.solicitudConfirmacion = original; correo.ultimoError = null; }
-});
-
-// ---------- Cierre del dia ----------
-test('cierre-dia GET lista solo citas sin resultado agrupadas por examinador', async () => {
-  const dia = diaNuevo();
-  const a = ocupado(dia, '08:00');
-  ocupado(dia, '09:00', { resultado: 'APROBADO' });
-  slot(dia, '10:00');
-  ocupado(dia, '11:00', { bloqueado: 1 });
-  const r = await api('GET', `/cierre-dia?fecha=${dia}`);
-  assert.equal(r.status, 200, r.texto);
-  assert.equal(r.datos.total, 1);
-  assert.equal(r.datos.grupos.length, 1);
-  assert.equal(r.datos.grupos[0].citas[0].id, a.id);
-  assert.equal((await api('GET', '/cierre-dia?fecha=malo')).status, 400);
-});
-
-test('cierre-dia POST valida resultado, ids y fecha; marca solo filas sin resultado', async () => {
-  const dia = diaNuevo();
-  const otro = diaNuevo();
-  const a = ocupado(dia, '08:00');
-  const b = ocupado(dia, '09:00', { resultado: 'APROBADO' });
-  const c = ocupado(otro, '08:00');
-  assert.equal((await api('POST', '/cierre-dia', { fecha: dia, ids: [a.id], resultado: 'INVENTADO' })).status, 400);
-  assert.equal((await api('POST', '/cierre-dia', { fecha: dia, ids: [], resultado: 'NO ASISTIO' })).status, 400);
-  assert.equal((await api('POST', '/cierre-dia', { fecha: 'x', ids: [a.id], resultado: 'NO ASISTIO' })).status, 400);
-  const muchos = Array.from({ length: 201 }, (_, i) => i + 1);
-  assert.equal((await api('POST', '/cierre-dia', { fecha: dia, ids: muchos, resultado: 'NO ASISTIO' })).status, 400);
-  const r = await api('POST', '/cierre-dia', { fecha: dia, ids: [a.id, b.id, c.id], resultado: 'NO ASISTIO' });
-  assert.equal(r.status, 200, r.texto);
-  assert.equal(r.datos.actualizados, 1);
-  assert.equal(leer(a.id).resultado, 'NO ASISTIO');
-  assert.equal(leer(b.id).resultado, 'APROBADO');
-  assert.equal(leer(c.id).resultado, null);
-  const mov = db.prepare("SELECT COUNT(*) n FROM movimientos WHERE agenda_id = ? AND detalle LIKE '%cierre del dia%'").get(a.id).n;
-  assert.equal(mov, 1);
 });
 
 // ---------- Avisos al postulante (telefono / whatsapp / correo) ----------

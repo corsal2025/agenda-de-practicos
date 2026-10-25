@@ -12,13 +12,11 @@
 
   var FRASES_LICO = [
     'Pulsa "Cómo usar el sistema" y te llevo de paseo por todas las pestañas.',
-    'El buscador de arriba encuentra por RUT, nombre o teléfono. Con 3 caracteres basta.',
     'Si un bloque se libera o se pisa, la cita no se pierde: queda en la Papelera.',
     'Las clases D y A5 solo van en su bloque especial. Yo no hago las reglas, pero las cumplo.',
     'Antes de importar un Excel con "Reemplazar todo", respira hondo. Es irreversible.',
     'El tema oscuro existe. Tus ojos de la tarde te lo agradecerán.',
     'Un RUT con dígito verificador incorrecto no pasa. Ni conmigo de abogado.',
-    'En Reagendar, "Ver bloques libres" te muestra dónde hay cupo antes de mover a alguien.',
     'Si pulsas de nuevo el resultado activo (Aprobó, Reprobó...), se borra. Así de simple.',
     'Mi licencia está al día. ¿Y la tuya?',
     'Revisa el teléfono y el correo del postulante: sin ellos no puedo avisarle de nada.',
@@ -29,7 +27,6 @@
   var FRASES_TAB = {
     disponibles: ['Aquí ves los bloques libres. Filtra por clase de licencia antes de ofrecer una hora.', 'Un clic en un bloque libre abre el formulario de agendamiento. Revisa teléfono y correo.'],
     agenda: ['Agenda: marca Aprobó, Reprobó o No asistió. Si te equivocas, pulsa de nuevo el resultado y se borra.', 'Bloquear un día o un tramo horario sin cita es un solo paso. Pon siempre el motivo.'],
-    reagendar: ['Reagendar: elige primero a la persona y mira los bloques libres antes de mover a nadie.', 'Quien no asistió o fue derivado aparece aquí. Que nadie se quede sin nueva hora.'],
     porconfirmar: ['Por confirmar en cero es mi estado favorito. Hasta confeti sale.', 'Confirmar asistencia a tiempo evita bloques vacíos el día del examen.'],
     vencimientos: ['Por vencer: atiende primero los trámites con menos días restantes.', 'Un trámite vencido obliga a empezar de nuevo. Avisa con tiempo al postulante.'],
     analitica: ['Estadísticas: compara períodos con calma. Los números cuentan una historia.', 'Si el rango no muestra datos, prueba ampliar las fechas.'],

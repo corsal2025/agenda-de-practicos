@@ -338,7 +338,7 @@ function dialogoBloquearDia() {
       let msg = `${r.bloqueados} ${r.bloqueados === 1 ? 'bloque bloqueado' : 'bloques bloqueados'}`;
       if (r.a_reagendar) msg += ` · ${r.a_reagendar} citas movidas a Lista de Espera`;
       toast(msg, 'ok');
-      actualizarBadgeReagendar();
+      actualizarBadgeEspera();
       estadoAgenda.fecha = d.desde;
       await renderAgenda();
       if (r.a_reagendar && confirm(`Se bloquearon los bloques y ${r.a_reagendar} postulante(s) fueron enviados a la Lista de Espera con máxima prioridad por bloqueo.\n\n¿Deseas ir a la Lista de Espera ahora para asignarles cupo?`)) {
@@ -672,6 +672,3 @@ async function dialogoDesbloquearDia() {
     }
   };
 }
-
-// Motivo corto si a la cita le falta algun dato clave, o null si esta bien.
-// Mismo criterio que el Reporte de errores, pero visible directo en la tarjeta.
