@@ -259,60 +259,95 @@ header.top::after {
 /* Tablas en ventana (modal): el marco tiene scroll propio, asi la barra horizontal queda debajo de las filas */
 #modal-root .tabla-scroll { overflow: auto; max-height: 60vh; grid-column: 1 / -1; }
 
-#view table:not(.tabla-agenda-elegante) th,
-#view table:not(.tabla-agenda-elegante) td,
-#view #tabla-disponibles-main th,
-#view #tabla-disponibles-main td {
+#view table:not(.tabla-agenda-elegante):not(#tabla-disponibles-main) th,
+#view table:not(.tabla-agenda-elegante):not(#tabla-disponibles-main) td {
   width: auto !important;
   min-width: 0 !important;
 }
 
+/* Anchos dedicados y legibles para columnas de Citas Disponibles */
+#view #tabla-disponibles-main .col-disp-fecha {
+  width: 140px !important;
+  min-width: 135px !important;
+  text-align: center;
+}
+#view #tabla-disponibles-main .col-disp-hora {
+  width: 95px !important;
+  min-width: 90px !important;
+  text-align: center;
+}
+#view #tabla-disponibles-main .col-disp-sede {
+  width: 220px !important;
+  min-width: 180px !important;
+  text-align: left;
+}
+#view #tabla-disponibles-main .col-disp-clase {
+  min-width: 230px !important;
+  text-align: left;
+}
+#view #tabla-disponibles-main .col-disp-accion {
+  width: 130px !important;
+  min-width: 120px !important;
+  text-align: center;
+}
+
 /* Texto centrado como en la Agenda; solo las columnas marcadas con .r quedan a la derecha */
 #view table th,
-#view table td {
+#view table td,
+#modal-root table th,
+#modal-root table td {
   text-align: center;
 }
 
 #view table th.r,
-#view table td.r {
+#view table td.r,
+#modal-root table th.r,
+#modal-root table td.r {
   text-align: right;
 }
 
-/* Mismo estilo que la Agenda en todos los modulos con tabla */
 /* Marco igual al de la Agenda (tarjeta azul, esquinas de 12 px, misma sombra) */
-#view .tabla-scroll {
+#view .tabla-scroll,
+#modal-root .tabla-scroll {
   border: 2px solid #2563eb;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(37, 99, 235, 0.08);
 }
 
-:root[data-tema="oscuro"] #view .tabla-scroll {
+:root[data-tema="oscuro"] #view .tabla-scroll,
+:root[data-tema="oscuro"] #modal-root .tabla-scroll {
   border-color: #3b82f6;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
 }
 
-#view table thead th {
+#view table thead th,
+#modal-root table thead th {
   padding: 12px 9px;
 }
 
-#view table tbody td {
+#view table tbody td,
+#modal-root table tbody td {
   padding: 9px 9px;
   height: 44px;
 }
 
-#view table tbody tr:nth-child(even) {
+#view table tbody tr:nth-child(even),
+#modal-root table tbody tr:nth-child(even) {
   background: #f8fafc;
 }
 
-#view table tbody tr:hover {
+#view table tbody tr:hover,
+#modal-root table tbody tr:hover {
   background: #f1f5f9;
 }
 
-:root[data-tema="oscuro"] #view table tbody tr:nth-child(even) {
+:root[data-tema="oscuro"] #view table tbody tr:nth-child(even),
+:root[data-tema="oscuro"] #modal-root table tbody tr:nth-child(even) {
   background: var(--elev);
 }
 
-:root[data-tema="oscuro"] #view table tbody tr:hover {
+:root[data-tema="oscuro"] #view table tbody tr:hover,
+:root[data-tema="oscuro"] #modal-root table tbody tr:hover {
   background: rgba(255, 255, 255, 0.05);
 }
 

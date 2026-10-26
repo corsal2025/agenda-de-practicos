@@ -73,12 +73,21 @@ function aplicarContacto(id, cambios) {
     .run({ ...cambios, id });
 }
 
-// Deja NULL los correos con formato invalido. Devuelve los ids tocados.
+// Deja NULL los correos con formato invalido, preservando las notas en comentarios. Devuelve los ids tocados.
 function vaciarCorreosInvalidos() {
   const ids = db.prepare(`SELECT id, correo FROM agenda WHERE correo IS NOT NULL AND correo != ''`).all()
     .filter((f) => correoInvalido(f.correo)).map((f) => f.id);
   tx(() => {
-    const st = db.prepare(`UPDATE agenda SET correo = NULL, actualizado_en = datetime('now','localtime') WHERE id = ?`);
+    const st = db.prepare(`
+      UPDATE agenda
+      SET comentarios = CASE
+        WHEN comentarios IS NULL OR TRIM(comentarios) = '' THEN '(nota de correo): ' || correo
+        ELSE comentarios || '; (nota de correo): ' || correo
+      END,
+      correo = NULL,
+      actualizado_en = datetime('now','localtime')
+      WHERE id = ?
+    `);
     for (const id of ids) st.run(id);
   });
   return ids;

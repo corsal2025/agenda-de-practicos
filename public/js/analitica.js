@@ -272,7 +272,7 @@ async function renderPapelera() {
         Restaurar solo funciona si el bloque original sigue libre.</p>
       <div class="tabla-scroll tabla-papelera"><table><thead><tr>
         <th class="c">Cuándo</th><th class="c">Motivo</th><th class="c">Bloque original</th>
-        <th class="c">Nombre</th><th class="c">RUT</th><th class="c">Clase</th><th class="c">Por</th><th class="c"></th>
+        <th class="c">Nombre</th><th class="c">RUT</th><th class="c">Clase</th><th class="c">Por</th><th class="c">Acción</th>
       </tr></thead><tbody id="pap-body"><tr><td colspan="8">Cargando...</td></tr></tbody></table></div>
     </div>`;
 

@@ -226,7 +226,7 @@ async function renderDatos() {
   };
 
   const mov = await api('/movimientos');
-  $('#mov-body').innerHTML = mov.map((m) => `<tr><td class="num c">${esc(fFechaHora(m.ts))}</td><td>${esc(m.accion)}</td><td>${esc(m.actor)}</td><td>${esc(m.detalle)}</td></tr>`).join('');
+  $('#mov-body').innerHTML = mov.map((m) => `<tr><td class="num c">${esc(fFechaHora(m.ts))}</td><td>${esc(m.accion || '—')}</td><td>${esc(m.actor || '—')}</td><td>${esc(m.detalle || '—')}</td></tr>`).join('');
 
   // Borrar historial: exige escribir la frase exacta (evita un borrado accidental con un solo clic).
   const FRASE_BORRAR_HISTORIAL = 'BORRAR HISTORIAL';

@@ -26,6 +26,7 @@ public/logo.webp
 
 .atl/
 .claude/
+.codegraph/
 public/screenshot.png
 
 # Credenciales locales (SMTP). NO subir.
