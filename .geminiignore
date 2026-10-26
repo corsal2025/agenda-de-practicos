@@ -1,0 +1,34 @@
+# Filtro anti-fuga de tokens (Google Antigravity / Gemini)
+# Previene indexacion y consumo masivo innecesario de tokens
+
+# Dependencias y control de versiones
+node_modules/
+.git/
+.codegraph/
+.tmp-edge/
+.vscode/
+.atl/
+
+# Bases de datos SQLite y respaldos
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/backups/
+
+# Locks y binarios pesados
+package-lock.json
+*.log
+*.zip
+*.exe
+*.tar.gz
+*.7z
+
+# Datos sensibles o binarios de oficina
+*.xlsx
+*.xls
+*.csv
+uploads/
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
