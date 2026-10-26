@@ -1,8 +1,8 @@
 /* ================= tab: DISPONIBLES ================= */
 let filtDisp = { desde: null, hasta: null, clase: '', examinador_id: '' };
 const DISP_KEY_PLEGADO = 'disp-filtros-plegado';
-function dispLeerPlegado() { try { return localStorage.getItem(DISP_KEY_PLEGADO) === '1'; } catch { return false; } }
-function dispGuardarPlegado(v) { try { localStorage.setItem(DISP_KEY_PLEGADO, v ? '1' : '0'); } catch { /* sin almacenamiento */ } }
+function dispLeerPlegado() { return AlmacenSeguro.local.leer(DISP_KEY_PLEGADO) === '1'; }
+function dispGuardarPlegado(v) { AlmacenSeguro.local.guardar(DISP_KEY_PLEGADO, v ? '1' : '0'); }
 async function renderDisponibles() {
   if (!filtDisp.desde) { filtDisp.desde = hoy(); filtDisp.hasta = sumarDias(hoy(), 60); }
   const plegado = dispLeerPlegado();

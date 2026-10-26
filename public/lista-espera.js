@@ -142,9 +142,9 @@ const ListaEspera = (() => {
         <td class="c"><button class="btn chico" style="font-weight:700" data-le="${esc(p.origen)}:${esc(p.id)}" ${p.cupos_compatibles ? '' : 'disabled'}>${p.cupos_compatibles ? '🔍 Asignar cupo' : 'Sin cupos'}</button></td>
       </tr>`).join('') : '<tr><td colspan="8" class="muted c" style="padding:1.5rem">No hay personas en espera con los filtros seleccionados.</td></tr>';
 
-    const destacado = sessionStorage.getItem('le_destacado');
+    const destacado = AlmacenSeguro.sesion.leer('le_destacado');
     if (destacado) {
-      sessionStorage.removeItem('le_destacado');
+      AlmacenSeguro.sesion.quitar('le_destacado');
       const fila = $('#le-body').querySelector(`[data-id="${destacado}"]`);
       if (fila) {
         fila.classList.add('fila-destacada-reagendar');

@@ -19,6 +19,8 @@ function cargarDia() {
     localStorage: { getItem: () => null, setItem() {} },
   };
   vm.createContext(ctx);
+  // El ayudante de almacenamiento se carga antes, igual que en index.html.
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'almacen-seguro.js'), 'utf8'), ctx);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'dia.js'), 'utf8'), ctx);
   return ctx;
 }

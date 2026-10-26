@@ -9,19 +9,18 @@
   // El funcionario elegido en esta sesion, o null si no hay ninguno elegido o si el
   // guardado ya no es un funcionario activo (nunca cae de vuelta al "primero activo").
   function actual() {
-    let guardado;
-    try { guardado = sessionStorage.getItem(CLAVE); } catch (_) { return null; }
+    const guardado = AlmacenSeguro.sesion.leer(CLAVE);
     if (!guardado) return null;
     const id = Number(guardado);
     return (META && META.funcionarios || []).find((f) => f.id === id && f.activo) || null;
   }
 
   function elegir(id) {
-    try { sessionStorage.setItem(CLAVE, String(id)); } catch (_) { /* sesion no disponible */ }
+    AlmacenSeguro.sesion.guardar(CLAVE, id);
   }
 
   function olvidar() {
-    try { sessionStorage.removeItem(CLAVE); } catch (_) { /* sesion no disponible */ }
+    AlmacenSeguro.sesion.quitar(CLAVE);
   }
 
   // Muestra un selector con los funcionarios activos y resuelve con el elegido (o null
