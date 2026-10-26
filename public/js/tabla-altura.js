@@ -7,6 +7,12 @@
 
   function ajustarAlturas() {
     document.querySelectorAll(SELECTOR_CAJAS).forEach((caja) => {
+      const thead = caja.querySelector('thead');
+      if (thead && thead.offsetHeight > 0) {
+        const h = `${thead.offsetHeight}px`;
+        caja.style.setProperty('--thead-h', h);
+        caja.style.setProperty('--cab-alto', h);
+      }
       if (caja.closest('.tabla-maximizada')) return;
       // Espacio que el marco ocupa debajo de la caja (barra lateral y bordes de la Agenda)
       const marco = caja.closest('.tabla-agenda-card') || caja;

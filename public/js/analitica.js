@@ -287,8 +287,10 @@ async function renderPapelera() {
       <td class="c">${p.clase ? clasesTagsHtml(p.clase) : '—'}</td>
       <td>${esc(p.actor || '—')}</td>
       <td class="c">
-        <button class="btn chico" data-id="${p.id}">Restaurar</button>
-        <button class="btn chico peligro sec" data-del="${p.id}">Eliminar</button>
+        <div class="tabla-acciones-celda">
+          <button class="btn chico" data-id="${p.id}">Restaurar</button>
+          <button class="btn chico peligro sec" data-del="${p.id}">Eliminar</button>
+        </div>
       </td></tr>`).join('')
       : licoVacioFila(8, 'saluda', 'Papelera vacía', 'Aquí no hay nada. Lico ya sacó la basura.');
     $('#pap-body').querySelectorAll('button[data-id]').forEach((el) => {

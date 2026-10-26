@@ -252,22 +252,7 @@ async function agregarOtraPersona(id) {
 }
 
 function crearBarraLateralTabla(scrollEl) {
-  const barra = document.createElement('div');
-  barra.className = 'tabla-agenda-barra-lateral';
-  barra.innerHTML = '<div></div>';
-  scrollEl.after(barra);
-
-  const ajustar = () => {
-    barra.firstElementChild.style.width = `${scrollEl.scrollWidth}px`;
-    barra.hidden = scrollEl.scrollWidth <= scrollEl.clientWidth;
-  };
-  barra.onscroll = () => { scrollEl.scrollLeft = barra.scrollLeft; };
-  scrollEl.onscroll = () => { barra.scrollLeft = scrollEl.scrollLeft; };
-
-  const observer = new ResizeObserver(ajustar);
-  observer.observe(scrollEl);
-  ajustar();
-  return { observer };
+  return null;
 }
 
 function pintarTablaAgenda(cont, filas, fecha, exs) {
@@ -308,14 +293,18 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
   const horasPorDia = new Map();
   for (const f of ordenadas) horasPorDia.set(f.fecha, (horasPorDia.get(f.fecha) || 0) + 1);
   let fechaAnterior = null;
+  let horaAnterior = null;
 
   for (const b of ordenadas) {
     const primeraDelDia = b.fecha !== fechaAnterior;
+    const primeraDeHora = primeraDelDia || b.hora !== horaAnterior;
     const celdaFecha = primeraDelDia
       ? `<td class="fecha-celda" rowspan="${horasPorDia.get(b.fecha)}" data-fecha="${esc(b.fecha)}">${fechaChipHtml(b.fecha)}</td>`
       : '';
     const claseDia = primeraDelDia && fechaAnterior !== null ? ' dia-inicio' : '';
+    const claseHora = !primeraDelDia && primeraDeHora ? ' hora-inicio' : '';
     fechaAnterior = b.fecha;
+    horaAnterior = b.hora;
 
     const ocupada = Boolean(b.rut || b.nombre);
     const bloqueada = Boolean(b.bloqueado);
@@ -331,7 +320,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
 
     if (bloqueada) {
       html += `
-        <tr class="fila-agenda-tabla fila-bloqueada${claseDia}" data-id="${b.id}" data-tipo="bloqueada" data-examinador="${b.examinador_id}" data-fecha="${esc(b.fecha)}">${celdaFecha}
+        <tr class="fila-agenda-tabla fila-bloqueada${claseDia}${claseHora}" data-id="${b.id}" data-tipo="bloqueada" data-examinador="${b.examinador_id}" data-fecha="${esc(b.fecha)}">${celdaFecha}
           <td class="td-hora es-rango">
             <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
               ${esc(b.hora)}
@@ -354,7 +343,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
       `;
     } else if (!ocupada) {
       html += `
-        <tr class="fila-agenda-tabla fila-libre${claseDia}" data-id="${b.id}" data-tipo="libre" data-examinador="${b.examinador_id}" data-fecha="${esc(b.fecha)}">${celdaFecha}
+        <tr class="fila-agenda-tabla fila-libre${claseDia}${claseHora}" data-id="${b.id}" data-tipo="libre" data-examinador="${b.examinador_id}" data-fecha="${esc(b.fecha)}">${celdaFecha}
           <td class="td-hora es-rango">
             <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
               ${esc(b.hora)}
@@ -399,7 +388,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
       const errTel = errorDato('contacto', b.contacto);
 
       html += `
-        <tr class="fila-agenda-tabla fila-ocupada ${resCls}${claseDia}" data-id="${b.id}" data-tipo="ocupada" data-examinador="${b.examinador_id}" data-fecha="${esc(b.fecha)}">${celdaFecha}
+        <tr class="fila-agenda-tabla fila-ocupada ${resCls}${claseDia}${claseHora}" data-id="${b.id}" data-tipo="ocupada" data-examinador="${b.examinador_id}" data-fecha="${esc(b.fecha)}">${celdaFecha}
           <td class="td-hora es-rango">
             <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
               ${esc(b.hora)}

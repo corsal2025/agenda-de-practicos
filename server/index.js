@@ -291,7 +291,11 @@ app.post('/reagendar/:id/:token/elegir', express.urlencoded({ extended: true }),
       nuevoId: destino.id,
     });
 
-    db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL} WHERE id = ?`).run(bloque.id);
+    if (Number(bloque.cupo) > 1) {
+      db.prepare('DELETE FROM agenda WHERE id = ?').run(bloque.id);
+    } else {
+      db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL} WHERE id = ?`).run(bloque.id);
+    }
     return destino;
   });
 
@@ -713,14 +717,18 @@ app.post('/api/agenda/:id/liberar', wrap((req, res) => {
 
   tx(() => {
     if (teniaPersona) cola.encolar(bloque, motivo, actor);
-    papelera.guardar(bloque, 'liberar', actor);
-    db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL} WHERE id = ?`).run(id);
+    if (teniaPersona || bloque.bloqueado) papelera.guardar(bloque, 'liberar', actor);
+    if (Number(bloque.cupo) > 1) {
+      db.prepare('DELETE FROM agenda WHERE id = ?').run(id);
+    } else {
+      db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL} WHERE id = ?`).run(id);
+    }
     if (pesada.esPesadaEnHoraValida(bloque) && teniaPersona) {
       pesada.liberar(bloque.fecha, bloque.examinador_id);
     }
   });
   logReq(req, id, 'liberar', `${bloque.fecha} ${bloque.hora} ${bloque.nombre || bloque.bloqueo_motivo || ''}`);
-  res.json({ ok: true, encolado: teniaPersona });
+  res.json({ ok: true, encolado: teniaPersona, eliminado: Number(bloque.cupo) > 1 });
 }));
 
 // ---------- VARIAS PERSONAS EN LA MISMA HORA ----------
@@ -1091,8 +1099,12 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
       fit: origen.fecha_inicio_tramite,
       comentarios: [origen.comentarios, `Reagendada desde ${origen.fecha} ${origen.hora}`].filter(Boolean).join(' | '),
     });
-    db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL.replace('comentarios=NULL', 'comentarios=@c')} WHERE id=@id`)
-      .run({ id: origen.id, c: `Reagendada a ${destino.fecha} ${destino.hora} (${motivo || 'sin motivo'})` });
+    if (Number(origen.cupo) > 1) {
+      db.prepare('DELETE FROM agenda WHERE id = ?').run(origen.id);
+    } else {
+      db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL.replace('comentarios=NULL', 'comentarios=@c')} WHERE id=@id`)
+        .run({ id: origen.id, c: `Reagendada a ${destino.fecha} ${destino.hora} (${motivo || 'sin motivo'})` });
+    }
   });
 
   const avisos = [];

@@ -162,13 +162,22 @@ async function renderDisponibles() {
       const agrupar = !filtDisp.examinador_id;
       const horasPorDia = new Map();
       for (const r of rows) horasPorDia.set(r.fecha, (horasPorDia.get(r.fecha) || 0) + 1);
+      const cuposPorDiaHora = new Map();
+      for (const r of rows) {
+        const k = `${r.fecha}__${r.hora}`;
+        cuposPorDiaHora.set(k, (cuposPorDiaHora.get(k) || 0) + 1);
+      }
       let fechaAnterior = null;
+      let horaAnterior = null;
       for (const r of rows) {
         const pesada = r.hora === META.hora_d_a5 || r.apto_pesada;
         // Primera fila de cada dia: separador visible respecto al dia anterior
-        const inicioDia = fechaAnterior !== null && r.fecha !== fechaAnterior ? ' dia-inicio' : '';
         const primeraDelDia = r.fecha !== fechaAnterior;
+        const primeraDeHora = primeraDelDia || r.hora !== horaAnterior;
+        const inicioDia = fechaAnterior !== null && primeraDelDia ? ' dia-inicio' : '';
+        const inicioHora = agrupar && !primeraDelDia && primeraDeHora ? ' hora-inicio' : '';
         fechaAnterior = r.fecha;
+        horaAnterior = r.hora;
         const span = agrupar && horasPorDia.get(r.fecha) > 1 ? ` rowspan="${horasPorDia.get(r.fecha)}"` : '';
         const celdaFecha = agrupar && !primeraDelDia ? '' : `
             <td class="num c fecha-celda col-disp-fecha" style="font-weight:700;color:var(--azul, #1e40af)"${span}>
@@ -176,14 +185,17 @@ async function renderDisponibles() {
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" style="vertical-align:middle;margin-right:5px;margin-top:-2px"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${esc(fFechaDia(r.fecha))}
               </span>
             </td>`;
-        html += `
-          <tr class="fila-agenda-tabla fila-libre${inicioDia}" data-fecha="${esc(r.fecha)}">${celdaFecha}
-            <td class="num c col-disp-hora">
+        const claveDiaHora = `${r.fecha}__${r.hora}`;
+        const spanHora = agrupar && cuposPorDiaHora.get(claveDiaHora) > 1 ? ` rowspan="${cuposPorDiaHora.get(claveDiaHora)}"` : '';
+        const celdaHora = agrupar && !primeraDeHora ? '' : `
+            <td class="num c col-disp-hora hora-celda"${spanHora}>
               <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
                 ${esc(r.hora)}
                 ${pesada ? '<span class="et-d">D·A5</span>' : ''}
               </span>
-            </td>
+            </td>`;
+        html += `
+          <tr class="fila-agenda-tabla fila-libre${inicioDia}${inicioHora}" data-fecha="${esc(r.fecha)}" data-hora="${esc(r.hora)}">${celdaFecha}${celdaHora}
             <td class="td-sede col-disp-sede">
               <span class="sede-pill-badge">${esc(r.examinador || '—')}</span>
             </td>
@@ -207,17 +219,41 @@ async function renderDisponibles() {
     // Si se ocultan filas por filtros dinamicos, reubica la celda con rowspan a la primera fila visible
     function reubicarFechasDisponibles(contenedor) {
       if (!agrupar) return;
-      const grupos = new Map();
+      // 1. Reubicar fecha por día
+      const gruposFecha = new Map();
       contenedor.querySelectorAll('.fila-agenda-tabla[data-fecha]').forEach((tr) => {
-        if (!grupos.has(tr.dataset.fecha)) grupos.set(tr.dataset.fecha, []);
-        grupos.get(tr.dataset.fecha).push(tr);
+        if (!gruposFecha.has(tr.dataset.fecha)) gruposFecha.set(tr.dataset.fecha, []);
+        gruposFecha.get(tr.dataset.fecha).push(tr);
       });
-      for (const filas of grupos.values()) {
+      for (const filas of gruposFecha.values()) {
         const celda = filas.map((tr) => tr.querySelector('td.fecha-celda')).find(Boolean);
         if (!celda) continue;
         const visibles = filas.filter((tr) => tr.style.display !== 'none');
         if (!visibles.length) continue;
         if (celda.parentElement !== visibles[0]) visibles[0].insertBefore(celda, visibles[0].firstElementChild);
+        celda.rowSpan = visibles.length;
+      }
+      // 2. Reubicar hora por bloque horario (fecha, hora)
+      const gruposHora = new Map();
+      contenedor.querySelectorAll('.fila-agenda-tabla[data-fecha][data-hora]').forEach((tr) => {
+        const k = `${tr.dataset.fecha}__${tr.dataset.hora}`;
+        if (!gruposHora.has(k)) gruposHora.set(k, []);
+        gruposHora.get(k).push(tr);
+      });
+      for (const filas of gruposHora.values()) {
+        const celda = filas.map((tr) => tr.querySelector('td.hora-celda')).find(Boolean);
+        if (!celda) continue;
+        const visibles = filas.filter((tr) => tr.style.display !== 'none');
+        if (!visibles.length) continue;
+        const primeraFila = visibles[0];
+        if (celda.parentElement !== primeraFila) {
+          const celdaFecha = primeraFila.querySelector('td.fecha-celda');
+          if (celdaFecha && celdaFecha.parentElement === primeraFila) {
+            primeraFila.insertBefore(celda, celdaFecha.nextElementSibling);
+          } else {
+            primeraFila.insertBefore(celda, primeraFila.firstElementChild);
+          }
+        }
         celda.rowSpan = visibles.length;
       }
     }
@@ -229,8 +265,26 @@ async function renderDisponibles() {
         : (base ? base + ' · Sin bloques libres en el rango.' : 'Sin bloques libres en el rango.');
     }
 
-    contBody.querySelectorAll('button[data-id]').forEach((el) => {
-      el.onclick = () => abrirSlotPorId(Number(el.dataset.id), recargar(buscar));
+    // Delegación y clic directo para abrir slot al agendar
+    contBody.onclick = (e) => {
+      const btn = e.target.closest('.btn-agendar-tabla, button[data-id]');
+      if (!btn || !contBody.contains(btn)) return;
+      e.stopPropagation();
+      const id = Number(btn.dataset.id);
+      if (!id) return;
+      abrirSlotPorId(id, () => { buscar(); }).catch((err) => {
+        if (typeof toast === 'function') toast(err.message, 'err');
+      });
+    };
+    contBody.querySelectorAll('.btn-agendar-tabla, button[data-id]').forEach((el) => {
+      el.onclick = (e) => {
+        e.stopPropagation();
+        const id = Number(el.dataset.id);
+        if (!id) return;
+        abrirSlotPorId(id, () => { buscar(); }).catch((err) => {
+          if (typeof toast === 'function') toast(err.message, 'err');
+        });
+      };
     });
     setTimeout(ajustarOffsetsFijos, 0);
   };

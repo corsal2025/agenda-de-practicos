@@ -221,7 +221,39 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
   $('#f-fecha-inicio').addEventListener('change', actualizarCuentaTramite);
   actualizarCuentaTramite();
 
-  $('#btn-cancel').onclick = cerrarModal;
+  const esCupoExtraVacio = Number(b.cupo) > 1 && !b.rut && !b.nombre;
+  let guardadoExitoso = false;
+  const limpiarSiCancela = async () => {
+    if (esCupoExtraVacio && !guardadoExitoso) {
+      try {
+        await api(`/agenda/${b.id}/liberar`, { method: 'POST', body: { motivo: 'Cancelación al agregar persona' } });
+        alGuardar && alGuardar();
+      } catch (_) {}
+    }
+  };
+
+  $('#btn-cancel').onclick = () => {
+    limpiarSiCancela();
+    cerrarModal();
+  };
+
+  const ovModal = $('#modal-root .overlay');
+  if (ovModal) {
+    const xBtn = ovModal.querySelector('.x');
+    if (xBtn) {
+      xBtn.onclick = () => {
+        limpiarSiCancela();
+        cerrarModal();
+      };
+    }
+    ovModal.addEventListener('click', (e) => {
+      if (e.target === ovModal) {
+        limpiarSiCancela();
+        cerrarModal();
+      }
+    });
+  }
+
   if ($('#fs-cambiar')) {
     $('#fs-cambiar').onclick = (e) => {
       e.preventDefault();
@@ -289,6 +321,7 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
         r = await api(`/agenda/${b.id}`, { method: 'PUT', body: { ...body, autorizar_tercer_intento: { motivo } } });
       }
       (r.avisos || []).forEach((a) => toast(a, 'err'));
+      guardadoExitoso = true;
       const aviso = avisoCorreoCita(r.correo);
       toast(aviso.texto, aviso.tipo);
       cerrarModal();

@@ -95,12 +95,34 @@
     return null;
   }
 
+  // Fila de cabecera con h2/h3 o barra de acciones en el mismo panel (p. ej. Papelera, Datos, Por confirmar)
+  function filaDeCabecera(contenedor) {
+    const resumen = filaDeResumen(contenedor);
+    if (resumen) return resumen;
+    const ant = contenedor.previousElementSibling;
+    if (ant && (ant.classList.contains('pc-toolbar') || ant.classList.contains('tabla-toolbar') || ant.classList.contains('fila-acciones'))) {
+      return ant;
+    }
+    const panel = contenedor.closest('.panel');
+    if (panel) {
+      const filas = [...panel.querySelectorAll('.fila')].filter((f) => {
+        return (f.compareDocumentPosition(contenedor) & Node.DOCUMENT_POSITION_FOLLOWING) && !f.querySelector('table');
+      });
+      if (filas.length) {
+        const conTitulo = filas.find((f) => f.querySelector('h2, h3'));
+        if (conTitulo) return conTitulo;
+        return filas[filas.length - 1];
+      }
+    }
+    return null;
+  }
+
   function agregarBotones(view) {
     view.querySelectorAll('.tabla-scroll, .tabla-agenda-card').forEach((c) => {
       if (c._btnMax || !c.querySelector('table') || !c.parentNode) return;
       const btn = crearBoton(c);
       c._btnMax = btn;
-      const fila = filaDeResumen(c);
+      const fila = filaDeCabecera(c);
       if (fila) {
         btn.classList.add('tabla-btn-en-fila');
         fila.appendChild(btn);
@@ -126,15 +148,7 @@
         linea.append(btn, hijo);
         return;
       }
-      // Por confirmar: fila de acciones masivas pegada a la tabla; el boton va al final de esa fila
-      const acciones = c.previousElementSibling;
-      if (acciones && acciones.classList.contains('pc-toolbar')) {
-        btn.classList.add('tabla-btn-en-fila');
-        btn.style.marginLeft = 'auto';
-        acciones.appendChild(btn);
-        return;
-      }
-      // Sin buscador: barra propia pegada a la tabla, con el boton a la derecha
+      // Sin barra previa ni buscador: barra propia pegada a la tabla, con el boton a la derecha
       const barra = document.createElement('div');
       barra.className = CLASE_BARRA;
       barra.appendChild(btn);
@@ -176,7 +190,9 @@
     if (!cab) return;
     const zoom = parseFloat(getComputedStyle(document.body).zoom) || 1;
     const fin = cab.getBoundingClientRect().bottom - (contenedor.getBoundingClientRect().top + contenedor.clientTop);
-    contenedor.style.setProperty('--cab-alto', `${fin / zoom}px`);
+    const h = `${fin / zoom}px`;
+    contenedor.style.setProperty('--cab-alto', h);
+    contenedor.style.setProperty('--thead-h', h);
   }
   function ajustarAlturas(view) {
     view.querySelectorAll('.tabla-scroll, .tabla-agenda-card').forEach(ajustarAltura);

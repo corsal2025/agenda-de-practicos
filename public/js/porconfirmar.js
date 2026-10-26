@@ -89,7 +89,7 @@ async function renderPorConfirmar() {
               <th class="c">Clase</th>
               <th class="c">Teléfono</th>
               <th>Correo</th>
-              <th class="c">Gestión de asistencia</th>
+              <th class="c" style="min-width:270px">Gestión de asistencia</th>
             </tr>
           </thead>
           <tbody id="pc-tbody">
@@ -174,10 +174,12 @@ async function renderPorConfirmar() {
             ? `<a href="mailto:${esc(correoTxt)}" style="color:var(--azul)" title="${esc(correoTxt)}">${esc(correoTxt)}</a>`
             : (correoTxt ? `<span class="muted" title="Valor registrado: ${esc(correoTxt)}">Correo inválido</span>` : '<span class="muted">Sin correo</span>')}
         </td>
-        <td class="c">
-          <button class="btn chico" data-si="${r.id}" style="background:#10b981;border-color:#059669;color:#fff;font-weight:700;margin-right:4px">✔ Confirmó</button>
-          <button class="btn chico sec" data-no="${r.id}" style="color:#b91c1c;font-weight:600;margin-right:4px">✖ No asiste</button>
-          <button class="btn chico sec" data-reag="${r.id}" style="color:var(--azul);font-weight:600;margin-right:4px" title="Derivar a Reagendar">🔄 Reagendar</button>
+        <td class="c pc-acciones-celda">
+          <div class="pc-btn-grupo">
+            <button class="btn chico" data-si="${r.id}" style="background:#10b981;border-color:#059669;color:#fff;font-weight:700">✔ Confirmó</button>
+            <button class="btn chico sec" data-no="${r.id}" style="color:#b91c1c;font-weight:600">✖ No asiste</button>
+            <button class="btn chico sec" data-reag="${r.id}" style="color:var(--azul);font-weight:600" title="Derivar a Reagendar">🔄 Reagendar</button>
+          </div>
         </td>
       </tr>
       `;
