@@ -68,8 +68,13 @@ const SMTP = {
 // corre local (ver README) y un celular fuera de la red no lo alcanza.
 const URL_PUBLICA = (process.env.AGENDA_URL_PUBLICA || '').replace(/\/$/, '') || null;
 
+// Origenes (https://dominio) de la app padre que puede embeber esta agenda en un iframe y hacer
+// POST/PUT/DELETE desde ella. Lista separada por comas, cruda: server/seguridad-acceso.js la valida
+// y normaliza (si es invalida el arranque falla). Sin esto solo vale el mismo origen.
+const ORIGENES_PERMITIDOS = (process.env.AGENDA_ORIGENES_PERMITIDOS || '').trim() || null;
+
 module.exports = {
   HORAS, HORA_D_A5, CLASES_PESADAS, DESDE_SIN_0830, horasDelDia,
   EXAMINADORES, FUNCIONARIOS, CATALOGOS,
-  RAIZ, DB_PATH, PUERTO, HOST, SMTP, URL_PUBLICA,
+  RAIZ, DB_PATH, PUERTO, HOST, SMTP, URL_PUBLICA, ORIGENES_PERMITIDOS,
 };

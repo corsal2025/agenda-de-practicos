@@ -61,6 +61,23 @@ de acceso lo resuelve la aplicación padre que la incorpora, por lo que el servi
 exponerse directamente en la red** (solo accesible desde la aplicación padre o desde el propio PC).
 Las acciones quedan registradas en la bitácora con el actor fijo `MODO SIN LOGIN`.
 
+### Protección contra páginas ajenas (CSRF y DNS rebinding)
+
+El servidor valida la cabecera `Host` y, en las peticiones que modifican datos, la cabecera
+`Origin`. Variables de entorno (o `.env`):
+
+- `AGENDA_ORIGENES_PERMITIDOS`: orígenes de la aplicación padre que pueden incrustar la agenda
+  en un iframe y enviarle cambios, separados por comas. Solo el origen, sin ruta ni `*`. Ejemplo:
+  `AGENDA_ORIGENES_PERMITIDOS=https://padre.ejemplo.cl,https://intranet.ejemplo.cl`.
+  Si está mal escrita, el servidor no arranca y el mensaje nombra la variable. Sin ella solo
+  vale el mismo origen.
+- `AGENDA_URL_PUBLICA`: además de armar los links de los correos, **fija el host aceptado**
+  para quien entra por esa dirección (dominio o túnel). Cualquier otro `Host` recibe 421.
+- Siempre se aceptan `localhost`, `127.0.0.1` y `[::1]`. Quien use `AGENDA_HOST=0.0.0.0` y entre
+  por la IP de red local recibirá 421 hasta definir `AGENDA_URL_PUBLICA` (o poner en
+  `AGENDA_HOST` esa IP concreta).
+- Los envíos JSON admiten hasta 1 MB; la importación de Excel (`/api/import`) hasta 25 MB.
+
 ---
 
 ## Pestañas
