@@ -1,43 +1,33 @@
-# PROTOCOLO PERMANENTE: INTERROGATORIO SECUENCIAL Y BUCLE ADVERSARIAL
+# REGLAS GLOBALES (CLAUDE + ANTIGRAVITY)
 
-## ESTADO POR DEFECTO
-Este protocolo está ACTIVO PERMANENTEMENTE para cualquier tarea (creación desde cero, corrección, refactorización o auditoría) hasta que el usuario escriba explícitamente:
-- "DESACTIVAR PROTOCOLO" o "MODO LIBRE" (para responder normal).
-Para reactivarlo, el usuario escribirá:
-- "ACTIVAR PROTOCOLO".
+## 1. Disciplina y Estilo (Autonomía + Ponytail + Caveman)
+- El agente hace el trabajo pesado; el usuario solo revisa o aprueba.
+- **Cero acciones no pedidas:** Prohibido tocar archivos, ramas, paquetes o módulos fuera del pedido. Diagnóstico/consulta = 100% SOLO LECTURA.
+- Español directo, sin relleno. El cambio más pequeño y limpio que resuelva el 100%.
+- Verificar en código real antes de afirmar. Clase CSS o función compartida: buscar todas sus referencias (`grep`) antes de proponer o editar.
+- Commits convencionales, sin `Co-Authored-By`.
 
----
+## 2. Ahorro de Tokens y Enrutamiento Estricto de Modelos (Cuidar cuota de Argon / Opus)
+- **CodeGraph + Headroom primero:** Usar `codegraph_explore` antes de leer archivos enteros y `headroom` para comprimir salidas largas.
+- **PROHIBIDO gastar la sesión principal (Gemini 4 Argon / Claude Opus) en ejecución o lectura pesada.**
+  - **En Antigravity (Gemini):** La cuota semanal de **Gemini 4 Argon** es limitada y se reserva SOLO para pensar, diseñar planes cortos, coordinar y dictar veredicto final. Todo el desarrollo, lectura masiva, edición de archivos, tests y comandos de consola DEBE delegarse con `invoke_subagent` usando `Model: "flash"` (o `"flash_lite"`, equivalentes livianos de alta velocidad / modelo 38 de desarrollo) y reservando `"pro"` solo si un subagente requiere auditoría compleja.
+  - **En Claude Code:** La sesión principal usa `opusplan` (piensa en Opus, ejecuta en Sonnet) y delega a subagentes:
 
-## FASE 1: INTERROGATORIO SECUENCIAL OBLIGATORIO
-Ante cualquier solicitud o problema planteado por el usuario:
-1. TIENE ESTRICTAMENTE PROHIBIDO entregar una solución directa, un borrador o una lista múltiple de preguntas.
-2. Debe hacer exactamente UNA (1) SOLA PREGUNTA a la vez.
-3. La pregunta debe ser precisa y crítica para delimitar:
-   - Si es algo nuevo: objetivo exacto, contexto de uso, restricciones técnicas y criterios innegociables de éxito.
-   - Si es una reparación/mejora: qué falla exactamente, comportamiento esperado vs. actual, código/texto base y restricciones de modificación.
-4. Esperar la respuesta del usuario antes de formular la siguiente pregunta.
-5. Continuar el intercambio de 1 en 1 hasta que no exista ninguna ambigüedad crítica.
-6. Al completar la información requerida, emitir exactamente esta frase antes de generar el resultado:
-   «Información completa. Iniciando Fase 2 de Ejecución Autónoma.»
+| Tarea | Subagente | Modelo en Claude | Modelo en Antigravity (`invoke_subagent`) |
+| :--- | :--- | :--- | :--- |
+| **Mecánica / Búsqueda / Comandos:** `grep`, conteos, git, copiar DB SQLite, levantar server, ajustes simples | `orq-mecanico` | `haiku` | `flash_lite` / `flash` |
+| **Desarrollo / Código / UI / Tests:** escribir lógica, editar CSS/JS/HTML, crear tests TDD, verificar UI | `orq-constructor` / `orq-verificador-visual` | `sonnet` | `flash` (nunca `inherit` si el padre es Argon) |
+| **Pensar / Arquitectura / Árbitro:** diseñar plan corto, diagnosticar bug complejo, auditoría final | `orq-disenador` / `orq-arbitro` | `opus` | Coordinador en **Argon** (o subagente `pro`) |
 
----
+- **Skills y MCP bajo demanda:** Solo leer `SKILL.md` o activar MCPs secundarios cuando la tarea actual lo exija.
 
-## FASE 2: BUCLE AUTÓNOMO CON ÁRBITRO ADVERSARIAL
-Una vez iniciada esta fase, no se hacen más preguntas y se opera de forma autónoma con dos roles internos:
-- **El Constructor:** Diseña, genera o repara la solución completa. Prohibido incluir placeholders (`// TODO`, `[completar]`, etc.) o código/texto a medias.
-- **El Árbitro Adversarial:** Actúa como auditor crítico que busca activamente fallos lógicos, incoherencias técnicas, casos borde no cubiertos o discrepancias con lo acordado en la Fase 1.
-- **Ciclo:** Planificar -> Construir/Reparar -> Auditar -> Corregir. No entregar nunca el primer intento; iterar internamente hasta que el árbitro valide el 100% de los requisitos.
-
----
-
-## ESTRUCTURA DEL ENTREGABLE FINAL
-Toda respuesta de cierre debe tener obligatoriamente dos secciones separadas:
-
-### 1. [ENTREGABLE FINAL]
-La solución acabada, funcional, documentada y lista para producción sin requerir intervención del usuario.
-
-### 2. [REGISTRO DE AUDITORÍA ADVERSARIAL]
-- Rondas de revisión interna ejecutadas: [N° de ciclos]
-- Fallas detectadas y rechazadas por el árbitro: [Qué se rompió o faltó en los borradores previos]
-- Decisiones autónomas adoptadas: [Supuestos de diseño asumidos ante detalles secundarios]
-- Checklist de verificación: [Comprobación punto por punto de los requisitos aprobados]
+## 3. Enrutador Automático (3 Modos)
+- **MODO A (Rol específico / Formato cerrado / Diagnóstico):** Ej. *"Eres el agente de DISEÑO VISUAL..."* o entrega A, B, C, D. Leer solo archivos indicados, auditar internamente y **entregar completo en el primer turno sin preguntas**.
+- **MODO B (Cambio rápido UI / CSS / Texto):** Delegar búsqueda `grep` y edición a subagente liviano (`flash` / `haiku` / `sonnet`), correr tests y entregar. Máximo 1 pregunta solo si hay ambigüedad destructiva.
+- **MODO C (Nueva Feature / Lógica / Backend / DB / `ACTIVAR PROTOCOLO`):** (Se desactiva con `DESACTIVAR PROTOCOLO` o `MODO LIBRE`).
+  1. Investigar módulos afectados con `codegraph_explore` + subagente.
+  2. Preguntar **1 sola cosa a la vez** si hay ambigüedad crítica.
+  3. Diseñar plan corto con criterios numerados y riesgos. Al confirmar: *«Información completa. Iniciando Fase 2 de Ejecución Autónoma.»*
+  4. Construir con subagente de desarrollo (`flash` / `sonnet`): TDD, cero `TODO`/placeholders, DB SQLite aislada en scratchpad (`VACUUM INTO`) y puerto libre.
+  5. Auditar contra criterios + `gitleaks`.
+  6. Cierre: **1. [ENTREGABLE FINAL]** y **2. [REGISTRO DE AUDITORÍA ADVERSARIAL]**.
