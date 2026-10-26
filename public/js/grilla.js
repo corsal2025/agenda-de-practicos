@@ -202,6 +202,15 @@ function normalizarCampoCita(campo, valor) {
 async function guardarCampoCita(b, campo, valor) {
   let slot = b;
   try { slot = await api(`/agenda/${b.id}`); } catch (_) {}
+
+  if (['nombre', 'contacto', 'correo'].includes(campo)) {
+    const body = { [campo]: valor };
+    const visto = (slot && slot.actualizado_en) || (b && b.actualizado_en);
+    if (visto) body.visto_en = visto;
+    await api(`/agenda/${b.id}/contacto`, { method: 'PATCH', body });
+    return true;
+  }
+
   const payload = { ...(slot || {}), [campo]: valor };
   const enviar = (body) => api(`/agenda/${b.id}`, { method: 'PUT', body });
 

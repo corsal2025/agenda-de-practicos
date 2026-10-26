@@ -42,7 +42,7 @@ const FUTURO = '2999-01-01';
 // Llamadas de api registradas; todas resuelven (el POST de reagendar tiene exito).
 function apiFalsa(llamadas, respuestas = {}) {
   return async (ruta, opts) => {
-    llamadas.push({ ruta, metodo: opts && opts.method });
+    llamadas.push({ ruta, metodo: opts && opts.method, body: opts && opts.body });
     for (const [prefijo, valor] of Object.entries(respuestas)) if (ruta.startsWith(prefijo)) return valor;
     return {};
   };
@@ -116,6 +116,36 @@ test('porconfirmar.js: reagendar con almacenamiento bloqueado solo da toast ok, 
   assert.ok(e.toasts.some((t) => t.tipo === 'ok'), 'toast ok');
   assert.deepEqual(e.irA, ['espera']);
   assert.ok(e.badges.includes('espera'));
+});
+
+test('grilla.js: guardarCampoCita usa PATCH /contacto para nombre, contacto y correo, y PUT para clase', async () => {
+  const e = entornoReagendar({});
+  Object.assign(e.ctx, {
+    clasesDisponibles: () => [], abrirSlotPorId: async () => {}, crearBarraLateralTabla: () => null,
+    problemaDatos: () => null, claseFamilia: () => '', renderAgenda() {},
+  });
+  vm.runInContext(leerFuente('js', 'grilla.js'), e.ctx);
+  const cita = { id: 7, nombre: 'JUAN', contacto: '912345678', correo: 'j@x.cl', clase: 'B', actualizado_en: '2026-10-26 12:00:00' };
+
+  await e.ctx.guardarCampoCita(cita, 'correo', 'nuevo@x.cl');
+  const patchCorreo = e.llamadas.find((l) => l.ruta === '/agenda/7/contacto');
+  assert.ok(patchCorreo, 'llama a PATCH /contacto para correo');
+  assert.equal(patchCorreo.metodo, 'PATCH');
+  assert.deepEqual({ ...patchCorreo.body }, { correo: 'nuevo@x.cl', visto_en: '2026-10-26 12:00:00' });
+
+  await e.ctx.guardarCampoCita(cita, 'contacto', '+56912345678');
+  const patchTel = e.llamadas.filter((l) => l.ruta === '/agenda/7/contacto');
+  assert.equal(patchTel.length, 2, 'llama a PATCH /contacto para contacto');
+  assert.deepEqual({ ...patchTel[1].body }, { contacto: '+56912345678', visto_en: '2026-10-26 12:00:00' });
+
+  await e.ctx.guardarCampoCita(cita, 'nombre', 'PEDRO');
+  const patchNom = e.llamadas.filter((l) => l.ruta === '/agenda/7/contacto');
+  assert.equal(patchNom.length, 3, 'llama a PATCH /contacto para nombre');
+  assert.deepEqual({ ...patchNom[2].body }, { nombre: 'PEDRO', visto_en: '2026-10-26 12:00:00' });
+
+  await e.ctx.guardarCampoCita(cita, 'clase', 'C');
+  const putClase = e.llamadas.find((l) => l.ruta === '/agenda/7' && l.metodo === 'PUT');
+  assert.ok(putClase, 'llama a PUT /agenda/:id para clase');
 });
 
 test('grilla.js: reagendar desde la fila con almacenamiento bloqueado solo da toast ok y navega a espera', async () => {
