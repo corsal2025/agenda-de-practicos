@@ -53,11 +53,11 @@ async function renderDisponibles() {
           <table class="tabla-agenda-elegante" id="tabla-disponibles-main">
             <thead>
               <tr>
-                <th class="th-hora" style="width:135px;min-width:135px;text-align:center">FECHA</th>
-                <th class="th-hora" style="width:90px;min-width:90px;text-align:center">HORA</th>
-                <th class="th-examinador">EXAMINADOR</th>
-                <th class="th-clase">APTITUD DE CLASE</th>
-                <th class="th-resultado" style="text-align:center;width:140px">ACCIÓN</th>
+                <th class="th-fecha col-disp-fecha">FECHA</th>
+                <th class="th-hora col-disp-hora">HORA</th>
+                <th class="th-examinador col-disp-sede">EXAMINADOR</th>
+                <th class="th-clase col-disp-clase">APTITUD DE CLASE</th>
+                <th class="th-resultado col-disp-accion" style="text-align:center">ACCIÓN</th>
               </tr>
             </thead>
             <tbody id="d-body">
@@ -171,28 +171,28 @@ async function renderDisponibles() {
         fechaAnterior = r.fecha;
         const span = agrupar && horasPorDia.get(r.fecha) > 1 ? ` rowspan="${horasPorDia.get(r.fecha)}"` : '';
         const celdaFecha = agrupar && !primeraDelDia ? '' : `
-            <td class="num c fecha-celda" style="font-weight:700;color:var(--azul, #1e40af)"${span}>
+            <td class="num c fecha-celda col-disp-fecha" style="font-weight:700;color:var(--azul, #1e40af)"${span}>
               <span class="fecha-slot-tabla">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" style="vertical-align:middle;margin-right:5px;margin-top:-2px"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${esc(fFechaDia(r.fecha))}
               </span>
             </td>`;
         html += `
-          <tr class="fila-agenda-tabla fila-libre${inicioDia}">${celdaFecha}
-            <td class="num c">
+          <tr class="fila-agenda-tabla fila-libre${inicioDia}" data-fecha="${esc(r.fecha)}">${celdaFecha}
+            <td class="num c col-disp-hora">
               <span class="hora-badge ${pesada ? 'hora-pesada' : ''}">
                 ${esc(r.hora)}
                 ${pesada ? '<span class="et-d">D·A5</span>' : ''}
               </span>
             </td>
-            <td class="td-sede">
+            <td class="td-sede col-disp-sede">
               <span class="sede-pill-badge">${esc(r.examinador || '—')}</span>
             </td>
-            <td class="td-clase">
+            <td class="td-clase col-disp-clase">
               <span class="badge ${pesada ? 'dpesada' : 'ok'}" style="font-size:11px;font-weight:600">
                 ${pesada ? '✓ D · A5 permitidas (y livianas)' : 'B, C, A1-A4 (sin D/A5)'}
               </span>
             </td>
-            <td class="td-resultado" style="text-align:center">
+            <td class="td-resultado col-disp-accion" style="text-align:center">
               <button type="button" class="btn-agendar-tabla" data-id="${Number(r.id)}" title="Agendar postulante en este cupo libre">
                 + Agendar
               </button>
@@ -201,6 +201,25 @@ async function renderDisponibles() {
         `;
       }
       contBody.innerHTML = html;
+      reubicarFechasDisponibles(contBody);
+    }
+
+    // Si se ocultan filas por filtros dinamicos, reubica la celda con rowspan a la primera fila visible
+    function reubicarFechasDisponibles(contenedor) {
+      if (!agrupar) return;
+      const grupos = new Map();
+      contenedor.querySelectorAll('.fila-agenda-tabla[data-fecha]').forEach((tr) => {
+        if (!grupos.has(tr.dataset.fecha)) grupos.set(tr.dataset.fecha, []);
+        grupos.get(tr.dataset.fecha).push(tr);
+      });
+      for (const filas of grupos.values()) {
+        const celda = filas.map((tr) => tr.querySelector('td.fecha-celda')).find(Boolean);
+        if (!celda) continue;
+        const visibles = filas.filter((tr) => tr.style.display !== 'none');
+        if (!visibles.length) continue;
+        if (celda.parentElement !== visibles[0]) visibles[0].insertBefore(celda, visibles[0].firstElementChild);
+        celda.rowSpan = visibles.length;
+      }
     }
 
     const reglaEl = $('#d-regla');
