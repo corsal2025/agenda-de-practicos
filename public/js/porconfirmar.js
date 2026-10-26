@@ -206,7 +206,7 @@ async function renderPorConfirmar() {
           actualizarBadgePorConfirmar();
           actualizarBadgeEspera();
           toast('Postulante derivado a Lista de Espera con alta prioridad', 'ok');
-          sessionStorage.setItem('le_destacado', String(id));
+          AlmacenSeguro.sesion.guardar('le_destacado', id);
           irA('espera');
         } catch (e) {
           toast(e.message, 'err');

@@ -2,8 +2,8 @@
 let estadoAgenda = { fecha: null, examinador_id: '', filtro: '' };
 let filtAgenda = { desde: null, hasta: null, clase: '', examinador_id: '', esRango: false };
 const AGENDA_KEY_PLEGADO = 'agenda-filtros-plegado';
-function agendaLeerPlegado() { try { return localStorage.getItem(AGENDA_KEY_PLEGADO) === '1'; } catch { return false; } }
-function agendaGuardarPlegado(v) { try { localStorage.setItem(AGENDA_KEY_PLEGADO, v ? '1' : '0'); } catch { /* sin almacenamiento */ } }
+function agendaLeerPlegado() { return AlmacenSeguro.local.leer(AGENDA_KEY_PLEGADO) === '1'; }
+function agendaGuardarPlegado(v) { AlmacenSeguro.local.guardar(AGENDA_KEY_PLEGADO, v ? '1' : '0'); }
 
 async function renderAgenda() {
   if (!estadoAgenda.fecha) estadoAgenda.fecha = await fechaInicialAgenda();

@@ -21,7 +21,7 @@ async function init() {
 
     // En celular el menu se muestra plegado (solo iconos): si no, ocupa media pantalla.
     const celular = window.matchMedia && window.matchMedia('(max-width: 760px)');
-    if (localStorage.getItem('agenda_sidebar_plegado') === '1' || (celular && celular.matches)) {
+    if (AlmacenSeguro.local.leer('agenda_sidebar_plegado') === '1' || (celular && celular.matches)) {
       document.documentElement.classList.add('sidebar-plegado');
       const flecha = document.getElementById('sidebar-plegar-flecha');
       if (flecha) flecha.setAttribute('d', 'M9 6l6 6-6 6');
@@ -46,7 +46,7 @@ const btnPlegarSidebar = document.getElementById('sidebar-plegar-btn');
 if (btnPlegarSidebar) {
   btnPlegarSidebar.onclick = () => {
     const plegado = document.documentElement.classList.toggle('sidebar-plegado');
-    try { localStorage.setItem('agenda_sidebar_plegado', plegado ? '1' : '0'); } catch {}
+    AlmacenSeguro.local.guardar('agenda_sidebar_plegado', plegado ? '1' : '0');
     const flecha = document.getElementById('sidebar-plegar-flecha');
     if (flecha) flecha.setAttribute('d', plegado ? 'M9 6l6 6-6 6' : 'M15 18l-6-6 6-6');
     setTimeout(ajustarOffsetsFijos, 50);
@@ -56,16 +56,14 @@ if (btnPlegarSidebar) {
 /* tema claro / oscuro */
 (function tema() {
   const btn = document.getElementById('tema');
-  try {
-    const g = localStorage.getItem('agenda-tema');
-    if (g) document.documentElement.dataset.tema = g;
-  } catch (_) { /* ignore */ }
+  const g = AlmacenSeguro.local.leer('agenda-tema');
+  if (g) document.documentElement.dataset.tema = g;
   const pinta = () => { btn.textContent = document.documentElement.dataset.tema === 'oscuro' ? '☀' : '☾'; };
   pinta();
   btn.onclick = () => {
     const nuevo = document.documentElement.dataset.tema === 'oscuro' ? 'claro' : 'oscuro';
     document.documentElement.dataset.tema = nuevo;
-    try { localStorage.setItem('agenda-tema', nuevo); } catch (_) { /* ignore */ }
+    AlmacenSeguro.local.guardar('agenda-tema', nuevo);
     pinta();
     if ((location.hash.slice(1) || 'agenda') === 'analitica') renderAnalitica();
   };

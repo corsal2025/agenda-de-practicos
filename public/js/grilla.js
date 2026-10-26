@@ -810,7 +810,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
       try {
         await api(`/agenda/${id}/reagendar`, { method: 'POST', body: { motivo: 'POSTULANTE SOLICITA CAMBIO' } });
         toast('Postulante enviado a Lista de Espera con alta prioridad', 'ok');
-        sessionStorage.setItem('le_destacado', String(id));
+        AlmacenSeguro.sesion.guardar('le_destacado', id);
         actualizarBadgeEspera();
         irA('espera');
       } catch (e) { toast(e.message, 'err'); }

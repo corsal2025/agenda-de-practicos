@@ -10,12 +10,11 @@ const PAGINAS = {
   oficio: { etq: 'Oficio · 216 × 330 mm', size: '216mm 330mm' },
 };
 function formatoImpresion() {
-  try { return PAGINAS[localStorage.getItem('agenda-formato')] ? localStorage.getItem('agenda-formato') : 'carta'; }
-  catch (_) { return 'carta'; }
+  const guardado = AlmacenSeguro.local.leer('agenda-formato');
+  return PAGINAS[guardado] ? guardado : 'carta';
 }
 function orientacionImpresion() {
-  try { return localStorage.getItem('agenda-orientacion') || 'vertical'; }
-  catch (_) { return 'vertical'; }
+  return AlmacenSeguro.local.leer('agenda-orientacion') || 'vertical';
 }
 function aplicarFormatoImpresion(f, ori) {
   const formato = f || formatoImpresion();
@@ -35,16 +34,13 @@ function aplicarFormatoImpresion(f, ori) {
     @page unica { size: ${pageSize}; margin: ${margins}; }
     .hoja-unica { page: unica; }
   }`;
-  try {
-    localStorage.setItem('agenda-formato', formato);
-    localStorage.setItem('agenda-orientacion', orientacion);
-  } catch (_) { /* ignore */ }
+  AlmacenSeguro.local.guardar('agenda-formato', formato);
+  AlmacenSeguro.local.guardar('agenda-orientacion', orientacion);
 }
 aplicarFormatoImpresion(formatoImpresion(), orientacionImpresion());
 
 function disenoDia() {
-  try { return localStorage.getItem('agenda-diseno-dia') === 'porexam' ? 'porexam' : 'unica'; }
-  catch (_) { return 'unica'; }
+  return AlmacenSeguro.local.leer('agenda-diseno-dia') === 'porexam' ? 'porexam' : 'unica';
 }
 
 // "25/10/2026 23:30" con la hora local del PC (toISOString entrega UTC y de noche ya es otro dia).
@@ -219,7 +215,7 @@ function dialogoImprimirDia(fecha, examinadorId) {
     const ori = $('#dd-orientacion').value;
     aplicarFormatoImpresion($('#dd-formato').value, ori);
     document.body.classList.toggle('orientacion-horizontal', ori === 'horizontal');
-    try { localStorage.setItem('agenda-diseno-dia', $('#dd-diseno').value); } catch (_) { /* ignore */ }
+    AlmacenSeguro.local.guardar('agenda-diseno-dia', $('#dd-diseno').value);
     cerrarModal();
     imprimirAgendaDia(fecha, examinadorId);
   };

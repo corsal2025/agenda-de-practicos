@@ -17,7 +17,10 @@ function cargarModulo(meta) {
   const sandbox = { META: meta, sessionStorage, window: {}, h: () => {}, esc: (s) => s, document: {} };
   sandbox.window = sandbox;
   const codigo = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'funcionario-sesion.js'), 'utf8');
-  vm.runInNewContext(codigo, sandbox);
+  vm.createContext(sandbox);
+  // El ayudante de almacenamiento se carga antes, igual que en index.html.
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'almacen-seguro.js'), 'utf8'), sandbox);
+  vm.runInContext(codigo, sandbox);
   return sandbox.FuncionarioSesion;
 }
 
