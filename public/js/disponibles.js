@@ -271,16 +271,13 @@ async function renderDisponibles() {
         e.preventDefault();
         e.stopPropagation();
       }
-      const id = Number(btn.dataset.id);
+      const id = Number(btn.dataset.id || btn.getAttribute('data-id'));
       if (!id) return;
-      if (typeof abrirSlotPorId === 'function') {
-        abrirSlotPorId(id, () => { buscar(); }).catch((err) => {
-          if (typeof toast === 'function') toast(err.message, 'err');
-        });
-      } else if (typeof window !== 'undefined' && window.abrirSlotPorId) {
-        window.abrirSlotPorId(id, () => { buscar(); }).catch((err) => {
-          if (typeof toast === 'function') toast(err.message, 'err');
-        });
+      const fnAbrir = (typeof abrirSlotPorId === 'function') ? abrirSlotPorId : window.abrirSlotPorId;
+      if (typeof fnAbrir === 'function') {
+        fnAbrir(id, () => { buscar(); });
+      } else {
+        console.error('abrirSlotPorId no está disponible');
       }
     };
 
@@ -291,6 +288,15 @@ async function renderDisponibles() {
     };
     contBody.querySelectorAll('.btn-agendar-tabla, button[data-id]').forEach((el) => {
       el.onclick = (e) => clickAgendar(el, e);
+    });
+
+    // Selección interactiva de fila activa
+    contBody.querySelectorAll('.fila-agenda-tabla').forEach((tr) => {
+      tr.addEventListener('click', (e) => {
+        if (e.target.closest('button, a, input, select')) return;
+        contBody.querySelectorAll('.fila-agenda-tabla').forEach((r) => r.classList.remove('row-activa'));
+        tr.classList.add('row-activa');
+      });
     });
     setTimeout(ajustarOffsetsFijos, 0);
   };

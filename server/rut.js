@@ -39,12 +39,21 @@ function formatear(rut) {
   return `${conPuntos}-${dv}`;
 }
 
-// Textos que en el Excel ocupaban la columna RUT sin ser un RUT.
-const NO_RUT = ['NO EXISTE EN SISTEMA', 'FALTA RUT', 'LLAMAR', 'TRASLADO', 'SIN SISTEMA', 'NO EXISTE'];
+// Textos que en el Excel o en la base ocupaban la columna RUT o nombre como notas o bloqueos de examinador sin ser un RUT de contribuyente.
+const MARCADOR_RE = /VACACION|LICENCIA|ADMINISTRATIVO|FERIADO|BLOQUE|PERMISO|FIESTAS PATRIAS|CAPACITACI|COMET[IÍ]DO|TRASLADO|NO USAR|POSIBLES|HELLION|NO EXISTE|FALTA RUT|LLAMAR|SIN SISTEMA/i;
+
+const NO_RUT = [
+  'NO EXISTE EN SISTEMA', 'FALTA RUT', 'LLAMAR', 'TRASLADO', 'SIN SISTEMA', 'NO EXISTE',
+  'VACACIONES', 'LICENCIA MEDICA', 'LICENCIA MÉDICA', 'LICENCIA', 'ADMINISTRATIVO',
+  'DIA ADMINISTRATIVO', 'FERIADO', 'FERIADO LEGAL', 'BLOQUEADO', 'PERMISO',
+  'CAPACITACION', 'CAPACITACIÓN', 'COMETIDO', 'NO USAR', 'POSIBLES', 'HELLION'
+];
 
 function pareceMarcador(txt) {
-  const t = String(txt == null ? '' : txt).trim().toUpperCase();
-  return NO_RUT.some((m) => t.includes(m));
+  if (txt == null) return false;
+  const t = String(txt).trim().toUpperCase();
+  if (!t) return false;
+  return NO_RUT.some((m) => t.includes(m)) || MARCADOR_RE.test(t);
 }
 
-module.exports = { limpiar, digitoVerificador, esValido, formatear, pareceMarcador };
+module.exports = { limpiar, digitoVerificador, esValido, formatear, pareceMarcador, MARCADOR_RE };

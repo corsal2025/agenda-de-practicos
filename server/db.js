@@ -191,6 +191,52 @@ function tx(fn) {
   }
 }
 
+// --- Migracion: Bloqueos y notas administrativas guardadas como texto en RUT/nombre ---
+function migrarBloqueosTexto() {
+  const rows = db.prepare(`
+    SELECT id, rut, nombre, bloqueo_motivo
+    FROM agenda
+    WHERE (bloqueado = 0 OR bloqueado IS NULL)
+      AND (
+        rut LIKE '%VACACION%' OR nombre LIKE '%VACACION%'
+        OR rut LIKE '%LICENCIA%' OR nombre LIKE '%LICENCIA%'
+        OR rut LIKE '%ADMINISTRATIVO%' OR nombre LIKE '%ADMINISTRATIVO%'
+        OR rut LIKE '%FERIADO%' OR nombre LIKE '%FERIADO%'
+        OR rut LIKE '%BLOQUE%' OR nombre LIKE '%BLOQUE%'
+      )
+  `).all();
+  if (!rows.length) return;
+
+  const upd = db.prepare(`
+    UPDATE agenda
+    SET bloqueado = 1,
+        bloqueo_motivo = ?,
+        rut = NULL,
+        nombre = NULL,
+        contacto = NULL,
+        correo = NULL,
+        actualizado_en = datetime('now', 'localtime')
+    WHERE id = ?
+  `);
+
+  tx(() => {
+    for (const r of rows) {
+      let motivo = r.bloqueo_motivo;
+      const texto = `${r.rut || ''} ${r.nombre || ''}`.toUpperCase();
+      if (!motivo) {
+        if (texto.includes('VACACION')) motivo = 'VACACIONES';
+        else if (texto.includes('LICENCIA')) motivo = 'LICENCIA MEDICA';
+        else if (texto.includes('ADMINISTRATIVO')) motivo = 'PERMISO ADMINISTRATIVO';
+        else if (texto.includes('FERIADO')) motivo = 'FERIADO LEGAL';
+        else if (texto.includes('TRASLADO') || texto.includes('TERRENO')) motivo = 'TERRENO';
+        else motivo = 'BLOQUEADO';
+      }
+      upd.run(motivo, r.id);
+    }
+  });
+}
+migrarBloqueosTexto();
+
 function log(agendaId, accion, detalle, actor) {
   db.prepare('INSERT INTO movimientos (agenda_id, accion, detalle, actor) VALUES (?, ?, ?, ?)')
     .run(agendaId ?? null, accion, detalle ? String(detalle) : null, actor || null);

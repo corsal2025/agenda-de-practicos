@@ -1,4 +1,6 @@
 function problemaDatos(b) {
+  if (!b || b.bloqueado) return null;
+  if (typeof pareceMarcador === 'function' && (pareceMarcador(b.rut) || pareceMarcador(b.nombre))) return null;
   if (b.rut && !rutEsValido(b.rut)) return 'RUT con dígito verificador inválido';
   if (!b.contacto && !b.correo) return 'Sin teléfono ni correo: no se puede avisar ni confirmar';
   if (b.contacto && b.contacto.replace(/\D/g, '').length !== 9) return 'Teléfono incompleto';
@@ -649,7 +651,8 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     if (agendar) {
       e.stopPropagation();
       const id = Number(agendar.dataset.id);
-      if (id) abrirSlotPorId(id, () => { if ($('#a-grid')) renderAgenda(); }).catch((err) => toast(err.message, 'err'));
+      const fnAbrir = (typeof abrirSlotPorId === 'function') ? abrirSlotPorId : window.abrirSlotPorId;
+      if (id && fnAbrir) fnAbrir(id, () => { if ($('#a-grid')) renderAgenda(); });
       return;
     }
     const persona = e.target.closest('.btn-tabla-persona');
@@ -668,7 +671,8 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     btn.onclick = (e) => {
       e.stopPropagation();
       const id = Number(btn.dataset.id);
-      abrirSlotPorId(id, () => { if ($('#a-grid')) renderAgenda(); }).catch((err) => toast(err.message, 'err'));
+      const fnAbrir = (typeof abrirSlotPorId === 'function') ? abrirSlotPorId : window.abrirSlotPorId;
+      if (id && fnAbrir) fnAbrir(id, () => { if ($('#a-grid')) renderAgenda(); });
     };
   });
 

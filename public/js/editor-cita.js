@@ -48,12 +48,6 @@ function funcionarioActual() {
 }
 
 function formularioCita(b, alGuardar) {
-  const tieneCita = Boolean(b && (b.rut || b.nombre));
-  if (tieneCita) {
-    // Ficha de cita modal eliminada por solicitud del usuario para trabajar otro método
-    return;
-  }
-
   // Abrir DIRECTAMENTE el formulario de agendamiento sin exigir usuario ni funcionario
   abrirFormularioCita(b, alGuardar);
 }
@@ -78,17 +72,40 @@ function avisoCorreoCita(correoRes) {
 }
 
 function abrirFormularioCita(b, alGuardar) {
-  const c = META.catalogos;
+  b = b || {};
+  const metaObj = (typeof META !== 'undefined' && META) ? META : {};
+  const c = metaObj.catalogos || {};
+  const catalogoClases = (Array.isArray(c.clase) && c.clase.length)
+    ? c.clase
+    : ['B', 'C', 'D', 'A1', 'A2', 'A3', 'A4', 'A5', 'E'];
+  const clasesPesadas = (Array.isArray(metaObj.clases_pesadas) && metaObj.clases_pesadas.length)
+    ? metaObj.clases_pesadas
+    : ['D', 'A5'];
+  const catalogoEscuelas = Array.isArray(c.escuela_conductores) ? c.escuela_conductores : [];
+  const horaD = metaObj.hora_d_a5 || '12:30';
+
   const clasesIniciales = clasesDe(b.clase);
-  const esPesada = clasesIniciales.some((cl) => META.clases_pesadas.includes(cl));
+  const esPesada = clasesIniciales.some((cl) => clasesPesadas.includes(cl));
+
+  const forzarTexto = typeof textoForzar === 'function'
+    ? textoForzar(b)
+    : (b.hora === horaD ? 'Forzar cita (bloque reservado para clase pesada)' : `Forzar: clase pesada fuera del bloque ${horaD}`);
+
+  const alertasTexto = typeof alertasHtml === 'function'
+    ? alertasHtml(b)
+    : (b.alerts || []).map((t) => `<span class="badge reprob">${esc(t)}</span>`).join(' ');
+
+  const esTramite = typeof esClaseTramite === 'function'
+    ? esClaseTramite(b.clase)
+    : clasesIniciales.some((cl) => clasesPesadas.includes(cl));
 
   modal(
-    `Agendar nueva cita · ${fFecha(b.fecha)} · ${b.hora} hrs · Examinador/a: ${esc(b.examinador)}`,
+    `Agendar nueva cita · ${fFecha(b.fecha)} · ${esc(b.hora || '')} hrs · Examinador/a: ${esc(b.examinador || 'Sin asignar')}`,
     `
     <div class="cita-resumen-c" aria-label="Resumen de la cita">
       <div><span>Fecha</span><b>${esc(fFecha(b.fecha))}</b></div>
-      <div><span>Hora</span><b>${esc(b.hora)} hrs</b></div>
-      <div><span>Examinador/a</span><b>${esc(b.examinador)}</b></div>
+      <div><span>Hora</span><b>${esc(b.hora || '')} hrs</b></div>
+      <div><span>Examinador/a</span><b>${esc(b.examinador || 'Sin asignar')}</b></div>
     </div>
     <div class="campo"><label>Nombre completo</label>
       <input id="f-nombre" value="${esc(nom(b.nombre))}" required placeholder="NOMBRES Y APELLIDOS" style="text-transform:uppercase;font-weight:600">
@@ -96,7 +113,7 @@ function abrirFormularioCita(b, alGuardar) {
     
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
       <div class="campo"><label>RUT</label>
-        <input id="f-rut" value="${esc(b.rut)}" required placeholder="12.345.678-9" style="font-weight:600">
+        <input id="f-rut" value="${esc(b.rut || '')}" required placeholder="12.345.678-9" style="font-weight:600">
       </div>
 
       <div class="campo"><label>Celular</label>
@@ -105,30 +122,30 @@ function abrirFormularioCita(b, alGuardar) {
     </div>
 
     <div class="campo ancho"><label>Licencias (puedes marcar varias)</label>
-      <div class="chk-clases" id="f-clase">${c.clase.map((cl) => `
+      <div class="chk-clases" id="f-clase">${catalogoClases.map((cl) => `
         <label class="chk-clase"><input type="checkbox" value="${esc(cl)}" ${clasesIniciales.includes(cl) ? 'checked' : ''}> ${esc(cl)}</label>
       `).join('')}</div>
     </div>
 
     <div class="campo"><label>Correo</label>
-      <input id="f-correo" type="email" required placeholder="nombre@correo.com" value="${esc(b.correo)}">
+      <input id="f-correo" type="email" required placeholder="nombre@correo.com" value="${esc(b.correo || '')}">
     </div>
 
     <div class="campo ancho" id="zona-forzar" ${esPesada ? '' : 'hidden'}>
-      <label><input type="checkbox" id="f-forzar"> <span id="f-forzar-txt">${esc(textoForzar(b))}</span></label>
+      <label><input type="checkbox" id="f-forzar"> <span id="f-forzar-txt">${esc(forzarTexto)}</span></label>
     </div>
-    ${(b.alerts || []).length ? `<div class="campo ancho">${alertasHtml(b)}</div>` : ''}
+    ${(b.alerts || []).length ? `<div class="campo ancho">${alertasTexto}</div>` : ''}
     <div class="campo ancho" id="f-intento-aviso" hidden></div>
     <div class="campo">
       <label for="f-fecha-inicio">Fecha de Inicio de Trámite *</label>
       <input type="date" id="f-fecha-inicio" required value="${esc(b.fecha_inicio_tramite || '')}" max="${hoy()}" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
       <div id="f-cuenta-tramite" class="cuenta-tramite-zona" aria-live="polite"></div>
     </div>
-    <div class="campo" id="zona-escuela" ${esClaseTramite(b.clase) ? '' : 'hidden'}>
+    <div class="campo" id="zona-escuela" ${esTramite ? '' : 'hidden'}>
       <label for="f-escuela">Escuela de Conductores</label>
       <select id="f-escuela" style="width:100%;padding:.45rem .6rem;border:1px solid var(--linea);border-radius:6px">
         <option value="">-- Sin escuela --</option>
-        ${c.escuela_conductores ? c.escuela_conductores.map((e) => `<option value="${esc(e)}" ${b.escuela_conductores === e ? 'selected' : ''}>${esc(e)}</option>`).join('') : ''}
+        ${catalogoEscuelas.map((e) => `<option value="${esc(e)}" ${b.escuela_conductores === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}
       </select>
     </div>
     `,
@@ -140,72 +157,98 @@ function abrirFormularioCita(b, alGuardar) {
   );
 
   // Autoformato de RUT en tiempo real
-  $('#f-rut').addEventListener('input', () => {
-    let v = $('#f-rut').value.replace(/[^0-9kK]/g, '').toUpperCase();
-    if (v.length > 9) v = v.slice(0, 9);
-    if (v.length > 1) {
-      const cuerpo = v.slice(0, -1);
-      const dv = v.slice(-1);
-      let cuerpoFmt = '';
-      for (let i = cuerpo.length - 1, j = 1; i >= 0; i--, j++) {
-        cuerpoFmt = cuerpo[i] + cuerpoFmt;
-        if (j % 3 === 0 && i > 0) cuerpoFmt = '.' + cuerpoFmt;
+  const fRutInput = $('#f-rut');
+  if (fRutInput) {
+    fRutInput.addEventListener('input', () => {
+      let v = fRutInput.value.replace(/[^0-9kK]/g, '').toUpperCase();
+      if (v.length > 9) v = v.slice(0, 9);
+      if (v.length > 1) {
+        const cuerpo = v.slice(0, -1);
+        const dv = v.slice(-1);
+        let cuerpoFmt = '';
+        for (let i = cuerpo.length - 1, j = 1; i >= 0; i--, j++) {
+          cuerpoFmt = cuerpo[i] + cuerpoFmt;
+          if (j % 3 === 0 && i > 0) cuerpoFmt = '.' + cuerpoFmt;
+        }
+        fRutInput.value = cuerpoFmt + '-' + dv;
+      } else {
+        fRutInput.value = v;
       }
-      $('#f-rut').value = cuerpoFmt + '-' + dv;
-    } else {
-      $('#f-rut').value = v;
-    }
-  });
+    });
+
+    // Autocompletar datos si el RUT tiene citas anteriores
+    fRutInput.addEventListener('blur', async () => {
+      const val = fRutInput.value.trim();
+      if (!val) return;
+      try {
+        const hist = await api(`/historial?rut=${encodeURIComponent(val)}`);
+        if (!hist || !hist.length) return;
+        const ultimo = hist[hist.length - 1];
+        let completo = false;
+        if ($('#f-nombre') && !$('#f-nombre').value && ultimo.nombre) { $('#f-nombre').value = nom(ultimo.nombre); completo = true; }
+        if ($('#f-contacto') && !$('#f-contacto').value && ultimo.contacto) { $('#f-contacto').value = fTel(ultimo.contacto); completo = true; }
+        if ($('#f-correo') && !$('#f-correo').value && ultimo.correo) { $('#f-correo').value = ultimo.correo; completo = true; }
+        if (completo) toast('Datos autocompletados de una cita anterior', 'ok');
+      } catch (_) {}
+    });
+  }
 
   // Autoformato de Celular
-  $('#f-contacto').addEventListener('blur', () => {
-    let v = $('#f-contacto').value.trim().replace(/\s+/g, '');
-    if (v.startsWith('+56')) v = v.slice(3);
-    if (v.startsWith('56')) v = v.slice(2);
-    if (v.length === 9 && v.startsWith('9')) {
-      $('#f-contacto').value = `+56 9 ${v.slice(1, 5)} ${v.slice(5)}`;
-    } else if (v.length === 8) {
-      $('#f-contacto').value = `+56 9 ${v.slice(0, 4)} ${v.slice(4)}`;
-    }
-  });
-
-  // Autocompletar datos si el RUT tiene citas anteriores
-  $('#f-rut').addEventListener('blur', async () => {
-    const val = $('#f-rut').value.trim();
-    if (!val) return;
-    try {
-      const hist = await api(`/historial?rut=${encodeURIComponent(val)}`);
-      if (!hist.length) return;
-      const ultimo = hist[hist.length - 1];
-      let completo = false;
-      if (!$('#f-nombre').value && ultimo.nombre) { $('#f-nombre').value = nom(ultimo.nombre); completo = true; }
-      if (!$('#f-contacto').value && ultimo.contacto) { $('#f-contacto').value = fTel(ultimo.contacto); completo = true; }
-      if (!$('#f-correo').value && ultimo.correo) { $('#f-correo').value = ultimo.correo; completo = true; }
-      if (completo) toast('Datos autocompletados de una cita anterior', 'ok');
-    } catch (_) {}
-  });
+  const fContactoInput = $('#f-contacto');
+  if (fContactoInput) {
+    fContactoInput.addEventListener('blur', () => {
+      let v = fContactoInput.value.trim().replace(/\s+/g, '');
+      if (v.startsWith('+56')) v = v.slice(3);
+      if (v.startsWith('56')) v = v.slice(2);
+      if (v.length === 9 && v.startsWith('9')) {
+        fContactoInput.value = `+56 9 ${v.slice(1, 5)} ${v.slice(5)}`;
+      } else if (v.length === 8) {
+        fContactoInput.value = `+56 9 ${v.slice(0, 4)} ${v.slice(4)}`;
+      }
+    });
+  }
 
   const clasesMarcadas = () => Array.from(document.querySelectorAll('#f-clase input:checked')).map((i) => i.value);
 
   const chequearPesada = () => {
     const clases = clasesMarcadas();
-    const tienePesada = clases.some((cl) => META.clases_pesadas.includes(cl));
-    $('#zona-forzar').hidden = !tienePesada;
-    if (tienePesada) $('#f-forzar-txt').textContent = textoForzar(b);
-    $('#zona-escuela').hidden = !esClaseTramite(clases.join(','));
+    const tienePesada = clases.some((cl) => clasesPesadas.includes(cl));
+    const zForzar = $('#zona-forzar');
+    if (zForzar) zForzar.hidden = !tienePesada;
+    const zForzarTxt = $('#f-forzar-txt');
+    if (zForzarTxt && tienePesada) {
+      zForzarTxt.textContent = typeof textoForzar === 'function' ? textoForzar(b) : forzarTexto;
+    }
+    const zEscuela = $('#zona-escuela');
+    if (zEscuela) {
+      zEscuela.hidden = typeof esClaseTramite === 'function'
+        ? !esClaseTramite(clases.join(','))
+        : !clases.some((c) => clasesPesadas.includes(c));
+    }
     actualizarCuentaTramite();
   };
   const actualizarCuentaTramite = () => {
-    const v = vigenciaTramiteCli($('#f-fecha-inicio').value);
-    $('#f-cuenta-tramite').innerHTML = v ? cuentaRegresivaHtml(v.dias, v.vence) : '';
+    const fIni = $('#f-fecha-inicio');
+    const zCuenta = $('#f-cuenta-tramite');
+    if (!fIni || !zCuenta) return;
+    const v = typeof vigenciaTramiteCli === 'function' ? vigenciaTramiteCli(fIni.value) : null;
+    zCuenta.innerHTML = (v && typeof cuentaRegresivaHtml === 'function') ? cuentaRegresivaHtml(v.dias, v.vence) : '';
   };
   document.querySelectorAll('#f-clase input').forEach((chk) => {
     chk.addEventListener('change', chequearPesada);
-    chk.addEventListener('change', () => avisoTercerIntentoEnVivo(b, $('#f-rut').value.trim(), clasesMarcadas()));
+    chk.addEventListener('change', () => {
+      const rInput = $('#f-rut');
+      avisoTercerIntentoEnVivo(b, rInput ? rInput.value.trim() : '', clasesMarcadas());
+    });
   });
-  $('#f-rut').addEventListener('blur', () => avisoTercerIntentoEnVivo(b, $('#f-rut').value.trim(), clasesMarcadas()));
-  $('#f-fecha-inicio').addEventListener('input', actualizarCuentaTramite);
-  $('#f-fecha-inicio').addEventListener('change', actualizarCuentaTramite);
+  if (fRutInput) {
+    fRutInput.addEventListener('blur', () => avisoTercerIntentoEnVivo(b, fRutInput.value.trim(), clasesMarcadas()));
+  }
+  const fIniInput = $('#f-fecha-inicio');
+  if (fIniInput) {
+    fIniInput.addEventListener('input', actualizarCuentaTramite);
+    fIniInput.addEventListener('change', actualizarCuentaTramite);
+  }
   actualizarCuentaTramite();
 
   const esCupoExtraVacio = Number(b.cupo) > 1 && !b.rut && !b.nombre;
@@ -235,22 +278,26 @@ function abrirFormularioCita(b, alGuardar) {
   };
   window.addEventListener('keydown', onEscapeModal);
 
-  $('#btn-cancel').onclick = cerrarYCancela;
+  const btnCancel = $('#btn-cancel');
+  if (btnCancel) btnCancel.onclick = cerrarYCancela;
 
   const ovModal = $('#modal-root .overlay');
-  if (ovModal) {
+  if (ovModal && typeof ovModal.querySelector === 'function') {
     const xBtn = ovModal.querySelector('.x');
     if (xBtn) {
       xBtn.onclick = cerrarYCancela;
     }
-    ovModal.addEventListener('click', (e) => {
-      if (e.target === ovModal) {
-        cerrarYCancela();
-      }
-    });
+    if (typeof ovModal.addEventListener === 'function') {
+      ovModal.addEventListener('click', (e) => {
+        if (e.target === ovModal) {
+          cerrarYCancela();
+        }
+      });
+    }
   }
 
-  $('#btn-guardar').onclick = async () => {
+  const btnGuardar = $('#btn-guardar');
+  if (btnGuardar) btnGuardar.onclick = async () => {
     const btnG = $('#btn-guardar');
     if (btnG && btnG.disabled) return;
     const nombre = $('#f-nombre').value.trim();
@@ -325,8 +372,29 @@ function abrirFormularioCita(b, alGuardar) {
   };
 }
 async function abrirSlotPorId(id, alGuardar) {
-  editorSlot(await api(`/agenda/${id}`), alGuardar);
+  try {
+    const idNum = Number(id);
+    if (!idNum) return;
+    if (typeof META === 'undefined' || !META || !META.catalogos) {
+      try {
+        META = await api('/meta');
+      } catch (_) {}
+    }
+    const bloque = await api(`/agenda/${idNum}`);
+    if (!bloque) {
+      if (typeof toast === 'function') toast('No se encontró el bloque seleccionado', 'err');
+      return;
+    }
+    editorSlot(bloque, alGuardar);
+  } catch (err) {
+    console.error('Error al abrir bloque:', err);
+    if (typeof toast === 'function') toast(err.message || 'Error al abrir bloque', 'err');
+  }
 }
+
+window.abrirSlotPorId = abrirSlotPorId;
+window.abrirFormularioCita = abrirFormularioCita;
+window.editorSlot = editorSlot;
 
 async function fechaInicialAgenda() {
   const h = hoy();
@@ -398,3 +466,50 @@ function pedirAutorizacionTercerIntento(datos) {
     txt.focus();
   });
 }
+
+// Delegación global infalible para cualquier botón de agendar en cualquier tabla o vista
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-agendar-tabla, [data-accion="agendar"]');
+  if (!btn) return;
+  const id = Number(btn.dataset.id || btn.getAttribute('data-id'));
+  if (!id) return;
+  e.preventDefault();
+  e.stopPropagation();
+  abrirSlotPorId(id, () => {
+    if (typeof renderAgenda === 'function' && document.getElementById('a-grid')) {
+      renderAgenda();
+    } else if (typeof renderDisponibles === 'function' && document.getElementById('tabla-disponibles-main')) {
+      const btnB = document.getElementById('d-buscar');
+      if (btnB) btnB.click();
+    }
+  });
+});
+
+// Atajo de teclado para agendar: tecla 'A' o 'Enter' sobre una fila seleccionada o libre
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+  if (document.querySelector('#modal-root .overlay')) return;
+
+  const esTeclaAgendar = e.key === 'a' || e.key === 'A' || e.key === 'Insert';
+  const esEnterEnFila = e.key === 'Enter' && !e.target.closest('button, a');
+
+  if (esTeclaAgendar || esEnterEnFila) {
+    const activa = document.querySelector('.fila-agenda-tabla.row-activa');
+    if (activa) {
+      const btn = activa.querySelector('.btn-agendar-tabla, [data-accion="agendar"]');
+      if (btn) {
+        e.preventDefault();
+        btn.click();
+        return;
+      }
+    }
+
+    if (esTeclaAgendar) {
+      const primerBtn = document.querySelector('#d-body .btn-agendar-tabla, #a-grid .btn-agendar-tabla');
+      if (primerBtn) {
+        e.preventDefault();
+        primerBtn.click();
+      }
+    }
+  }
+});

@@ -13,9 +13,19 @@ const MAX_FILAS = 500;
 const correoInvalido = (c) => Boolean(String(c || '').trim()) && !CORREO_RE.test(String(c).trim());
 const normNombre = (n) => String(n || '').trim().replace(/\s+/g, ' ').toUpperCase();
 
+const esBloqueoOMarcador = (f) => {
+  if (!f) return false;
+  if (Boolean(f.bloqueado)) return true;
+  if (f.bloqueo_motivo) return true;
+  if (rut.pareceMarcador(f.rut)) return true;
+  if (rut.pareceMarcador(f.nombre)) return true;
+  return false;
+};
+
 // Tipos de problema de una cita: CORREO_INVALIDO, TELEFONO_INCOMPLETO, NOMBRE, RUT_INVALIDO,
 // CORREO_FALLIDO (el servidor rechazo el recordatorio; solo citas de hoy en adelante).
 function problemas(f) {
+  if (esBloqueoOMarcador(f)) return [];
   const p = [];
   if (correoInvalido(f.correo)) p.push('CORREO_INVALIDO');
   if (Number(f.correo_recordatorio_enviado) === 2 && f.fecha >= hoyISO()) p.push('CORREO_FALLIDO');
@@ -30,11 +40,13 @@ function problemas(f) {
 function listar() {
   const filas = db.prepare(`
     SELECT a.id, a.fecha, a.hora, a.rut, a.nombre, a.correo, a.contacto, a.actualizado_en,
-           a.correo_recordatorio_enviado, e.nombre AS examinador
+           a.correo_recordatorio_enviado, a.bloqueado, a.bloqueo_motivo, e.nombre AS examinador
     FROM agenda a LEFT JOIN examinadores e ON e.id = a.examinador_id
-    WHERE (a.rut IS NOT NULL AND a.rut != '') OR (a.nombre IS NOT NULL AND a.nombre != '')
+    WHERE ((a.rut IS NOT NULL AND a.rut != '') OR (a.nombre IS NOT NULL AND a.nombre != ''))
+      AND (a.bloqueado IS NULL OR a.bloqueado = 0)
     ORDER BY a.fecha DESC, a.hora
   `).all()
+    .filter((f) => !esBloqueoOMarcador(f))
     .map((f) => ({ ...f, problemas: problemas(f) }))
     .filter((f) => f.problemas.length);
   return { total: filas.length, filas: filas.slice(0, MAX_FILAS) };

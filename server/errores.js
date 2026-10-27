@@ -53,7 +53,8 @@ function reporte() {
   const terrenoPorDia = new Map();
 
   for (const f of filas) {
-    const ocupada = Boolean(f.rut || f.nombre) && !f.bloqueado;
+    const esMarcador = rut.pareceMarcador(f.rut) || rut.pareceMarcador(f.nombre);
+    const ocupada = Boolean(f.rut || f.nombre) && !f.bloqueado && !esMarcador;
 
     // 1) Cita incompleta
     if (ocupada && f.nombre && !f.rut) {
@@ -65,8 +66,8 @@ function reporte() {
         mensaje: 'Registra RUT pero falta nombre' });
     }
 
-    // 2) RUT invalido
-    if (f.rut && !rut.esValido(f.rut)) {
+    // 2) RUT invalido (solo para citas de contribuyentes reales)
+    if (ocupada && f.rut && !rut.pareceMarcador(f.rut) && !rut.esValido(f.rut)) {
       hallazgos.push({ ...base(f), tipo: 'RUT_INVALIDO', severidad: 'warning',
         mensaje: `RUT con digito verificador invalido: ${f.rut}` });
     }
@@ -128,8 +129,8 @@ function reporte() {
         mensaje: `Pendiente de reagendar${f.pendiente_nota ? ': ' + f.pendiente_nota : ''}` });
     }
 
-    // acumular indices
-    if (f.rut && rut.esValido(f.rut)) {
+    // acumular indices (solo citas ocupadas con RUT valido de contribuyentes)
+    if (ocupada && f.rut && !rut.pareceMarcador(f.rut) && rut.esValido(f.rut)) {
       const k = rut.limpiar(f.rut);
       if (f.fecha >= hoy) {
         if (!futurasPorRut.has(k)) futurasPorRut.set(k, []);

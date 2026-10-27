@@ -392,8 +392,15 @@ function ruta() {
 window.addEventListener('resize', () => setTimeout(ajustarOffsetsFijos, 0));
 window.addEventListener('hashchange', ruta);
 
+const MARCADOR_RE = /VACACION|LICENCIA|ADMINISTRATIVO|FERIADO|BLOQUE|PERMISO|FIESTAS PATRIAS|CAPACITACI|COMET[IÍ]DO|TRASLADO|NO USAR|POSIBLES|HELLION|NO EXISTE|FALTA RUT|LLAMAR|SIN SISTEMA/i;
+function pareceMarcador(v) {
+  if (!v) return false;
+  return MARCADOR_RE.test(String(v).trim());
+}
+
 function textoForzar(b) {
-  return b.hora === META.hora_d_a5
+  const horaD = (META && META.hora_d_a5) || '12:30';
+  return (b && b.hora === horaD)
     ? 'Forzar: ya hay citas a las horas siguientes (13:00/13:30 no se van a bloquear)'
-    : `Forzar: clase pesada fuera del bloque ${META.hora_d_a5}`;
+    : `Forzar: clase pesada fuera del bloque ${horaD}`;
 }

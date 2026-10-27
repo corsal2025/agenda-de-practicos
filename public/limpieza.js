@@ -50,16 +50,17 @@ const Limpieza = (() => {
     const recargar = () => render(cont);
     let datos;
     try { datos = await api('/limpieza'); } catch (e) { cont.innerHTML = `<div class="panel"><p class="muted">${esc(e.message)}</p></div>`; return; }
+    const filasValidas = (datos.filas || []).filter((f) => !f.bloqueado && (typeof pareceMarcador !== 'function' || (!pareceMarcador(f.rut) && !pareceMarcador(f.nombre))));
     const conteo = {};
-    datos.filas.forEach((f) => f.problemas.forEach((p) => { conteo[p] = (conteo[p] || 0) + 1; }));
-    const visibles = datos.filas.filter((f) => !filtro || f.problemas.includes(filtro));
+    filasValidas.forEach((f) => f.problemas.forEach((p) => { conteo[p] = (conteo[p] || 0) + 1; }));
+    const visibles = filasValidas.filter((f) => !filtro || f.problemas.includes(filtro));
     const nCorreos = conteo.CORREO_INVALIDO || 0;
     cont.innerHTML = `<div class="panel">
       <div class="fila"><h3 style="margin:0;flex:1">Corrección rápida</h3>
         <button class="btn sec" id="lz-vaciar" ${nCorreos ? '' : 'disabled'}>Vaciar correos inválidos (${nCorreos})</button></div>
       <p class="muted" style="font-size:.82rem">Corrige correo, teléfono y nombre directo en la fila y pulsa <b>Guardar</b>. Para el RUT usa <b>Abrir</b>.</p>
       <div class="chips" id="lz-chips" style="margin:.4rem 0">
-        <button class="chip" data-t="">Todos (${datos.total})</button>
+        <button class="chip" data-t="">Todos (${filasValidas.length})</button>
         ${Object.entries(conteo).map(([t, n]) => `<button class="chip" data-t="${t}">${esc(ETQ[t] || t)} (${n})</button>`).join('')}
       </div>
       <div class="tabla-scroll"><table class="tabla-limpieza"><thead><tr>

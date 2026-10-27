@@ -30,5 +30,9 @@ test('formatear normaliza puntuacion', () => {
 test('pareceMarcador detecta textos que no son RUT', () => {
   assert.ok(rut.pareceMarcador('NO EXISTE EN SISTEMA'));
   assert.ok(rut.pareceMarcador('  falta rut '));
+  assert.ok(rut.pareceMarcador('VACACIONES'));
+  assert.ok(rut.pareceMarcador('licencia medica'));
+  assert.ok(rut.pareceMarcador('DIA ADMINISTRATIVO'));
+  assert.ok(rut.pareceMarcador('FERIADO'));
   assert.ok(!rut.pareceMarcador('12.345.678-5'));
 });
