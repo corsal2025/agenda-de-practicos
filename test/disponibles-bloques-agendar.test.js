@@ -192,10 +192,9 @@ test('styles.css: scrollbar de tablas inicia bajo el encabezado y sin flecha nat
   assert.ok(bloqueTablasScroll[0].includes('margin-top: var(--thead-h'), 'Track vertical debe iniciar con margin-top var(--thead-h');
 });
 
-test('editor-cita.js: abre directamente con fallback de funcionario activo', () => {
+test('editor-cita.js: abre directamente sin exigir usuario ni funcionario', () => {
   const codigo = leer('js', 'editor-cita.js');
-  assert.ok(codigo.includes('funcionarioActual()'), 'Debe incluir funcionarioActual()');
-  assert.ok(codigo.includes('fPrimero'), 'Debe tener fallback al primer funcionario activo');
-  assert.ok(codigo.includes('abrirFormularioCita(b, alGuardar, actual)'), 'formularioCita debe llamar directamente abrirFormularioCita');
-  assert.ok(codigo.includes('(funcionarioSesion && funcionarioSesion.nombre) || fAsignado.nombre'), 'Debe proteger el acceso a funcionarioSesion.nombre');
+  assert.ok(codigo.includes('abrirFormularioCita(b, alGuardar)'), 'formularioCita debe llamar directamente abrirFormularioCita');
+  assert.ok(!codigo.includes('elegirModal()'), 'No debe exigir elegirModal al abrir cita');
+  assert.ok(codigo.includes('limpiarSiCancela'), 'Debe contar con limpiarSiCancela para cancelar sobrecupos');
 });

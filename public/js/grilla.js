@@ -244,7 +244,6 @@ async function liberarCupoCita(b) {
 async function agregarOtraPersona(id) {
   try {
     const { bloque } = await api(`/agenda/${id}/persona`, { method: 'POST' });
-    if ($('#a-grid')) renderAgenda();
     await abrirSlotPorId(bloque.id, () => { if ($('#a-grid')) renderAgenda(); });
   } catch (e) {
     toast(e.message, 'err');
@@ -644,6 +643,13 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     if (liberar) {
       e.stopPropagation();
       liberarCupoCita(mapaSlots.get(Number(liberar.dataset.id)));
+      return;
+    }
+    const agendar = e.target.closest('.btn-agendar-tabla');
+    if (agendar) {
+      e.stopPropagation();
+      const id = Number(agendar.dataset.id);
+      if (id) abrirSlotPorId(id, () => { if ($('#a-grid')) renderAgenda(); }).catch((err) => toast(err.message, 'err'));
       return;
     }
     const persona = e.target.closest('.btn-tabla-persona');

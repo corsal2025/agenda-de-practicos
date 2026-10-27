@@ -110,3 +110,55 @@ test('POST persona sobre un id inexistente responde 404', async () => {
   const r = await post('/api/agenda/999999999/persona');
   assert.equal(r.status, 404);
 });
+
+test('liberar cupo 2 elimina fisicamente la fila y deja solo cupo 1', async () => {
+  const origen = bloque('07:50', { rut: '44.444.444-4', nombre: 'MARIA LOPEZ' });
+  const p = await post(`/api/agenda/${origen.id}/persona`);
+  const cupo2 = p.datos.bloque;
+  assert.equal(filasDeLaHora('07:50').length, 2);
+
+  const lib = await post(`/api/agenda/${cupo2.id}/liberar`);
+  assert.equal(lib.status, 200);
+  assert.equal(lib.datos.eliminado, true);
+
+  const restantes = filasDeLaHora('07:50');
+  assert.equal(restantes.length, 1, 'solo debe quedar 1 fila');
+  assert.equal(restantes[0].cupo, 1);
+  assert.equal(restantes[0].nombre, 'MARIA LOPEZ');
+});
+
+test('liberar cupo 1 cuando existe cupo 2 elimina cupo 1 y renombra cupo 2 a cupo 1', async () => {
+  const origen = bloque('08:00', { rut: '55.555.555-5', nombre: 'CARLOS DIAZ' });
+  const p = await post(`/api/agenda/${origen.id}/persona`);
+  const cupo2 = p.datos.bloque;
+  // Ocupamos cupo 2 con una cita
+  db.prepare("UPDATE agenda SET rut = '66.666.666-6', nombre = 'LAURA VEGA' WHERE id = ?").run(cupo2.id);
+
+  assert.equal(filasDeLaHora('08:00').length, 2);
+
+  // Liberamos el cupo 1
+  const lib = await post(`/api/agenda/${origen.id}/liberar`);
+  assert.equal(lib.status, 200);
+  assert.equal(lib.datos.eliminado, true);
+
+  const restantes = filasDeLaHora('08:00');
+  assert.equal(restantes.length, 1, 'solo debe quedar 1 fila');
+  assert.equal(restantes[0].id, cupo2.id, 'la fila que queda es la que tenia a Laura Vega');
+  assert.equal(restantes[0].cupo, 1, 'se renombro a cupo 1');
+  assert.equal(restantes[0].nombre, 'LAURA VEGA');
+});
+
+test('GET /api/agenda autolimpia cualquier sobrecupo vacio huerfano', async () => {
+  const origen = bloque('08:10', { rut: '77.777.777-7', nombre: 'HUGO ROJAS' });
+  const p = await post(`/api/agenda/${origen.id}/persona`);
+  assert.equal(filasDeLaHora('08:10').length, 2);
+
+  // Si por cualquier razon cupo 2 quedo vacio, GET /api/agenda lo limpia
+  const res = await fetch(`${base}/api/agenda?fecha=${FECHA}`);
+  assert.equal(res.status, 200);
+
+  const filas = filasDeLaHora('08:10');
+  assert.equal(filas.length, 1, 'el sobrecupo vacio fue autolimpiado');
+  assert.equal(filas[0].cupo, 1);
+  assert.equal(filas[0].nombre, 'HUGO ROJAS');
+});

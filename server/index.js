@@ -53,11 +53,18 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.static(path.join(RAIZ, 'public'), {
-  etag: false, lastModified: false,
+  etag: false,
+  lastModified: false,
+  maxAge: 0,
   setHeaders: (res, ruta) => {
     // App local: nunca cachear HTML/CSS/JS (asi los cambios se ven al recargar sin trucos).
-    if (/\.(html|css|js)$/i.test(ruta)) res.setHeader('Cache-Control', 'no-store, must-revalidate');
-    else res.setHeader('Cache-Control', 'public, max-age=86400');
+    if (/\.(html|css|js)$/i.test(ruta) || ruta.endsWith('/') || !path.extname(ruta)) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    }
   },
 }));
 const subir = multer({ dest: path.join(os.tmpdir(), 'agenda-uploads'), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -415,6 +422,7 @@ function conAlertas(row) {
 }
 
 app.get('/api/agenda', wrap((req, res) => {
+  limpiarSobrecuposVacios();
   const { fecha, desde, hasta, examinador_id, estado, clase } = req.query;
   const cond = [];
   const p = [];
@@ -707,6 +715,51 @@ const LIMPIAR_SQL = `
   token_confirmacion=NULL, correo_confirmacion_enviado=0, correo_recordatorio_enviado=0,
   agendado_en=NULL, actualizado_en=datetime('now','localtime')`;
 
+// Limpia bloques sobrecupo (cupo > 1) que hayan quedado vacios y renumera a cupo = 1 si correspondiera
+function limpiarSobrecuposVacios() {
+  tx(() => {
+    // 1. Elimina cualquier bloque vacio con cupo > 1
+    db.prepare(`
+      DELETE FROM agenda
+      WHERE cupo > 1
+        AND (rut IS NULL OR TRIM(rut) = '')
+        AND (nombre IS NULL OR TRIM(nombre) = '')
+        AND bloqueado = 0
+    `).run();
+
+    // 2. Si para un mismo (fecha, hora, examinador_id) existe un bloque vacio con cupo = 1
+    // pero existe otro bloque con cupo > 1 (ocupado o no):
+    const huerfanos = db.prepare(`
+      SELECT a1.id AS vacio_id, a1.fecha, a1.hora, a1.examinador_id
+      FROM agenda a1
+      WHERE a1.cupo = 1
+        AND (a1.rut IS NULL OR TRIM(a1.rut) = '')
+        AND (a1.nombre IS NULL OR TRIM(a1.nombre) = '')
+        AND a1.bloqueado = 0
+        AND EXISTS (
+          SELECT 1 FROM agenda a2
+          WHERE a2.fecha = a1.fecha
+            AND a2.hora = a1.hora
+            AND a2.examinador_id = a1.examinador_id
+            AND a2.cupo > 1
+        )
+    `).all();
+
+    for (const h of huerfanos) {
+      db.prepare('DELETE FROM agenda WHERE id = ?').run(h.vacio_id);
+      const siguiente = db.prepare(`
+        SELECT id, cupo FROM agenda
+        WHERE fecha = ? AND hora = ? AND examinador_id = ?
+        ORDER BY cupo ASC
+        LIMIT 1
+      `).get(h.fecha, h.hora, h.examinador_id);
+      if (siguiente && siguiente.cupo > 1) {
+        db.prepare('UPDATE agenda SET cupo = 1 WHERE id = ?').run(siguiente.id);
+      }
+    }
+  });
+}
+
 app.post('/api/agenda/:id/liberar', wrap((req, res) => {
   const id = Number(req.params.id);
   const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
@@ -715,20 +768,38 @@ app.post('/api/agenda/:id/liberar', wrap((req, res) => {
   const motivo = (req.body && req.body.motivo) || 'Examinador no disponible';
   const teniaPersona = Boolean(bloque.rut || bloque.nombre);
 
+  let eliminado = false;
   tx(() => {
     if (teniaPersona) cola.encolar(bloque, motivo, actor);
     if (teniaPersona || bloque.bloqueado) papelera.guardar(bloque, 'liberar', actor);
-    if (Number(bloque.cupo) > 1) {
+
+    // Contar cuantos bloques existen en total para esa fecha, hora y examinador
+    const totalEnHora = db.prepare(
+      'SELECT COUNT(*) AS total FROM agenda WHERE fecha = ? AND hora = ? AND examinador_id = ?'
+    ).get(bloque.fecha, bloque.hora, bloque.examinador_id).total;
+
+    if (Number(bloque.cupo) > 1 || totalEnHora > 1) {
+      // Si era un cupo extra O si habia mas de un bloque en ese horario, se elimina la fila liberada
       db.prepare('DELETE FROM agenda WHERE id = ?').run(id);
+      eliminado = true;
+      // Si la fila eliminada era cupo = 1, renombramos la menor fila sobreviviente a cupo = 1
+      const restante = db.prepare(
+        'SELECT id, cupo FROM agenda WHERE fecha = ? AND hora = ? AND examinador_id = ? ORDER BY cupo ASC LIMIT 1'
+      ).get(bloque.fecha, bloque.hora, bloque.examinador_id);
+      if (restante && restante.cupo > 1) {
+        db.prepare('UPDATE agenda SET cupo = 1 WHERE id = ?').run(restante.id);
+      }
     } else {
       db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL} WHERE id = ?`).run(id);
     }
+
     if (pesada.esPesadaEnHoraValida(bloque) && teniaPersona) {
       pesada.liberar(bloque.fecha, bloque.examinador_id);
     }
+    limpiarSobrecuposVacios();
   });
   logReq(req, id, 'liberar', `${bloque.fecha} ${bloque.hora} ${bloque.nombre || bloque.bloqueo_motivo || ''}`);
-  res.json({ ok: true, encolado: teniaPersona, eliminado: Number(bloque.cupo) > 1 });
+  res.json({ ok: true, encolado: teniaPersona, eliminado });
 }));
 
 // ---------- VARIAS PERSONAS EN LA MISMA HORA ----------
@@ -1099,12 +1170,23 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
       fit: origen.fecha_inicio_tramite,
       comentarios: [origen.comentarios, `Reagendada desde ${origen.fecha} ${origen.hora}`].filter(Boolean).join(' | '),
     });
-    if (Number(origen.cupo) > 1) {
+    const totalEnHora = db.prepare(
+      'SELECT COUNT(*) AS total FROM agenda WHERE fecha = ? AND hora = ? AND examinador_id = ?'
+    ).get(origen.fecha, origen.hora, origen.examinador_id).total;
+
+    if (Number(origen.cupo) > 1 || totalEnHora > 1) {
       db.prepare('DELETE FROM agenda WHERE id = ?').run(origen.id);
+      const restante = db.prepare(
+        'SELECT id, cupo FROM agenda WHERE fecha = ? AND hora = ? AND examinador_id = ? ORDER BY cupo ASC LIMIT 1'
+      ).get(origen.fecha, origen.hora, origen.examinador_id);
+      if (restante && restante.cupo > 1) {
+        db.prepare('UPDATE agenda SET cupo = 1 WHERE id = ?').run(restante.id);
+      }
     } else {
       db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL.replace('comentarios=NULL', 'comentarios=@c')} WHERE id=@id`)
         .run({ id: origen.id, c: `Reagendada a ${destino.fecha} ${destino.hora} (${motivo || 'sin motivo'})` });
     }
+    limpiarSobrecuposVacios();
   });
 
   const avisos = [];
@@ -1199,6 +1281,7 @@ app.post('/api/desbloquear-dia', wrap((req, res) => {
 
 // ---------- DISPONIBLES ----------
 app.get('/api/disponibles', wrap((req, res) => {
+  limpiarSobrecuposVacios();
   const { desde, hasta, clase, examinador_id } = req.query;
   const cond = ['a.rut IS NULL', 'a.nombre IS NULL', 'a.bloqueado = 0', 'a.fecha NOT IN (SELECT fecha FROM feriados)'];
   const p = [];

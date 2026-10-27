@@ -45,7 +45,7 @@ const PASOS_TOUR = [
     listo: '#d-buscar',
     titulo: 'Citas disponibles: filtros de búsqueda',
     icono: '🗓️',
-    descripcion: 'Busca cupos libres por rango <b>Desde / Hasta</b> (por defecto, los próximos 60 días), <b>Clase</b> y <b>Examinador</b>, y pulsa <b>Buscar</b>. Si eliges clase <b>D</b> o <b>A5</b>, solo se muestran los bloques reservados para clases pesadas.'
+    descripcion: 'Busca cupos libres por rango <b>Desde / Hasta</b> (por defecto, los próximos 60 días), <b>Clase</b> y <b>Examinador</b>, y pulsa <b>Buscar</b>. Las citas se agrupan ordenadamente por bloques de fecha (línea azul marino) y bloques de hora (línea celeste). Si eliges clase <b>D</b> o <b>A5</b>, solo se muestran los bloques reservados para clases pesadas.'
   },
   {
     seccion: 'Citas disponibles',
@@ -53,9 +53,9 @@ const PASOS_TOUR = [
     target: '#d-body button[data-id]',
     fallback: '#d-body',
     listo: tourSinCargando('#d-body'),
-    titulo: 'Reservar un cupo (Agendar)',
+    titulo: 'Reservar un cupo (+ Agendar)',
     icono: '✍️',
-    descripcion: 'Cada fila es un bloque libre. <b>Agendar</b> abre el formulario de la cita: <b>nombre, RUT</b> (con validación), <b>celular</b>, <b>clase(s)</b> (puedes marcar más de una), <b>correo</b> y el <b>funcionario/a</b> que agenda. Para clases pesadas fuera de su bloque aparece la casilla <b>Forzar</b>. Termina con <b>Confirmar y agendar cita</b>. Si no hay cupos en el rango, amplía la fecha <b>Hasta</b>.'
+    descripcion: 'Cada fila es un bloque libre. <b>+ Agendar</b> abre de inmediato el formulario: <b>nombre, RUT</b> (con validación y autoformato), <b>celular</b>, <b>clase(s)</b> (puedes marcar más de una) y <b>correo</b>. No requiere login ni elegir usuario, ya que el control lo gestiona el sistema institucional. Para clases pesadas fuera de su horario aparece la casilla <b>Forzar</b>. Termina con <b>Confirmar y agendar cita</b>.'
   },
 
   /* ---------- Agenda ---------- */
@@ -74,6 +74,22 @@ const PASOS_TOUR = [
     titulo: 'Filtro de examinadores',
     icono: '👤',
     descripcion: 'Ve la grilla con <b>todos</b> los examinadores en columnas paralelas, o selecciona uno para concentrarte en sus citas y cupos.'
+  },
+  {
+    seccion: 'Agenda',
+    tab: 'agenda',
+    target: '#a-grid',
+    titulo: 'Edición rápida en planilla y botón + Agendar cita',
+    icono: '⚡',
+    descripcion: 'En la grilla diaria, los bloques libres tienen el botón <b>+ Agendar cita</b> para citar al instante. En las citas agendadas, puedes hacer <b>clic directo sobre cualquier dato</b> (RUT, nombre, teléfono, etc.) para editarlo en línea con protección contra cambios simultáneos.'
+  },
+  {
+    seccion: 'Agenda',
+    tab: 'agenda',
+    target: '#a-grid',
+    titulo: 'Acciones de cita y sobrecupos automáticos',
+    icono: '👥',
+    descripcion: 'Cada cita cuenta con botones rápidos: <b>liberar cupo (🗑️)</b>, <b>derivar a Lista de espera (🔄)</b> y <b>agregar otra persona en la misma hora (👤+)</b>. Si se cancela la creación o se libera la hora extra, el sobrecupo se elimina automáticamente sin dejar filas vacías huérfanas.'
   },
   {
     seccion: 'Agenda',

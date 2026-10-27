@@ -40,15 +40,11 @@ function editorSlot(b, alGuardar) {
   formularioCita(b, alGuardar);
 }
 
-// El funcionario/a actual se obtiene de la sesion del navegador, o fallback automatico
-// al primer funcionario activo disponible en el sistema para permitir agendar directamente sin bloqueo.
+// El sistema opera sin requisito de login/funcionario propio: el control de acceso lo gestiona el sistema padre.
 function funcionarioActual() {
   if (!META) return null;
   const fSesion = window.FuncionarioSesion ? window.FuncionarioSesion.actual() : null;
-  if (fSesion) return fSesion;
-  const fPrimero = (META.funcionarios || []).find((f) => f.activo);
-  if (fPrimero) return fPrimero;
-  return (META.funcionarios && META.funcionarios[0]) || { id: null, nombre: 'Sin asignar' };
+  return fSesion || { id: null, nombre: 'Sin asignar' };
 }
 
 function formularioCita(b, alGuardar) {
@@ -58,9 +54,8 @@ function formularioCita(b, alGuardar) {
     return;
   }
 
-  // Abrir DIRECTAMENTE el formulario de agendamiento sin frenar al usuario
-  const actual = funcionarioActual() || { id: null, nombre: 'Sin asignar' };
-  abrirFormularioCita(b, alGuardar, actual);
+  // Abrir DIRECTAMENTE el formulario de agendamiento sin exigir usuario ni funcionario
+  abrirFormularioCita(b, alGuardar);
 }
 
 // Aviso tras guardar una cita nueva, segun lo que el servidor informa del correo de confirmacion:
@@ -82,15 +77,10 @@ function avisoCorreoCita(correoRes) {
   }
 }
 
-function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
+function abrirFormularioCita(b, alGuardar) {
   const c = META.catalogos;
-  const fAsignado = (b.funcionario_id && (META.funcionarios || []).find((f) => f.id === b.funcionario_id))
-    || funcionarioSesion
-    || (b.funcionario ? { id: b.funcionario_id || null, nombre: b.funcionario } : null)
-    || { id: null, nombre: 'Sin asignar' };
   const clasesIniciales = clasesDe(b.clase);
   const esPesada = clasesIniciales.some((cl) => META.clases_pesadas.includes(cl));
-  const fNombre = (funcionarioSesion && funcionarioSesion.nombre) || fAsignado.nombre || 'Sin asignar';
 
   modal(
     `Agendar nueva cita · ${fFecha(b.fecha)} · ${b.hora} hrs · Examinador/a: ${esc(b.examinador)}`,
@@ -99,7 +89,6 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
       <div><span>Fecha</span><b>${esc(fFecha(b.fecha))}</b></div>
       <div><span>Hora</span><b>${esc(b.hora)} hrs</b></div>
       <div><span>Examinador/a</span><b>${esc(b.examinador)}</b></div>
-      <div><span>Funcionario/a</span><b>${esc(fNombre)} · <a href="#" id="fs-cambiar">cambiar</a></b></div>
     </div>
     <div class="campo"><label>Nombre completo</label>
       <input id="f-nombre" value="${esc(nom(b.nombre))}" required placeholder="NOMBRES Y APELLIDOS" style="text-transform:uppercase;font-weight:600">
@@ -221,50 +210,46 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
 
   const esCupoExtraVacio = Number(b.cupo) > 1 && !b.rut && !b.nombre;
   let guardadoExitoso = false;
+  let yaLimpiado = false;
   const limpiarSiCancela = async () => {
-    if (esCupoExtraVacio && !guardadoExitoso) {
+    if (esCupoExtraVacio && !guardadoExitoso && !yaLimpiado) {
+      yaLimpiado = true;
       try {
         await api(`/agenda/${b.id}/liberar`, { method: 'POST', body: { motivo: 'Cancelación al agregar persona' } });
         alGuardar && alGuardar();
+        if (window.renderAgenda) renderAgenda();
       } catch (_) {}
     }
   };
 
-  $('#btn-cancel').onclick = () => {
+  const cerrarYCancela = () => {
+    window.removeEventListener('keydown', onEscapeModal);
     limpiarSiCancela();
     cerrarModal();
   };
+
+  const onEscapeModal = (e) => {
+    if (e.key === 'Escape') {
+      cerrarYCancela();
+    }
+  };
+  window.addEventListener('keydown', onEscapeModal);
+
+  $('#btn-cancel').onclick = cerrarYCancela;
 
   const ovModal = $('#modal-root .overlay');
   if (ovModal) {
     const xBtn = ovModal.querySelector('.x');
     if (xBtn) {
-      xBtn.onclick = () => {
-        limpiarSiCancela();
-        cerrarModal();
-      };
+      xBtn.onclick = cerrarYCancela;
     }
     ovModal.addEventListener('click', (e) => {
       if (e.target === ovModal) {
-        limpiarSiCancela();
-        cerrarModal();
+        cerrarYCancela();
       }
     });
   }
 
-  if ($('#fs-cambiar')) {
-    $('#fs-cambiar').onclick = (e) => {
-      e.preventDefault();
-      cerrarModal();
-      if (window.FuncionarioSesion && window.FuncionarioSesion.elegirModal) {
-        window.FuncionarioSesion.elegirModal().then(() => {
-          formularioCita(b, alGuardar);
-        });
-      } else {
-        formularioCita(b, alGuardar);
-      }
-    };
-  }
   $('#btn-guardar').onclick = async () => {
     const btnG = $('#btn-guardar');
     if (btnG && btnG.disabled) return;
@@ -300,7 +285,7 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
         motivo_reagendamiento: b.motivo_reagendamiento || null,
         lista_espera: 'NO',
         intento: b.intento || '1° VEZ',
-        funcionario_id: fAsignado.id || null,
+        funcionario_id: b.funcionario_id || null,
         fecha_inicio_tramite: $('#f-fecha-inicio') ? ($('#f-fecha-inicio').value || null) : (b.fecha_inicio_tramite || null),
         escuela_conductores: esClaseTramite(clasesMarcadas().join(',')) ? ($('#f-escuela').value || null) : null,
         tipo_reagendamiento: $('#f-tipo-reagendamiento') ? $('#f-tipo-reagendamiento').value || null : (b.tipo_reagendamiento || null),
@@ -326,6 +311,7 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
       }
       (r.avisos || []).forEach((a) => toast(a, 'err'));
       guardadoExitoso = true;
+      window.removeEventListener('keydown', onEscapeModal);
       const aviso = avisoCorreoCita(r.correo);
       toast(aviso.texto, aviso.tipo);
       cerrarModal();
