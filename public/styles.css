@@ -4497,11 +4497,14 @@ body:has(#a-grid.tabla-agenda-wrap) {
 }
 
 .sidebar-cabecera {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px 10px 16px;
+  justify-content: center;
+  padding: 12px 14px 10px;
   border-bottom: 1px solid var(--linea);
+  min-height: 44px;
+  box-sizing: border-box;
 }
 
 .sidebar-titulo {
@@ -4510,9 +4513,13 @@ body:has(#a-grid.tabla-agenda-wrap) {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--tinta-2);
+  text-align: center;
+  width: 100%;
 }
 
 .sidebar-plegar {
+  position: absolute;
+  right: 12px;
   border: 1px solid var(--linea);
   background: var(--elev);
   color: var(--tinta-2);
@@ -4612,6 +4619,9 @@ html.sidebar-plegado .sidebar-titulo {
 html.sidebar-plegado .sidebar-cabecera {
   justify-content: center;
   padding: 10px 4px;
+}
+html.sidebar-plegado .sidebar-plegar {
+  position: static;
 }
 html.sidebar-plegado nav#nav {
   padding: 8px 4px;
