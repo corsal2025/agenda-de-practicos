@@ -266,25 +266,31 @@ async function renderDisponibles() {
     }
 
     // Delegación y clic directo para abrir slot al agendar
-    contBody.onclick = (e) => {
-      const btn = e.target.closest('.btn-agendar-tabla, button[data-id]');
-      if (!btn || !contBody.contains(btn)) return;
-      e.stopPropagation();
+    const clickAgendar = (btn, e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       const id = Number(btn.dataset.id);
       if (!id) return;
-      abrirSlotPorId(id, () => { buscar(); }).catch((err) => {
-        if (typeof toast === 'function') toast(err.message, 'err');
-      });
-    };
-    contBody.querySelectorAll('.btn-agendar-tabla, button[data-id]').forEach((el) => {
-      el.onclick = (e) => {
-        e.stopPropagation();
-        const id = Number(el.dataset.id);
-        if (!id) return;
+      if (typeof abrirSlotPorId === 'function') {
         abrirSlotPorId(id, () => { buscar(); }).catch((err) => {
           if (typeof toast === 'function') toast(err.message, 'err');
         });
-      };
+      } else if (typeof window !== 'undefined' && window.abrirSlotPorId) {
+        window.abrirSlotPorId(id, () => { buscar(); }).catch((err) => {
+          if (typeof toast === 'function') toast(err.message, 'err');
+        });
+      }
+    };
+
+    contBody.onclick = (e) => {
+      const btn = e.target.closest('.btn-agendar-tabla, button[data-id]');
+      if (!btn || !contBody.contains(btn)) return;
+      clickAgendar(btn, e);
+    };
+    contBody.querySelectorAll('.btn-agendar-tabla, button[data-id]').forEach((el) => {
+      el.onclick = (e) => clickAgendar(el, e);
     });
     setTimeout(ajustarOffsetsFijos, 0);
   };

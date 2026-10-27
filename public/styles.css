@@ -236,12 +236,11 @@ header.top::after {
 }
 
 /* Barra de desplazamiento uniforme y sin esquina blanca en todas las tablas */
+.tabla-scroll,
 #view .tabla-scroll,
 #modal-root .tabla-scroll,
 #view .tabla-agenda-scroll,
 .tabla-agenda-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: #94a3b8 #f1f5f9;
   background-color: var(--papel, #ffffff);
   background-image: linear-gradient(to bottom,
     var(--azul-th) 0, var(--azul-th) calc(var(--thead-h, var(--cab-alto, 45px)) - 4px),
@@ -250,6 +249,7 @@ header.top::after {
   background-repeat: no-repeat !important;
 }
 
+.tabla-scroll::-webkit-scrollbar,
 #view .tabla-scroll::-webkit-scrollbar,
 #modal-root .tabla-scroll::-webkit-scrollbar,
 #view .tabla-agenda-scroll::-webkit-scrollbar,
@@ -259,14 +259,27 @@ header.top::after {
   background: transparent !important;
 }
 
+.tabla-scroll::-webkit-scrollbar-button,
+#view .tabla-scroll::-webkit-scrollbar-button,
+#modal-root .tabla-scroll::-webkit-scrollbar-button,
+#view .tabla-agenda-scroll::-webkit-scrollbar-button,
+.tabla-agenda-scroll::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.tabla-scroll::-webkit-scrollbar-track:vertical,
 #view .tabla-scroll::-webkit-scrollbar-track:vertical,
 #modal-root .tabla-scroll::-webkit-scrollbar-track:vertical,
 #view .tabla-agenda-scroll::-webkit-scrollbar-track:vertical,
 .tabla-agenda-scroll::-webkit-scrollbar-track:vertical {
   margin-top: var(--thead-h, var(--cab-alto, 45px)) !important;
-  background: #f1f5f9;
+  background: #f1f5f9 !important;
+  border-left: 1px solid #cbd5e1;
 }
 
+.tabla-scroll::-webkit-scrollbar-track:horizontal,
 #view .tabla-scroll::-webkit-scrollbar-track:horizontal,
 #modal-root .tabla-scroll::-webkit-scrollbar-track:horizontal,
 #view .tabla-agenda-scroll::-webkit-scrollbar-track:horizontal,
@@ -274,6 +287,7 @@ header.top::after {
   background: #f1f5f9;
 }
 
+.tabla-scroll::-webkit-scrollbar-thumb,
 #view .tabla-scroll::-webkit-scrollbar-thumb,
 #modal-root .tabla-scroll::-webkit-scrollbar-thumb,
 #view .tabla-agenda-scroll::-webkit-scrollbar-thumb,
@@ -283,6 +297,7 @@ header.top::after {
   border: 2px solid #f1f5f9;
 }
 
+.tabla-scroll::-webkit-scrollbar-corner,
 #view .tabla-scroll::-webkit-scrollbar-corner,
 #modal-root .tabla-scroll::-webkit-scrollbar-corner,
 #view .tabla-agenda-scroll::-webkit-scrollbar-corner,
@@ -290,22 +305,29 @@ header.top::after {
   background: #f1f5f9;
 }
 
+:root[data-tema="oscuro"] .tabla-scroll,
 :root[data-tema="oscuro"] #view .tabla-scroll,
 :root[data-tema="oscuro"] #modal-root .tabla-scroll,
 :root[data-tema="oscuro"] #view .tabla-agenda-scroll,
 :root[data-tema="oscuro"] .tabla-agenda-scroll {
-  scrollbar-color: #475569 #1e293b;
   background-color: var(--papel, #0f172a);
 }
 
+:root[data-tema="oscuro"] .tabla-scroll::-webkit-scrollbar-track:vertical,
 :root[data-tema="oscuro"] #view .tabla-scroll::-webkit-scrollbar-track:vertical,
 :root[data-tema="oscuro"] #modal-root .tabla-scroll::-webkit-scrollbar-track:vertical,
 :root[data-tema="oscuro"] #view .tabla-agenda-scroll::-webkit-scrollbar-track:vertical,
-:root[data-tema="oscuro"] .tabla-agenda-scroll::-webkit-scrollbar-track:vertical,
+:root[data-tema="oscuro"] .tabla-agenda-scroll::-webkit-scrollbar-track:vertical {
+  background: #1e293b !important;
+  border-left: 1px solid #334155;
+}
+
+:root[data-tema="oscuro"] .tabla-scroll::-webkit-scrollbar-track:horizontal,
 :root[data-tema="oscuro"] #view .tabla-scroll::-webkit-scrollbar-track:horizontal,
 :root[data-tema="oscuro"] #modal-root .tabla-scroll::-webkit-scrollbar-track:horizontal,
 :root[data-tema="oscuro"] #view .tabla-agenda-scroll::-webkit-scrollbar-track:horizontal,
 :root[data-tema="oscuro"] .tabla-agenda-scroll::-webkit-scrollbar-track:horizontal,
+:root[data-tema="oscuro"] .tabla-scroll::-webkit-scrollbar-corner,
 :root[data-tema="oscuro"] #view .tabla-scroll::-webkit-scrollbar-corner,
 :root[data-tema="oscuro"] #modal-root .tabla-scroll::-webkit-scrollbar-corner,
 :root[data-tema="oscuro"] #view .tabla-agenda-scroll::-webkit-scrollbar-corner,
@@ -313,6 +335,7 @@ header.top::after {
   background: #1e293b;
 }
 
+:root[data-tema="oscuro"] .tabla-scroll::-webkit-scrollbar-thumb,
 :root[data-tema="oscuro"] #view .tabla-scroll::-webkit-scrollbar-thumb,
 :root[data-tema="oscuro"] #modal-root .tabla-scroll::-webkit-scrollbar-thumb,
 :root[data-tema="oscuro"] #view .tabla-agenda-scroll::-webkit-scrollbar-thumb,
@@ -4170,6 +4193,18 @@ body:has(#a-grid.tabla-agenda-wrap) {
   background: #2563eb;
   color: #ffffff;
   border-style: solid;
+}
+
+:root[data-tema="oscuro"] .btn-agendar-tabla {
+  background: #1e293b;
+  border-color: #60a5fa;
+  color: #93c5fd;
+}
+
+:root[data-tema="oscuro"] .btn-agendar-tabla:hover {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
 }
 
 .libre-label {

@@ -40,11 +40,15 @@ function editorSlot(b, alGuardar) {
   formularioCita(b, alGuardar);
 }
 
-// El funcionario/a "actual" viene del selector temporal de la sesion del navegador
-// (funcionario-sesion.js): sin login propio, nunca se asume "el primero activo".
+// El funcionario/a actual se obtiene de la sesion del navegador, o fallback automatico
+// al primer funcionario activo disponible en el sistema para permitir agendar directamente sin bloqueo.
 function funcionarioActual() {
   if (!META) return null;
-  return window.FuncionarioSesion ? window.FuncionarioSesion.actual() : null;
+  const fSesion = window.FuncionarioSesion ? window.FuncionarioSesion.actual() : null;
+  if (fSesion) return fSesion;
+  const fPrimero = (META.funcionarios || []).find((f) => f.activo);
+  if (fPrimero) return fPrimero;
+  return (META.funcionarios && META.funcionarios[0]) || { id: null, nombre: 'Sin asignar' };
 }
 
 function formularioCita(b, alGuardar) {
@@ -54,15 +58,8 @@ function formularioCita(b, alGuardar) {
     return;
   }
 
-  // Primera vez que se abre "Agendar nueva cita" en esta sesion del navegador sin un
-  // funcionario/a elegido: se pide antes de mostrar el formulario (ver funcionario-sesion.js).
-  const actual = funcionarioActual();
-  if (!actual) {
-    if (!window.FuncionarioSesion) return;
-    window.FuncionarioSesion.elegirModal().then((elegido) => { if (elegido) formularioCita(b, alGuardar); });
-    return;
-  }
-
+  // Abrir DIRECTAMENTE el formulario de agendamiento sin frenar al usuario
+  const actual = funcionarioActual() || { id: null, nombre: 'Sin asignar' };
   abrirFormularioCita(b, alGuardar, actual);
 }
 
@@ -93,6 +90,7 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
     || { id: null, nombre: 'Sin asignar' };
   const clasesIniciales = clasesDe(b.clase);
   const esPesada = clasesIniciales.some((cl) => META.clases_pesadas.includes(cl));
+  const fNombre = (funcionarioSesion && funcionarioSesion.nombre) || fAsignado.nombre || 'Sin asignar';
 
   modal(
     `Agendar nueva cita · ${fFecha(b.fecha)} · ${b.hora} hrs · Examinador/a: ${esc(b.examinador)}`,
@@ -101,7 +99,7 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
       <div><span>Fecha</span><b>${esc(fFecha(b.fecha))}</b></div>
       <div><span>Hora</span><b>${esc(b.hora)} hrs</b></div>
       <div><span>Examinador/a</span><b>${esc(b.examinador)}</b></div>
-      <div><span>Funcionario/a</span><b>${esc(funcionarioSesion.nombre)} · <a href="#" id="fs-cambiar">cambiar</a></b></div>
+      <div><span>Funcionario/a</span><b>${esc(fNombre)} · <a href="#" id="fs-cambiar">cambiar</a></b></div>
     </div>
     <div class="campo"><label>Nombre completo</label>
       <input id="f-nombre" value="${esc(nom(b.nombre))}" required placeholder="NOMBRES Y APELLIDOS" style="text-transform:uppercase;font-weight:600">
@@ -258,7 +256,13 @@ function abrirFormularioCita(b, alGuardar, funcionarioSesion) {
     $('#fs-cambiar').onclick = (e) => {
       e.preventDefault();
       cerrarModal();
-      window.FuncionarioSesion.elegirModal().then((elegido) => { if (elegido) formularioCita(b, alGuardar); });
+      if (window.FuncionarioSesion && window.FuncionarioSesion.elegirModal) {
+        window.FuncionarioSesion.elegirModal().then(() => {
+          formularioCita(b, alGuardar);
+        });
+      } else {
+        formularioCita(b, alGuardar);
+      }
     };
   }
   $('#btn-guardar').onclick = async () => {

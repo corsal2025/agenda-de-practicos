@@ -180,3 +180,22 @@ test('styles.css: define bordes claros para dia-inicio y hora-inicio', () => {
   assert.ok(css.includes('.tabla-acciones-celda'), 'styles.css debe definir tabla-acciones-celda');
   assert.ok(css.includes('.btn.peligro.sec'), 'styles.css debe definir estilo accesible para .btn.peligro.sec');
 });
+
+test('styles.css: scrollbar de tablas inicia bajo el encabezado y sin flecha nativa arriba', () => {
+  const css = leer('styles.css');
+  // En las tablas no debe haber scrollbar-width ni scrollbar-color que invaliden ::-webkit-scrollbar
+  const bloqueTablasScroll = css.match(/\/\* Barra de desplazamiento uniforme y sin esquina blanca[\s\S]*?:root\[data-tema="oscuro"\][\s\S]*?border: 2px solid #1e293b;\s*\}/);
+  assert.ok(bloqueTablasScroll, 'Debe existir la seccion de scrollbar para tablas');
+  assert.ok(!bloqueTablasScroll[0].includes('scrollbar-width: thin'), 'No debe usar scrollbar-width en las tablas');
+  assert.ok(!bloqueTablasScroll[0].includes('scrollbar-color:'), 'No debe usar scrollbar-color en las tablas');
+  assert.ok(bloqueTablasScroll[0].includes('::-webkit-scrollbar-button'), 'Debe ocultar los botones de scrollbar');
+  assert.ok(bloqueTablasScroll[0].includes('margin-top: var(--thead-h'), 'Track vertical debe iniciar con margin-top var(--thead-h');
+});
+
+test('editor-cita.js: abre directamente con fallback de funcionario activo', () => {
+  const codigo = leer('js', 'editor-cita.js');
+  assert.ok(codigo.includes('funcionarioActual()'), 'Debe incluir funcionarioActual()');
+  assert.ok(codigo.includes('fPrimero'), 'Debe tener fallback al primer funcionario activo');
+  assert.ok(codigo.includes('abrirFormularioCita(b, alGuardar, actual)'), 'formularioCita debe llamar directamente abrirFormularioCita');
+  assert.ok(codigo.includes('(funcionarioSesion && funcionarioSesion.nombre) || fAsignado.nombre'), 'Debe proteger el acceso a funcionarioSesion.nombre');
+});
