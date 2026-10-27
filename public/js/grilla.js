@@ -423,9 +423,9 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
               ${telWa ? `<a href="sms:+${telWa}?body=${encodeURIComponent(mensajeSms)}" class="btn-sms-tabla" onclick="event.stopPropagation()" title="Enviar mensaje de texto (SMS) a este postulante"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:middle;margin-right:3px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Mensaje de texto</a>` : ''}
             </div>
           </td>
-          <td class="td-correo">
+          <td class="td-correo" title="${esc(b.correo || '')}">
             ${b.correo
-              ? `<span class="correo-txt" data-valor="correo" title="Clic para editar el correo">${esc(b.correo)}</span>`
+              ? `<span class="correo-txt" data-valor="correo" title="${esc(b.correo)} · Clic para editar">${esc(b.correo)}</span>`
               : '<span class="sin-correo" data-valor="correo" title="Clic para ingresar el correo">+ Agregar correo</span>'}
           </td>
           <td class="td-avisos">

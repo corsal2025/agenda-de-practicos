@@ -10,7 +10,8 @@
     const nombres = ths.map((th) => th.textContent.trim());
     for (const tb of tabla.tBodies) {
       for (const tr of tb.rows) {
-        let i = 0;
+        const offset = Math.max(0, ths.length - tr.cells.length);
+        let i = offset;
         for (const td of tr.cells) {
           const n = nombres[i] || '';
           if (n && td.getAttribute('data-label') !== n) td.setAttribute('data-label', n);
