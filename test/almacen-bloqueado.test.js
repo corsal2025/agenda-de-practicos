@@ -53,7 +53,7 @@ test('main.js: init() llega a ruta() y no pinta "No se pudo conectar" con almace
   const view = elemento();
   const stubs = {};
   for (const n of ['renderAgenda', 'renderDisponibles', 'renderListaEspera', 'renderPorConfirmar', 'renderErrores',
-    'renderAnalitica', 'renderPapelera', 'renderDatos', 'renderVencimientos', 'renderJefatura']) stubs[n] = () => {};
+    'renderAnalitica', 'renderPapelera', 'renderDatos', 'renderVencimientos', 'renderJefatura', 'renderHistorialPersonas']) stubs[n] = () => {};
   const ctx = contextoBloqueado({
     ...stubs,
     view, MARCA: { organismo: 'Org', unidad: 'Uni' }, ESCUDO_FALLBACK: '', logoHtml: () => '',

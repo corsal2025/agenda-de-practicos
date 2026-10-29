@@ -21,6 +21,7 @@ const validar = require('./validar');
 const papelera = require('./papelera');
 const cola = require('./cola');
 const faltas = require('./faltas');
+const historialPersona = require('./historial-persona');
 const bloqueo = require('./bloqueo');
 const pesada = require('./pesada');
 const correo = require('./correo');
@@ -887,6 +888,17 @@ app.post('/api/agenda/:id/no-vino', wrap((req, res) => {
   res.json({ ok: true, faltas: total });
 }));
 
+// ---------- HISTORIAL POR PERSONA (solo lectura) ----------
+app.get('/api/personas-historial', wrap((req, res) => {
+  res.json({ personas: historialPersona.listar({ q: req.query.q }) });
+}));
+
+app.get('/api/personas-historial/:clave', wrap((req, res) => {
+  const ficha = historialPersona.ficha(req.params.clave);
+  if (!ficha) throw bad('No hay historial para esta persona.', 404);
+  res.json(ficha);
+}));
+
 // ---------- VARIAS PERSONAS EN LA MISMA HORA ----------
 // Crea un cupo extra (cupo = MAX+1) en el mismo (fecha, hora, examinador) del bloque :id, libre.
 app.post('/api/agenda/:id/persona', wrap((req, res) => {
@@ -1013,6 +1025,12 @@ app.post('/api/cola-reagendar/:id/asignar', wrap((req, res) => {
     if (resAgenda.changes === 0) {
       throw bad('El bloque de destino ya no está disponible o fue ocupado por otro funcionario.', 409);
     }
+
+    historialPersona.registrarCambio({
+      persona: item,
+      origen: { fecha: item.origen_fecha, hora: item.origen_hora, examinador_id: item.origen_examinador_id },
+      destino, motivo, flujo: 'cola', actor: actorDe(req),
+    });
 
     db.prepare(`UPDATE cola_reagendar SET estado='reagendado', destino_agenda_id=?, correo=?, resuelto_en=? WHERE id=?`)
       .run(destino.id, correoFinal, ts, item.id);
@@ -1347,6 +1365,9 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
       db.prepare(`UPDATE agenda SET ${LIMPIAR_SQL.replace('comentarios=NULL', 'comentarios=@c')} WHERE id=@id`)
         .run({ id: origen.id, c: `Reagendada a ${destino.fecha} ${destino.hora} (${motivo || 'sin motivo'})` });
     }
+    historialPersona.registrarCambio({
+      persona: origen, origen, destino, motivo: motivo || null, flujo: 'reagendar', actor: actorDe(req),
+    });
     limpiarSobrecuposVacios();
   });
 

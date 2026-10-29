@@ -5,6 +5,7 @@ const tabs = {
   papelera: renderPapelera, datos: renderDatos, vencimientos: renderVencimientos,
   examinador: () => window.renderExaminador(),
   jefatura: renderJefatura,
+  historial: renderHistorialPersonas,
 };
 /* ================= arranque ================= */
 async function init() {

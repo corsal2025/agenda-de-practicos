@@ -130,3 +130,23 @@ CREATE TABLE IF NOT EXISTS faltas (
   creado_en   TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_faltas_rut ON faltas(rut_limpio);
+
+-- Cambios de hora por persona: cada vez que alguien recibe una hora distinta (reagendar, cola, lista de espera).
+CREATE TABLE IF NOT EXISTS cambios_hora (
+  id                     INTEGER PRIMARY KEY,
+  rut_limpio             TEXT NOT NULL,   -- RUT sin formato o, sin RUT, el nombre en mayusculas
+  rut                    TEXT,
+  nombre                 TEXT,
+  clase                  TEXT,
+  fecha_origen           TEXT,
+  hora_origen            TEXT,
+  examinador_origen_id   INTEGER,
+  fecha_destino          TEXT,
+  hora_destino           TEXT,
+  examinador_destino_id  INTEGER,
+  motivo                 TEXT,
+  origen_flujo           TEXT,            -- reagendar | cola | lista_espera
+  actor                  TEXT,
+  creado_en              TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_cambios_hora_rut ON cambios_hora(rut_limpio);

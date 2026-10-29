@@ -5244,3 +5244,42 @@ html.sidebar-plegado #view {
   color: var(--tinta-2);
 }
 
+
+/* ===== Historial de personas (hp-) ===== */
+.hp-barra { gap: 1rem; flex-wrap: wrap; align-items: center; }
+.hp-buscar { max-width: 320px; min-width: 220px; padding: .4rem .8rem; border: 1px solid var(--linea); border-radius: var(--r-sm); background: var(--papel); color: var(--tinta); }
+.tabla-hp tr.hp-fila { cursor: pointer; }
+.tabla-hp tr.hp-fila:hover td { background: var(--azul-50); }
+.hp-rut { font-size: .78rem; }
+.hp-link { color: inherit; text-decoration: none; }
+.hp-link:hover { text-decoration: underline; }
+.hp-badge { display: inline-block; min-width: 1.6rem; padding: .1rem .5rem; border-radius: 999px; font-weight: 700; border: 1px solid transparent; }
+.hp-ambar { background: var(--alerta-bg); color: var(--alerta); border-color: var(--alerta-bd); }
+.hp-rojo { background: var(--error-bg); color: var(--error); border-color: var(--error-bd); }
+.hp-verde { background: var(--ok-bg); color: var(--ok); border-color: var(--ok-bd); }
+.hp-info { background: var(--info-bg); color: var(--info); }
+.modal.hp-ficha { width: min(760px, 96vw); max-width: 96vw; }
+.hp-ficha-cab { display: grid; gap: .3rem; margin-bottom: .8rem; font-size: .92rem; overflow-wrap: anywhere; }
+.hp-estados { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .2rem; }
+.hp-estado { padding: .2rem .6rem; border-radius: 999px; font-size: .82rem; font-weight: 600; background: var(--elev); border: 1px solid var(--linea); }
+.hp-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .6rem; margin-bottom: .8rem; }
+.hp-card { display: flex; flex-direction: column; gap: .15rem; padding: .6rem .8rem; border-radius: var(--r-sm); background: var(--elev); border: 1px solid var(--linea); }
+.hp-card b { font-size: 1.5rem; line-height: 1.1; }
+.hp-card span { font-size: .78rem; color: var(--tinta-2); }
+.hp-card.hp-ambar, .hp-card.hp-rojo, .hp-card.hp-verde { border-color: currentColor; }
+.hp-card.hp-ambar span, .hp-card.hp-rojo span, .hp-card.hp-verde span { color: inherit; }
+.hp-h { margin: .4rem 0; font-size: 1rem; }
+.hp-linea { list-style: none; margin: 0 0 .8rem; padding: 0 0 0 1.2rem; border-left: 2px solid var(--linea); }
+.hp-ev { position: relative; display: flex; gap: .6rem; padding: .35rem 0; font-size: .88rem; overflow-wrap: anywhere; }
+.hp-ev::before { content: ""; position: absolute; left: -1.62rem; top: .8rem; width: 10px; height: 10px; border-radius: 50%; background: var(--pizarra); border: 2px solid var(--papel); }
+.hp-ev.hp-t-falta::before, .hp-ev.hp-t-rep::before { background: var(--error); }
+.hp-ev.hp-t-cambio::before { background: var(--alerta); }
+.hp-ev.hp-t-apr::before { background: var(--ok); }
+.hp-ev-ico { font-size: 1.1rem; }
+.hp-sec { margin-top: .6rem; }
+.hp-sec summary { cursor: pointer; font-weight: 700; padding: .3rem 0; }
+.hp-sec summary:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+@media (max-width: 600px) {
+  .hp-buscar { max-width: none; width: 100%; }
+  .hp-cards { grid-template-columns: repeat(2, 1fr); }
+}

@@ -2,6 +2,7 @@
 const { db } = require('./db');
 const { hoyISO } = require('./fechas');
 const est = require('./estadisticas');
+const faltas = require('./faltas');
 const feriados = require('./feriados');
 const { HORA_D_A5 } = require('./config');
 const { sumarDias } = require('./fechas');
@@ -26,9 +27,11 @@ function kpisPeriodo(desde, hasta) {
   const bloqueadas = one(`SELECT COUNT(*) n FROM agenda a WHERE a.bloqueado = 1 AND a.fecha BETWEEN ? AND ?`).n;
   const disponiblesTot = totBloques - bloqueadas;
   const totOcupadas = one(`SELECT COUNT(*) n FROM agenda a WHERE ${OCUPADA} AND a.fecha BETWEEN ? AND ?`).n;
-  const conResultado = one(`SELECT COUNT(*) n FROM agenda a WHERE ${OCUPADA} AND a.resultado IS NOT NULL AND a.fecha BETWEEN ? AND ?`).n;
+  // Las inasistencias nuevas liberan la fila y solo quedan en faltas: se suman como citas con resultado.
+  const faltasNuevas = faltas.enRango(desde, hasta).length;
+  const conResultado = one(`SELECT COUNT(*) n FROM agenda a WHERE ${OCUPADA} AND a.resultado IS NOT NULL AND a.fecha BETWEEN ? AND ?`).n + faltasNuevas;
   const aprobados = one(`SELECT COUNT(*) n FROM agenda a WHERE ${OCUPADA} AND a.resultado = 'APROBADO' AND a.fecha BETWEEN ? AND ?`).n;
-  const noAsiste = one(`SELECT COUNT(*) n FROM agenda a WHERE ${OCUPADA} AND a.resultado IN ('NO ASISTIO','REPROBADO INASISTENCIA') AND a.fecha BETWEEN ? AND ?`).n;
+  const noAsiste = one(`SELECT COUNT(*) n FROM agenda a WHERE ${OCUPADA} AND a.resultado IN ('NO ASISTIO','REPROBADO INASISTENCIA') AND a.fecha BETWEEN ? AND ?`).n + faltasNuevas;
   const reagendadas = one(`SELECT COUNT(*) n FROM agenda a WHERE a.tipo_cita = 'REAGENDADO' AND a.fecha BETWEEN ? AND ?`).n;
   const confirmadas = one(`SELECT COUNT(*) n FROM agenda a WHERE a.confirmo_asistencia = 1 AND a.fecha BETWEEN ? AND ?`).n;
   const listaEspera = one(`SELECT COUNT(*) n FROM agenda a WHERE a.lista_espera = 'SI' AND a.fecha BETWEEN ? AND ?`).n;
@@ -124,6 +127,22 @@ function resumen(desde, hasta) {
     reprobacion: r.con_resultado ? +((r.reprobados + r.no_asistio) / r.con_resultado * 100).toFixed(1) : 0,
   }));
 
+  // Examinadores que solo tienen faltas nuevas en el rango tambien aparecen, con esas inasistencias.
+  const faltasRango = faltas.enRango(desde, hasta);
+  for (const f of faltasRango) {
+    const nombre = f.examinador || '(sin dato)';
+    let fila = porExamRes.find((r) => r.examinador === nombre);
+    if (!fila) {
+      fila = { examinador: nombre, aprobados: 0, reprobados: 0, no_asistio: 0, con_resultado: 0 };
+      porExamRes.push(fila);
+    }
+    fila.no_asistio += 1;
+    fila.con_resultado += 1;
+    fila.aprobacion = fila.con_resultado ? +(fila.aprobados / fila.con_resultado * 100).toFixed(1) : 0;
+    fila.reprobacion = +((fila.reprobados + fila.no_asistio) / fila.con_resultado * 100).toFixed(1);
+  }
+  porExamRes.sort((a, b) => a.examinador.localeCompare(b.examinador));
+
   const filas = filasPeriodo(desde, hasta);
   const prev = est.periodoAnterior(desde === '2000-01-01' ? null : desde, hasta === '2100-01-01' ? null : hasta);
   // Sin bloques en el periodo anterior no hay con que comparar (evita deltas contra cero).
@@ -147,7 +166,7 @@ function resumen(desde, hasta) {
     deltas: kAnt ? est.deltas(elegir(k), kAnt) : null,
     aprobacion_por_clase: est.aprobacionPorClase(filas),
     aprobacion_por_intento: est.aprobacionPorIntento(filas),
-    inasistencia_dia_hora: est.inasistenciaDiaHora(filas),
+    inasistencia_dia_hora: est.inasistenciaDiaHora(filas, faltasRango),
     tiempo_espera: est.tiempoEspera(filas),
     tramites_vencidos: est.tramitesVencidos(filas, hoy),
     capacidad: capacidad(hoy),

@@ -79,7 +79,12 @@ const ListaEspera = (() => {
   }
 
   const nFaltas = (n) => `${n} falta${n === 1 ? '' : 's'}`;
-  const TIP_NO_VINO = 'No asistió a su cita: tiene menos prioridad que quienes tienen menos faltas';
+  // Abre la ficha de historial de la persona (clave: RUT, o nombre si no tiene RUT).
+  const fichaLink = (p, html) => {
+    const clave = p.rut || nom(p.nombre);
+    return clave ? `<a href="#" class="hp-link" data-ficha-persona="${esc(clave)}" title="Ver historial de la persona">${html}</a>` : html;
+  };
+  const TIP_NO_VINO ='No asistió a su cita: tiene menos prioridad que quienes tienen menos faltas';
 
   const prioridadBadge = (p, prio) => {
     if (p.tipo === 'no_vino') {
@@ -148,7 +153,7 @@ const ListaEspera = (() => {
     $('#le-body').innerHTML = filas.length ? filas.map(({ p, prio }) => `
       <tr data-id="${esc(p.id)}" data-origen="${esc(p.origen)}">
         <td class="c">${prioridadBadge(p, prio)}</td>
-        <td><b>${esc(nom(p.nombre) || '—')}</b>${p.faltas > 0 ? ` <span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;font-size:.7rem;font-weight:700" title="${TIP_NO_VINO}">⚠ ${nFaltas(p.faltas)}</span>` : ''}</td>
+        <td>${fichaLink(p, `<b>${esc(nom(p.nombre) || '—')}</b>`)}${p.faltas > 0 ? ` ${fichaLink(p, `<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;font-size:.7rem;font-weight:700" title="${TIP_NO_VINO}">⚠ ${nFaltas(p.faltas)}</span>`)}` : ''}</td>
         <td class="num">${esc(p.rut || '—')}</td>
         <td class="c"><b>${esc(p.clase || '—')}</b></td>
         <td class="c">${origenBadge(p)}</td>
@@ -282,6 +287,8 @@ const ListaEspera = (() => {
     }
 
     $('#le-body').onclick = (e) => {
+      const ficha = e.target.closest('a[data-ficha-persona]');
+      if (ficha) { e.preventDefault(); abrirFichaPersona(ficha.dataset.fichaPersona); return; }
       const btn = e.target.closest('button[data-le]');
       if (!btn) return;
       const [origen, id] = btn.dataset.le.split(':');

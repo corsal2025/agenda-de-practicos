@@ -60,9 +60,10 @@ function diaSemana(iso) {
   return w < 5 ? w : null;
 }
 
-function inasistenciaDiaHora(rows) {
+// extras: inasistencias que ya no tienen fila con resultado (tabla faltas); cuentan como cita con inasistencia.
+function inasistenciaDiaHora(rows, extras = []) {
   const m = new Map();
-  for (const row of rows) {
+  for (const row of [...rows, ...extras.map((x) => ({ ...x, resultado: INASISTE[0] }))]) {
     if (!row.resultado || !row.fecha || !row.hora) continue;
     const dia = diaSemana(row.fecha);
     if (dia == null) continue;

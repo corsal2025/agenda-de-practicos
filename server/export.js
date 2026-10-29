@@ -3,6 +3,7 @@ const XLSX = require('xlsx');
 const { db } = require('./db');
 const { reporte } = require('./errores');
 const { hoyISO } = require('./fechas');
+const historialPersona = require('./historial-persona');
 
 const CABECERAS = [
   'FECHA', 'HORA', 'RUT', 'NOMBRE', 'CLASE', 'NUMERO DE CONTACTO', 'CORREO',
@@ -111,6 +112,35 @@ function generarXlsxOriginal() {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
+// Hojas de historial por persona (solo informativas: el importador las ignora).
+function hojaTabla(cabeceras, filasTabla) {
+  const ws = XLSX.utils.aoa_to_sheet([cabeceras, ...filasTabla]);
+  ws['!cols'] = cabeceras.map((c) => ({ wch: Math.max(c.length + 3, 14) }));
+  return ws;
+}
+
+function hojasHistorial() {
+  const personas = historialPersona.listar().map((p) => [
+    p.rut || '', p.nombre || '', p.faltas, p.cambios_hora, p.examenes, p.aprobados, p.reprobados,
+    p.ultima_falta || '', p.ultimo_cambio || '',
+  ]);
+  const faltasFilas = historialPersona.filasFaltas().map((f) => [
+    f.rut || '', f.nombre || '', f.clase || '', f.fecha, f.hora || '', f.examinador || '', f.actor || '', f.registrada_en || '',
+  ]);
+  const cambios = historialPersona.filasCambios().map((c) => [
+    c.rut || '', c.nombre || '', c.clase || '', c.fecha_origen || '', c.hora_origen || '', c.examinador_origen || '',
+    c.fecha_destino || '', c.hora_destino || '', c.examinador_destino || '', c.motivo || '', c.origen_flujo || '',
+    c.actor || '', c.creado_en || '',
+  ]);
+  return [
+    ['HISTORIAL PERSONAS', hojaTabla(['RUT', 'NOMBRE', 'FALTAS', 'CAMBIOS DE HORA', 'EXAMENES', 'APROBADOS', 'REPROBADOS',
+      'ULTIMA FALTA', 'ULTIMO CAMBIO'], personas)],
+    ['FALTAS', hojaTabla(['RUT', 'NOMBRE', 'CLASE', 'FECHA', 'HORA', 'EXAMINADOR', 'REGISTRADA POR', 'REGISTRADA EN'], faltasFilas)],
+    ['CAMBIOS DE HORA', hojaTabla(['RUT', 'NOMBRE', 'CLASE', 'FECHA ORIGEN', 'HORA ORIGEN', 'EXAMINADOR ORIGEN', 'FECHA DESTINO',
+      'HORA DESTINO', 'EXAMINADOR DESTINO', 'MOTIVO', 'FLUJO', 'REGISTRADO POR', 'REGISTRADO EN'], cambios)],
+  ];
+}
+
 // Exportar el 100% de las columnas de la tabla agenda en un solo archivo Excel plano y completo.
 function generarXlsxCompleto() {
   const wb = XLSX.utils.book_new();
@@ -173,6 +203,7 @@ function generarXlsxCompleto() {
   }
   XLSX.utils.book_append_sheet(wb, ws, 'AGENDA COMPLETA');
   XLSX.utils.book_append_sheet(wb, hojaErrores(), 'REPORTE DE ERRORES');
+  for (const [nombre, hoja] of hojasHistorial()) XLSX.utils.book_append_sheet(wb, hoja, nombre);
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 

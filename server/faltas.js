@@ -34,4 +34,16 @@ function mapaConteos() {
   return mapa;
 }
 
-module.exports = { clave, registrar, contarPorRut, mapaConteos };
+// Faltas de un rango de fechas (por fecha de la cita) que las estadisticas aun no ven en agenda:
+// las nuevas liberan su fila, asi que se excluyen las que conservan NO ASISTIO / REPROBADO INASISTENCIA.
+function enRango(desde, hasta) {
+  return db.prepare(`
+    SELECT f.fecha, f.hora, f.clase, f.examinador_id, e.nombre AS examinador
+    FROM faltas f LEFT JOIN examinadores e ON e.id = f.examinador_id
+    WHERE f.fecha BETWEEN ? AND ?
+      AND NOT EXISTS (SELECT 1 FROM agenda a WHERE a.id = f.agenda_id
+                      AND a.resultado IN ('NO ASISTIO', 'REPROBADO INASISTENCIA'))
+  `).all(desde, hasta);
+}
+
+module.exports = { clave, registrar, contarPorRut, mapaConteos, enRango };
