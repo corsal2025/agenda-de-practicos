@@ -67,7 +67,7 @@ async function renderErrores() {
   const pintar = (rep) => {
     const hoyStr = typeof hoy === 'function' ? hoy() : new Date().toISOString().slice(0, 10);
     const busq = (filtErr.q || '').trim().toLowerCase();
-    const rows = (rep.hallazgos || []).filter((x) => {
+    const filtrados = (rep.hallazgos || []).filter((x) => {
       if (x.fecha && x.fecha < hoyStr) return false;
       if (typeof pareceMarcador === 'function' && (pareceMarcador(x.rut) || pareceMarcador(x.nombre))) return false;
       if (filtErr.tipo && x.tipo !== filtErr.tipo) return false;
@@ -77,6 +77,18 @@ async function renderErrores() {
       }
       return true;
     });
+
+    // Agrupa por persona (RUT, o nombre si no hay): sus errores quedan juntos, cada uno en su fila.
+    // Los grupos conservan el orden del primer error de cada persona (severidad, fecha, hora).
+    const grupos = new Map();
+    for (const x of filtrados) {
+      const clave = String(x.rut || '').replace(/[^0-9kK]/g, '').toUpperCase()
+        || String(x.nombre || '').trim().toLowerCase()
+        || `id-${x.agenda_id}`;
+      if (!grupos.has(clave)) grupos.set(clave, []);
+      grupos.get(clave).push(x);
+    }
+    const rows = [...grupos.values()].flat();
 
     if (!rows.length) {
       $('#e-body').innerHTML = licoVacioFila(9, 'celebra', 'Todo en orden', 'Nada que mostrar: no hay errores coincidentes en este filtro.');
