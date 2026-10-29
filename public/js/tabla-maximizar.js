@@ -208,8 +208,11 @@
     // pantallas escaladas no es un entero, y los bordes colapsados lo corren una fraccion de pixel)
     if (!cab) return;
     const zoom = parseFloat(getComputedStyle(document.body).zoom) || 1;
-    const fin = cab.getBoundingClientRect().bottom - (contenedor.getBoundingClientRect().top + contenedor.clientTop);
-    const h = `${fin / zoom}px`;
+    // Solo la altura: el thead se va con el scroll (lo que queda pegado son sus th), asi que medir su posicion
+    // daba valores negativos al redibujar con la tabla desplazada y la barra lateral se salia del encabezado.
+    const alto = cab.getBoundingClientRect().height;
+    if (!(alto > 0)) return;
+    const h = `${alto / zoom}px`;
     contenedor.style.setProperty('--cab-alto', h);
     contenedor.style.setProperty('--thead-h', h);
   }
