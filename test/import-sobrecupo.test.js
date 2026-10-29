@@ -103,20 +103,18 @@ test('bloqueo y persona a la misma hora: la persona ocupa el horario y no genera
   assert.equal(filas[0].bloqueado, 0);
 });
 
-test('regla estricta: mismo RUT con dos examinadores DISTINTOS para la misma clase es RECHAZADO con error 400', () => {
+test('mismo RUT con dos examinadores DISTINTOS para la misma clase: se importa y se avisa para revisar a mano', () => {
   const p = crearXlsx([
     ['2026-09-04', '08:30', '19.999.999-K', 'RODRIGO CONFLICTO', 'B', '', '', 'NORMAL', '', '', '', '', '', '', 'DANIEL LAGOS', '', ''],
     ['2026-09-04', '09:00', '19.999.999-K', 'RODRIGO CONFLICTO', 'B', '', '', 'NORMAL', '', '', '', '', '', '', 'DOMINGO NAVARRO', '', ''],
   ]);
 
-  assert.throws(() => importar(p, { limpiar: true }), (err) => {
-    assert.equal(err.status, 400);
-    assert.match(err.message, /Conflicto de examinador/);
-    assert.match(err.message, /19\.999\.999-K/);
-    assert.match(err.message, /DANIEL LAGOS/);
-    assert.match(err.message, /DOMINGO NAVARRO/);
-    return true;
-  });
+  const r = importar(p, { limpiar: true });
+  assert.equal(r.conflictos_examinador.length, 1);
+  assert.match(r.conflictos_examinador[0], /19\.999\.999-K/);
+  assert.match(r.conflictos_examinador[0], /DANIEL LAGOS/);
+  assert.match(r.conflictos_examinador[0], /DOMINGO NAVARRO/);
+  assert.equal(r.ocupadas, 2, 'ambas filas se importan');
 
   fs.unlinkSync(p);
 });
@@ -144,4 +142,20 @@ test('mismo RUT con examinadores distintos para DISTINTA clase es PERMITIDO', ()
   assert.equal(filas[0].clase, 'B');
   assert.equal(filas[1].examinador, 'DOMINGO NAVARRO');
   assert.equal(filas[1].clase, 'C');
+});
+
+test('dos columnas de correo (CORREO y "correo electronico" vacia al final): se usa CORREO y no se pierden los correos', () => {
+  const cab = [...CAB_EXCEL_ORIGINAL, 'correo electronico', 'sms'];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([cab,
+    ['2026-09-08', '08:30', '33.333.333-3', 'JESUS PRUEBA', 'B', '912345678', 'jesus@ejemplo.cl', 'NORMAL', '', '', '', 'CAROLINA CUADRA', '', 'SI', 'DANIEL LAGOS', '', '', null, null],
+  ]), 'AGO-DIC');
+  const p = path.join(os.tmpdir(), `agenda-correo2-${Date.now()}.xlsx`);
+  XLSX.writeFile(wb, p);
+
+  importar(p, { limpiar: true });
+  fs.unlinkSync(p);
+
+  const f = db.prepare("SELECT correo FROM agenda WHERE rut = '33.333.333-3'").get();
+  assert.equal(f.correo, 'jesus@ejemplo.cl');
 });

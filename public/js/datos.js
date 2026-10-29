@@ -209,7 +209,8 @@ async function renderDatos() {
       const r = await api('/import', { method: 'POST', body: { hojas, limpiar: $('#im-limpiar').checked } });
       $('#im-res').innerHTML = `<div class="aviso">Listo. Leidas ${r.resumen.leidas}, citas ${r.resumen.ocupadas},
         bloques nuevos ${r.resumen.bloques_generados}, rango ${r.resumen.rango.map(fFecha).join(' a ')}.
-        ${r.resumen.fuera_de_rango ? `<br><b>${r.resumen.fuera_de_rango} fila(s) con fecha anterior a 2020 se descartaron</b> (probable error de digitación en el Excel).` : ''}</div>`;
+        ${r.resumen.fuera_de_rango ? `<br><b>${r.resumen.fuera_de_rango} fila(s) con fecha anterior a 2020 se descartaron</b> (probable error de digitación en el Excel).` : ''}</div>
+        ${(r.resumen.conflictos_examinador || []).length ? `<div class="aviso" style="margin-top:.6rem"><b>${r.resumen.conflictos_examinador.length} conflicto(s) de examinador para revisar a mano</b> (la misma persona figura con dos examinadores; ambas filas se importaron y aparecen en el Reporte de errores como duplicado del día):<ul style="margin:.4rem 0 0 1.1rem">${r.resumen.conflictos_examinador.slice(0, 50).map((c) => `<li>${esc(c)}</li>`).join('')}</ul>${r.resumen.conflictos_examinador.length > 50 ? `<p class="muted">… y ${r.resumen.conflictos_examinador.length - 50} más.</p>` : ''}</div>` : ''}`;
       META = await api('/meta');
       toast('Importacion completada');
     } catch (e) { $('#im-res').innerHTML = `<div class="aviso">${esc(e.message)}</div>`; }

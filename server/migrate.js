@@ -52,15 +52,23 @@ function detectarColumnas(filaEncabezado) {
   const normalizar = (s) => String(s || '').trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const encabezados = filaEncabezado.map(normalizar);
   const map = { ...COL };
+  // Si el archivo trae mas de una columna con "correo" (p. ej. CORREO y una "correo electronico" vacia al
+  // final), gana la cabecera exacta CORREO; sin ella, la primera que aparezca. Antes ganaba la ultima y
+  // los correos de la columna real se perdian al importar.
+  let correoFijado = false;
   encabezados.forEach((h, idx) => {
     if (COLUMNAS_EXACTAS[h]) { map[COLUMNAS_EXACTAS[h]] = idx; return; }
+    if (h.includes('CORREO') || h.includes('EMAIL')) {
+      if (h === 'CORREO' || !correoFijado) map.correo = idx;
+      correoFijado = true;
+      return;
+    }
     if (h.includes('FECHA') && !h.includes('TRAMITE') && !h.includes('INICIO')) map.fecha = idx;
     else if (h.includes('HORA') && !h.includes('INICIO')) map.hora = idx;
     else if (h === 'RUT') map.rut = idx;
     else if (h.includes('NOMBRE') && !h.includes('FUNCIONARIO')) map.nombre = idx;
     else if (h.includes('CLASE')) map.clase = idx;
     else if (h.includes('CONTACTO') || h.includes('TELEFONO')) map.contacto = idx;
-    else if (h.includes('CORREO') || h.includes('EMAIL')) map.correo = idx;
     else if (h.includes('TIPO') && h.includes('CITA')) map.tipo_cita = idx;
     else if (h.includes('MOTIVO') && h.includes('REAGEND')) map.motivo = idx;
     else if (h.includes('ESPERA')) map.lista_espera = idx;
@@ -255,6 +263,9 @@ function importar(fuente, { limpiar = false } = {}) {
   let leidas = 0;
   let saltadas = 0;
   let fueraDeRango = 0;
+  // Misma persona con dos examinadores para la misma licencia: no se rechaza el archivo, se avisa
+  // para revisarlo a mano (ambas filas se importan y el Reporte de errores las marca como duplicado del dia).
+  const conflictos = [];
 
   const hojasAProcesar = Object.keys(hojas).filter((h) => h !== 'CITAS DISPONIBLES' && esHojaMaestra(h));
   const listaHojas = hojasAProcesar.length > 0 ? hojasAProcesar : Object.keys(hojas).filter((h) => h !== 'CITAS DISPONIBLES');
@@ -281,11 +292,10 @@ function importar(fuente, { limpiar = false } = {}) {
           }
           for (const prev of previas) {
             if (prev.examinadorNom !== b.examinadorNom && compartenClase(prev.clase, b.clase)) {
-              throw errorImport(
-                `Conflicto de examinador: la persona "${b.nombre || b.rut}" (RUT ${b.rut}) ya está asignada el ${b.fecha} `
+              conflictos.push(
+                `La persona "${b.nombre || b.rut}" (RUT ${b.rut}) ya está asignada el ${b.fecha} `
                 + `con el examinador "${prev.examinadorNom}" (hoja "${prev._hoja}", fila ${prev._fila}) para la clase `
-                + `"${b.clase || 'indicada'}", y aparece con el examinador distinto "${b.examinadorNom}" (hoja "${hoja}", fila ${i + 1}). `
-                + `No se permite la misma persona con dos examinadores distintos para la misma licencia.`
+                + `"${b.clase || 'indicada'}", y aparece con el examinador distinto "${b.examinadorNom}" (hoja "${hoja}", fila ${i + 1}).`
               );
             }
           }
@@ -303,10 +313,10 @@ function importar(fuente, { limpiar = false } = {}) {
             `).all(b.fecha, rLimpio);
             for (const fDb of enDb) {
               if (fDb.examinadorNom !== b.examinadorNom && compartenClase(fDb.clase, b.clase)) {
-                throw errorImport(
-                  `Conflicto de examinador: la persona "${b.nombre || b.rut}" (RUT ${b.rut}) ya tiene una cita agendada en el sistema `
-                  + `el ${b.fecha} a las ${fDb.hora} con el examinador "${fDb.examinadorNom}" para la clase "${fDb.clase || 'indicada'}". `
-                  + `No se permite la misma persona con dos examinadores distintos para la misma licencia.`
+                conflictos.push(
+                  `La persona "${b.nombre || b.rut}" (RUT ${b.rut}) ya tiene una cita agendada en el sistema `
+                  + `el ${b.fecha} a las ${fDb.hora} con el examinador "${fDb.examinadorNom}" para la clase "${fDb.clase || 'indicada'}", `
+                  + `y el archivo la trae con "${b.examinadorNom}" (hoja "${hoja}", fila ${i + 1}).`
                 );
               }
             }
@@ -450,6 +460,7 @@ function importar(fuente, { limpiar = false } = {}) {
   const resumen = {
     leidas, saltadas, fuera_de_rango: fueraDeRango, ocupadas, rescatadas, bloques_generados: gen.creados, rango: [desde, hasta],
     pesadas_sincronizadas: sync.procesados,
+    conflictos_examinador: conflictos,
   };
   log(null, 'importar', JSON.stringify(resumen));
   return resumen;
