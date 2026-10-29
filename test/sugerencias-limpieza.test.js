@@ -83,7 +83,7 @@ test('esCompatible: D/A5 solo en 12:30; clases livianas en cualquier bloque', ()
   assert.equal(esCompatible({ hora: '12:30' }, { clase: 'B' }), true);
 });
 
-test('rankear: cola (mas antigua primero), luego lista de espera con la cita mas lejana, desempate por tramite', () => {
+test('rankear: tramite por vencer primero, luego cola (mas antigua), lista de espera con la cita mas lejana, desempate por tramite', () => {
   const r = rankear([
     { origen: 'lista_espera', id: 1, fecha: '2026-12-01', vigencia: { dias: 50 } },
     { origen: 'cola', id: 2, creado_en: '2026-10-05 10:00:00', vigencia: null },
@@ -91,7 +91,7 @@ test('rankear: cola (mas antigua primero), luego lista de espera con la cita mas
     { origen: 'cola', id: 4, creado_en: '2026-10-01 10:00:00', vigencia: null },
     { origen: 'lista_espera', id: 5, fecha: '2026-12-01', vigencia: { dias: 10 } },
   ]);
-  assert.deepEqual(r.map((c) => c.id), [4, 2, 3, 5, 1]);
+  assert.deepEqual(r.map((c) => c.id), [5, 4, 2, 3, 1]);
 });
 
 // ---------- GET /api/sugerencias-cupo/:id ----------

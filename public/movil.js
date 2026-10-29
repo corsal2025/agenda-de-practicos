@@ -83,9 +83,12 @@
       card.classList.toggle('mv-hecha', activos.length > 0);
       progreso(cont);
     };
+    if (!quitar && btn.dataset.r === 'NO ASISTIO' && !confirm(TEXTO_CONFIRMAR_NO_ASISTIO)) return;
     pintar(quitar ? [] : [btn]);
     try {
-      await marcarResultado(id, quitar ? null : btn.dataset.r);
+      const r = await marcarResultado(id, quitar ? null : btn.dataset.r);
+      if (avisarResultado(r)) { cargar(); return; }
+      if (r && r.lista_espera) return;
       toast(quitar ? 'Resultado borrado' : `Marcado: ${ETIQ[btn.dataset.r]}`);
     } catch (e) {
       pintar(antes);

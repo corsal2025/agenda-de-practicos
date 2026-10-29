@@ -9,6 +9,7 @@ const { vigenciaTramite, diasEntre } = require('./tramite');
 const { hoyISO, sumarDias } = require('./fechas');
 const pesada = require('./pesada');
 const rut = require('./rut');
+const faltas = require('./faltas');
 
 const MAX_CANDIDATOS = 15;
 
@@ -20,29 +21,49 @@ function esCompatible(cupo, candidato) {
   return !tienePesada(candidato.clase) || cupo.hora === HORA_D_A5;
 }
 
-// Orden: cola (mas antigua primero) > solicita cambio (cita mas cercana primero)
-// > lista de espera (cita mas lejana primero);
-// desempate final: tramite mas cerca de vencer.
+// Orden: (1) tramite por vencer (<= DIAS_POR_VENCER, mismo umbral que la pestana) primero;
+// (2) grupo: cola urgente (bloqueo municipal, sin tipo) > cambio (solicita cambio y cola 'no_vino'/'reprobo')
+// > lista de espera (cita mas lejana primero); (3) menos faltas ("No vino") primero; (4) desempate del
+// grupo (cambio: fecha de la cita o del origen mas cercana, luego la mas antigua) y, al final, tramite
+// mas cerca de vencer.
 const PRIORIDAD = { cola: 0, cambio: 1, lista_espera: 2 };
+const DIAS_POR_VENCER = 15;
+const grupo = (c) => (c.origen === 'cola' && (c.tipo === 'no_vino' || c.tipo === 'reprobo') ? PRIORIDAD.cambio : PRIORIDAD[c.origen] ?? 2);
+const fechaCita = (c) => String(c.fecha || c.origen_fecha || '');
 function rankear(candidatos) {
   const dias = (c) => (c.vigencia ? c.vigencia.dias : Infinity);
+  const porVencer = (c) => (dias(c) <= DIAS_POR_VENCER ? 0 : 1);
   return [...candidatos].sort((a, b) => {
-    const pa = PRIORIDAD[a.origen] ?? 2;
-    const pb = PRIORIDAD[b.origen] ?? 2;
+    if (porVencer(a) !== porVencer(b)) return porVencer(a) - porVencer(b);
+    const pa = grupo(a);
+    const pb = grupo(b);
     if (pa !== pb) return pa - pb;
+    const fa = a.faltas || 0;
+    const fb = b.faltas || 0;
+    if (fa !== fb) return fa - fb;
     if (pa === 0 && a.creado_en !== b.creado_en) return String(a.creado_en).localeCompare(String(b.creado_en));
-    if (pa === 1 && a.fecha !== b.fecha) return String(a.fecha).localeCompare(String(b.fecha));
+    if (pa === 1) {
+      if (fechaCita(a) !== fechaCita(b)) return fechaCita(a).localeCompare(fechaCita(b));
+      if (a.creado_en !== b.creado_en) return String(a.creado_en || '').localeCompare(String(b.creado_en || ''));
+    }
     if (pa === 2 && a.fecha !== b.fecha) return String(b.fecha).localeCompare(String(a.fecha));
     return dias(a) - dias(b);
   });
 }
+
+// Agrega faltas y tipo a cada persona (tipo 'no_vino' / 'reprobo' solo viene de la cola).
+const conFaltas = (personas) => {
+  const conteos = faltas.mapaConteos();
+  return personas.map((p) => ({ ...p, tipo: p.tipo || null, faltas: conteos.get(clavePersona(p)) || 0 }));
+};
 
 // Clave de persona: RUT normalizado o, sin RUT, el nombre en mayusculas.
 const clavePersona = (p) => rut.limpiar(p.rut) || String(p.nombre || '').toUpperCase().replace(/\s+/g, ' ').trim();
 
 function sugerir(cupo) {
   const ocupadosDia = new Set(db.prepare(
-    `SELECT rut, nombre FROM agenda WHERE fecha = ? AND (rut IS NOT NULL OR nombre IS NOT NULL)`
+    `SELECT rut, nombre FROM agenda WHERE fecha = ? AND (rut IS NOT NULL OR nombre IS NOT NULL)
+      AND COALESCE(resultado, '') NOT IN ('NO ASISTIO', 'REPROBADO INASISTENCIA')`
   ).all(cupo.fecha).map(clavePersona).filter(Boolean));
 
   const cola = db.prepare(`SELECT * FROM cola_reagendar WHERE estado = 'pendiente'`).all()
@@ -50,6 +71,7 @@ function sugerir(cupo) {
       origen: 'cola', id: c.id, rut: c.rut, nombre: c.nombre, clase: c.clase, correo: c.correo,
       contacto: c.contacto, creado_en: c.creado_en, motivo: c.motivo,
       origen_fecha: c.origen_fecha, origen_hora: c.origen_hora, fecha_inicio_tramite: c.fecha_inicio_tramite,
+      tipo: c.tipo,
     }));
   const lista = db.prepare(`
     SELECT a.*, e.nombre AS examinador FROM agenda a LEFT JOIN examinadores e ON e.id = a.examinador_id
@@ -65,7 +87,7 @@ function sugerir(cupo) {
     .map((a) => ({ ...desdeCita(a, hoyISO()), origen: 'cambio' }));
 
   const vistos = new Set();
-  const candidatos = [...cola, ...cambio, ...lista]
+  const candidatos = conFaltas([...cola, ...cambio, ...lista])
     .filter((c) => esCompatible(cupo, c))
     .filter((c) => {
       const k = clavePersona(c);
@@ -97,7 +119,7 @@ const ORIGENES = { reagendar: 'cola', cambio: 'cambio', lista_espera: 'lista_esp
 const desdeCola = (c, hoy) => ({
   origen: 'cola', id: c.id, rut: c.rut, nombre: c.nombre, clase: c.clase, correo: c.correo,
   contacto: c.contacto, creado_en: c.creado_en, motivo: c.motivo, origen_fecha: c.origen_fecha,
-  origen_hora: c.origen_hora, fecha_inicio_tramite: c.fecha_inicio_tramite,
+  origen_hora: c.origen_hora, fecha_inicio_tramite: c.fecha_inicio_tramite, tipo: c.tipo,
   dias_esperando: c.creado_en ? Math.max(0, diasEntre(String(c.creado_en).slice(0, 10), hoy)) : null,
 });
 const desdeCita = (a, hoy) => ({
@@ -127,7 +149,8 @@ function contexto(hoy) {
     ORDER BY a.fecha, a.hora, a.id`).all(hoy, hasta);
   const ocupadosPorDia = new Map();
   db.prepare(`SELECT fecha, rut, nombre FROM agenda WHERE fecha > ? AND fecha <= ?
-    AND ((rut IS NOT NULL AND rut != '') OR (nombre IS NOT NULL AND nombre != ''))`).all(hoy, hasta)
+    AND ((rut IS NOT NULL AND rut != '') OR (nombre IS NOT NULL AND nombre != ''))
+    AND COALESCE(resultado, '') NOT IN ('NO ASISTIO', 'REPROBADO INASISTENCIA')`).all(hoy, hasta)
     .forEach((r) => {
       if (!ocupadosPorDia.has(r.fecha)) ocupadosPorDia.set(r.fecha, new Set());
       ocupadosPorDia.get(r.fecha).add(clavePersona(r));
@@ -147,7 +170,7 @@ function listarEspera(hoy = hoyISO()) {
   const cambio = db.prepare(SQL_CAMBIO).all(hoy).map((a) => ({ ...desdeCita(a, hoy), origen: 'cambio' }));
   const lista = db.prepare(SQL_LISTA).all(hoy).map((a) => desdeCita(a, hoy));
   const ctx = contexto(hoy);
-  return rankear([...cola, ...cambio, ...lista].map((p) => ({ ...p, vigencia: vigenciaTramite(p, hoy) })))
+  return rankear(conFaltas([...cola, ...cambio, ...lista]).map((p) => ({ ...p, vigencia: vigenciaTramite(p, hoy) })))
     .map((p) => ({
       ...p,
       origen: p.origen === 'cola' ? 'reagendar' : p.origen,

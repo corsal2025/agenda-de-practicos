@@ -62,6 +62,8 @@ asegurarColumna('agenda', 'tipo_reagendamiento', 'tipo_reagendamiento TEXT');
 asegurarColumna('examinadores', 'eliminado', 'eliminado INTEGER NOT NULL DEFAULT 0');
 // Si habia examinadores previamente desactivados (como el duplicado ANGELO IBANI con activo = 0), marcarlos eliminado = 1
 db.exec("UPDATE examinadores SET eliminado = 1 WHERE activo = 0 AND (eliminado = 0 OR eliminado IS NULL)");
+// Origen de la entrada en la cola: 'no_vino' si la persona no asistio a su examen.
+asegurarColumna('cola_reagendar', 'tipo', 'tipo TEXT');
 asegurarColumna('movimientos', 'actor', 'actor TEXT');
 asegurarColumna('funcionarios', 'usuario', 'usuario TEXT');
 asegurarColumna('funcionarios', 'clave_hash', 'clave_hash TEXT');

@@ -113,3 +113,20 @@ CREATE TABLE IF NOT EXISTS cola_reagendar (
   resuelto_en          TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_cola_reagendar_estado ON cola_reagendar(estado);
+
+-- Inasistencias ("No vino") por persona. Tabla propia porque liberar borra el resultado de la cita.
+CREATE TABLE IF NOT EXISTS faltas (
+  id          INTEGER PRIMARY KEY,
+  rut_limpio  TEXT NOT NULL,   -- RUT sin formato o, sin RUT, el nombre en mayusculas
+  rut         TEXT,
+  nombre      TEXT,
+  clase       TEXT,
+  fecha       TEXT NOT NULL,
+  hora        TEXT,
+  examinador_id INTEGER,
+  agenda_id   INTEGER,
+  resultado   TEXT,
+  actor       TEXT,
+  creado_en   TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_faltas_rut ON faltas(rut_limpio);

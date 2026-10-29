@@ -92,7 +92,19 @@ function pintarGrilla(cont, filasOriginales, fecha) {
 // Marca (o borra, con resultado=null) el resultado de una cita preservando
 // el resto de sus datos. Lo usa la grilla.
 async function marcarResultado(id, resultado) {
-  await api(`/agenda/${id}/resultado`, { method: 'POST', body: { resultado } });
+  return api(`/agenda/${id}/resultado`, { method: 'POST', body: { resultado } });
+}
+const TEXTO_CONFIRMAR_NO_ASISTIO = 'Si la cita es de hoy o anterior, se anota la falta, el cupo queda libre y la persona pasa a la lista de espera con menor prioridad.\n\n¿Marcar "No asistió"?';
+// Avisa lo que hizo el servidor con el resultado; devuelve true si el cupo quedo libre (la vista debe refrescarse).
+function avisarResultado(r) {
+  if (!r || (!r.liberada && !r.lista_espera)) return false;
+  toast(r.liberada
+    ? `No asistió · falta registrada (${r.faltas} en total) · cupo liberado · pasa a lista de espera con menor prioridad`
+    : 'Reprobó · pasa a lista de espera para volver a rendir', 'ok');
+  cacheGet.delete('/errores');
+  cacheGet.delete('/lista-espera');
+  actualizarBadgeEspera();
+  return Boolean(r.liberada);
 }
 
 const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -425,6 +437,12 @@ function pintarTablaAgenda(cont, filasOriginales, fecha, exs) {
       const tipoSel = normalizarTipoCita(b.tipo_cita);
       const esPrioridad = tipoSel === 'REAGENDAMIENTO POR NOSOTROS';
 
+      // "No vino" solo aplica a citas de hoy o pasadas (el servidor rechaza las futuras)
+      const btnNoVino = b.fecha <= hoy() ? `
+              <button type="button" class="btn-tabla-novino" data-id="${b.id}" data-desc="${esc(nom(b.nombre) || b.rut || 'la persona')}" data-cita="${esc(fFecha(b.fecha))} ${esc(b.hora)}" title="No vino: registrar falta y pasar a lista de espera" aria-label="No vino: registrar falta y pasar a lista de espera">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5"/><path d="M17 8l5 5M22 8l-5 5"/></svg>
+              </button>` : '';
+
       html += `
         <tr class="fila-agenda-tabla fila-ocupada ${resCls}${claseDia}${claseHora}" data-id="${b.id}" data-tipo="ocupada" data-examinador="${b.examinador_id}" data-fecha="${esc(b.fecha)}">${celdaFecha}
           <td class="td-hora es-rango">
@@ -517,6 +535,7 @@ function pintarTablaAgenda(cont, filasOriginales, fecha, exs) {
               <button type="button" class="btn-tabla-reagendar" data-id="${b.id}" title="Derivar directamente a Reagendar" aria-label="Derivar directamente a Reagendar">
                 <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
               </button>
+              ${btnNoVino}
               <button type="button" class="btn-tabla-persona" data-id="${b.id}" title="Agregar otra persona a esta hora" aria-label="Agregar otra persona a esta hora">
                 <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5"/><path d="M19 8v6M16 11h6"/></svg>
               </button>
@@ -855,6 +874,7 @@ function pintarTablaAgenda(cont, filasOriginales, fecha, exs) {
       const tr = el.closest('tr');
       const id = Number(box.dataset.id);
       const quitar = el.classList.contains('on');
+      if (!quitar && el.dataset.r === 'NO ASISTIO' && !confirm(TEXTO_CONFIRMAR_NO_ASISTIO)) return;
       const antes = { on: [...box.querySelectorAll('.sr.on')], cls: tr.className };
       box.querySelectorAll('.sr').forEach((s) => s.classList.remove('on'));
       tr.classList.remove('res-aprob', 'res-reprob');
@@ -863,9 +883,13 @@ function pintarTablaAgenda(cont, filasOriginales, fecha, exs) {
         tr.classList.add(el.dataset.r === 'APROBADO' ? 'res-aprob' : 'res-reprob');
       }
       try {
-        await marcarResultado(id, quitar ? null : el.dataset.r);
+        const r = await marcarResultado(id, quitar ? null : el.dataset.r);
         if (!quitar && el.dataset.r === 'APROBADO') licoConfeti(el);
+        if (avisarResultado(r)) { if (window.renderAgenda) renderAgenda(); return; }
+        if (r && r.lista_espera) return;
         toast(quitar ? 'Resultado borrado' : `Marcado: ${el.dataset.r === 'NO ASISTIO' ? 'No asistió' : el.dataset.r === 'APROBADO' ? 'Aprobó' : 'Reprobó'}`);
+        cacheGet.delete('/lista-espera'); // cambiar un REPROBADO retira su entrada de la lista de espera
+        actualizarBadgeEspera();
       } catch (e) {
         box.querySelectorAll('.sr').forEach((s) => s.classList.remove('on'));
         antes.on.forEach((s) => s.classList.add('on'));
@@ -999,6 +1023,25 @@ function pintarTablaAgenda(cont, filasOriginales, fecha, exs) {
         AlmacenSeguro.sesion.guardar('le_destacado', id);
         actualizarBadgeEspera();
         irA('espera');
+      } catch (e) { toast(e.message, 'err'); }
+    };
+  });
+
+  // 7b. Botón "No vino": anota la falta, libera el cupo y deriva a la lista de espera
+  cont.querySelectorAll('.btn-tabla-novino').forEach((btn) => {
+    btn.onclick = async (ev) => {
+      ev.stopPropagation();
+      const id = Number(btn.dataset.id);
+      if (!confirm(`¿Registrar que ${btn.dataset.desc} no vino el ${btn.dataset.cita}?
+
+Se anota la falta, el cupo queda libre y pasa a la lista de espera con menor prioridad según sus faltas.`)) return;
+      try {
+        const r = await api(`/agenda/${id}/no-vino`, { method: 'POST' });
+        toast(`Falta registrada · ${r.faltas} falta(s) en total · cupo liberado`, 'ok');
+        cacheGet.delete('/errores');
+        cacheGet.delete('/lista-espera');
+        actualizarBadgeEspera();
+        if (window.renderAgenda) renderAgenda();
       } catch (e) { toast(e.message, 'err'); }
     };
   });

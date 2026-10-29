@@ -4478,6 +4478,33 @@ input.tabla-busc-input:focus,
   color: var(--tinta-2);
 }
 
+.btn-tabla-novino {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid #f87171;
+  background: #fef2f2;
+  color: #b91c1c;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.btn-tabla-novino:hover {
+  border-color: #dc2626;
+  background: #fee2e2;
+}
+
+:root[data-tema="oscuro"] .btn-tabla-novino {
+  background: var(--elev);
+  border-color: var(--linea);
+  color: #fca5a5;
+}
+
 .btn-tabla-persona {
   display: inline-flex;
   align-items: center;
@@ -5190,6 +5217,7 @@ html.sidebar-plegado #view {
 
 #view #tabla-agenda-main .btn-tabla-liberar,
 #view #tabla-agenda-main .btn-tabla-reagendar,
+#view #tabla-agenda-main .btn-tabla-novino,
 #view #tabla-agenda-main .btn-tabla-persona {
   width: 30px;
   height: 30px;

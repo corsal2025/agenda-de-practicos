@@ -11,7 +11,7 @@ const SugerenciasCupo = (() => {
     return `${v.dias} día(s)`;
   };
   const origenTxt = (c) => (c.origen === 'cola'
-    ? `<span class="badge reag">Cola</span><div class="muted" style="font-size:.78rem">Desde ${esc(fFecha(c.origen_fecha))} ${esc(c.origen_hora || '')}</div>`
+    ? `<span class="badge reag">${c.tipo === 'reprobo' ? 'Reprobó' : c.tipo === 'no_vino' ? 'No vino' : 'Cola'}</span><div class="muted" style="font-size:.78rem">Desde ${esc(fFecha(c.origen_fecha))} ${esc(c.origen_hora || '')}</div>`
     : `<span class="badge ${c.origen === 'cambio' ? 'reag' : 'intento-1'}">${c.origen === 'cambio' ? 'Solicita cambio' : 'Lista de espera'}</span><div class="muted" style="font-size:.78rem">Hoy: ${esc(fFecha(c.fecha))} ${esc(c.hora || '')}</div>`);
 
   async function asignar(cupo, c) {
@@ -35,7 +35,7 @@ const SugerenciasCupo = (() => {
     const cuerpo = `
       <p style="margin-top:0">Cupo libre: <b>${esc(fFecha(cupo.fecha))} ${esc(cupo.hora)}</b>${cupo.examinador ? ` · ${esc(cupo.examinador)}` : ''}</p>
       ${(avisos || []).map((a) => `<p class="aviso-sug">${esc(a)}</p>`).join('')}
-      <p class="muted" style="font-size:.82rem">Prioridad: cola de reagendar (más antigua primero), luego quienes solicitan cambio (cita más cercana primero), luego lista de espera (cita más lejana primero); desempata el trámite más cerca de vencer. Ya se filtran la regla D/A5 y a quien tiene cita ese día.</p>
+      <p class="muted" style="font-size:.82rem">Prioridad: 1° trámite por vencer (15 días o menos), 2° origen (cola urgente por bloqueo, luego solicitudes de cambio junto a quienes no vinieron o reprobaron, luego lista de espera), 3° menos faltas primero y 4° desempates (cola más antigua, cita más cercana o más lejana según el origen). Ya se filtran la regla D/A5 y a quien tiene cita ese día.</p>
       <div class="tabla-scroll"><table><thead><tr><th class="c">#</th><th>Origen</th><th>Postulante</th><th class="c">Clase</th><th class="c">Trámite vence en</th><th></th></tr></thead>
       <tbody>${filas || '<tr><td colspan="6" class="muted">No hay candidatos compatibles para este cupo.</td></tr>'}</tbody></table></div>`;
     const ov = modal('Sugerencias para el cupo', cuerpo, '<button class="btn sec" id="sug-cerrar">Cerrar</button>');
@@ -78,7 +78,16 @@ const ListaEspera = (() => {
     } catch (_) { pintarBadge('badge-espera', 0); return null; }
   }
 
+  const nFaltas = (n) => `${n} falta${n === 1 ? '' : 's'}`;
+  const TIP_NO_VINO = 'No asistió a su cita: tiene menos prioridad que quienes tienen menos faltas';
+
   const prioridadBadge = (p, prio) => {
+    if (p.tipo === 'no_vino') {
+      return `<span class="badge-prio badge-prio-alta" style="background:#fef3c7;color:#92400e;border-color:#fcd34d" title="${TIP_NO_VINO}">#${prio} · 🚫 NO VINO</span>`;
+    }
+    if (p.tipo === 'reprobo') {
+      return `<span class="badge-prio badge-prio-alta" title="Reprobó su examen: compite con las solicitudes de cambio">#${prio} · 📝 REPROBÓ</span>`;
+    }
     if (p.origen === 'reagendar') {
       return `<span class="badge-prio badge-prio-urgente" title="Máxima prioridad: Sin cupo por bloqueo municipal">#${prio} · 🚨 URGENTE</span>`;
     }
@@ -89,6 +98,12 @@ const ListaEspera = (() => {
   };
 
   const origenBadge = (p) => {
+    if (p.tipo === 'no_vino') {
+      return `<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;font-weight:700" title="${TIP_NO_VINO}">🚫 No vino · ${nFaltas(p.faltas || 1)}</span><div class="muted" style="font-size:.74rem;margin-top:2px">Menor prioridad por faltas</div>`;
+    }
+    if (p.tipo === 'reprobo') {
+      return `<span class="badge" style="background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;font-weight:700">📝 Reprobó · vuelve a rendir</span><div class="muted" style="font-size:.74rem;margin-top:2px">${p.faltas > 0 ? `Reprobó · ${nFaltas(p.faltas)}` : 'Reprobó'}</div>`;
+    }
     if (p.origen === 'reagendar') {
       return `<span class="badge" style="background:#fee2e2;color:#b91c1c;border:1px solid #f87171;font-weight:700">🚨 Por Reagendar</span><div class="muted" style="font-size:.74rem;margin-top:2px">Bloqueo municipal</div>`;
     }
@@ -133,7 +148,7 @@ const ListaEspera = (() => {
     $('#le-body').innerHTML = filas.length ? filas.map(({ p, prio }) => `
       <tr data-id="${esc(p.id)}" data-origen="${esc(p.origen)}">
         <td class="c">${prioridadBadge(p, prio)}</td>
-        <td><b>${esc(nom(p.nombre) || '—')}</b></td>
+        <td><b>${esc(nom(p.nombre) || '—')}</b>${p.faltas > 0 ? ` <span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;font-size:.7rem;font-weight:700" title="${TIP_NO_VINO}">⚠ ${nFaltas(p.faltas)}</span>` : ''}</td>
         <td class="num">${esc(p.rut || '—')}</td>
         <td class="c"><b>${esc(p.clase || '—')}</b></td>
         <td class="c">${origenBadge(p)}</td>
@@ -208,7 +223,7 @@ const ListaEspera = (() => {
         <div class="fila" style="align-items:center;flex-wrap:wrap;gap:8px">
           <div style="flex:1">
             <h2 style="margin:0">Lista de espera unificada</h2>
-            <p class="muted" style="margin:4px 0 0;font-size:13px">Ordenada por prioridad estricta: <b>1° Urgentes</b> por bloqueo municipal (sin cupo), <b>2° Solicitudes de cambio</b> / reagendamiento, y <b>3° Adelanto de fecha</b>. Desempata la fecha de vencimiento del trámite.</p>
+            <p class="muted" style="margin:4px 0 0;font-size:13px">Ordenada por prioridad: <b>1° Trámite por vencer</b> (15 días o menos), <b>2° Origen</b> (urgentes por bloqueo municipal; solicitudes de cambio junto a quienes no vinieron o reprobaron; adelanto de fecha), <b>3° Menos faltas primero</b> y <b>4° Desempates</b> por fecha más cercana.</p>
           </div>
           <span class="pastilla" id="le-total" style="font-weight:700">Cargando...</span>
         </div>

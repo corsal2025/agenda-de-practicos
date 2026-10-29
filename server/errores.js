@@ -10,6 +10,8 @@ const { HORAS } = require('./config');
 const { CORREO_FORMATO } = require('./validar');
 
 const CORREO_RE = CORREO_FORMATO;
+// Resultados de quien no asistio: no cuentan para los duplicados.
+const RESULTADOS_INASISTENCIA = ['NO ASISTIO', 'REPROBADO INASISTENCIA'];
 // Bloques que ocupa una clase pesada agendada a las 12:30 (13:00 y 13:30).
 const HORAS_TRAS_PESADA = HORAS.slice(HORAS.indexOf(HORA_D_A5) + 1);
 
@@ -128,8 +130,9 @@ function reporte(fechaDesde) {
         mensaje: `Pendiente de reagendar${f.pendiente_nota ? ': ' + f.pendiente_nota : ''}` });
     }
 
-    // acumular indices (solo citas ocupadas con RUT valido de contribuyentes)
-    if (ocupada && f.rut && !rut.pareceMarcador(f.rut) && rut.esValido(f.rut)) {
+    // acumular indices (solo citas ocupadas con RUT valido de contribuyentes); quien no asistio
+    // ya no ocupa el cupo, asi que no cuenta como duplicado
+    if (ocupada && !RESULTADOS_INASISTENCIA.includes(f.resultado) && f.rut && !rut.pareceMarcador(f.rut) && rut.esValido(f.rut)) {
       const k = rut.limpiar(f.rut);
       if (f.fecha >= hoy) {
         if (!futurasPorRut.has(k)) futurasPorRut.set(k, []);

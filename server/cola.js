@@ -2,19 +2,19 @@
 const { db } = require('./db');
 const { ahoraTS } = require('./fechas');
 
-function encolar(bloque, motivo, actor) {
+function encolar(bloque, motivo, actor, tipo) {
   const ts = ahoraTS();
   return db.prepare(`
     INSERT INTO cola_reagendar (rut, nombre, clase, contacto, correo, intento, lista_espera,
       funcionario_id, fecha_inicio_tramite, comentarios, origen_agenda_id, origen_fecha,
-      origen_hora, origen_examinador_id, motivo, creado_por, creado_en)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      origen_hora, origen_examinador_id, motivo, creado_por, creado_en, tipo)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     bloque.rut || null, bloque.nombre || null, bloque.clase || null, bloque.contacto || null,
     bloque.correo || null, bloque.intento || null, bloque.lista_espera || null,
     bloque.funcionario_id || null, bloque.fecha_inicio_tramite || null, bloque.comentarios || null,
     bloque.id, bloque.fecha, bloque.hora, bloque.examinador_id,
-    motivo || 'Examinador no disponible', actor || null, ts
+    motivo || 'Examinador no disponible', actor || null, ts, tipo || null
   );
 }
 

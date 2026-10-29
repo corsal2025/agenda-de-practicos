@@ -98,12 +98,14 @@ async function renderErrores() {
     $('#e-body').innerHTML = rows.slice(0, 600).map((x) => {
       let acciones = '';
       if (x.agenda_id) {
+        const btnNoVino = x.fecha <= hoy() ? `
+              <button class="btn chico peligro btn-err-novino" data-id="${x.agenda_id}" data-desc="${esc(x.nombre || x.rut || 'la persona')}" data-cita="${esc(fFecha(x.fecha))} ${esc(x.hora)}" title="No vino: registrar falta y pasar a lista de espera">🚫 No vino</button>` : '';
         if (x.tipo === 'DUPLICADO_DIA' || x.tipo === 'DUPLICADO_FUTURO') {
           acciones = `
             <div class="acciones-error-wrap">
               <button class="btn chico peligro btn-err-liberar" data-id="${x.agenda_id}" data-desc="${esc(x.nombre || x.rut || 'cita')} (${esc(fFecha(x.fecha))} ${esc(x.hora)})" title="Liberar este cupo duplicado de inmediato">🗑️ Liberar</button>
               <button class="btn chico sec btn-err-editar" data-id="${x.agenda_id}" title="Editar cita en esta misma planilla">✏️ Editar</button>
-              <button class="btn chico sec btn-err-espera" data-id="${x.agenda_id}" data-desc="${esc(x.nombre || x.rut || 'cita')}" title="Pasar a lista de espera con prioridad">🔄 Espera</button>
+              <button class="btn chico sec btn-err-espera" data-id="${x.agenda_id}" data-desc="${esc(x.nombre || x.rut || 'cita')}" title="Pasar a lista de espera con prioridad">🔄 Espera</button>${btnNoVino}
             </div>`;
         } else if (x.tipo === 'SIN_RESULTADO') {
           acciones = `
@@ -111,14 +113,14 @@ async function renderErrores() {
               <button class="btn chico btn-err-res" style="background:var(--ok);color:#fff" data-id="${x.agenda_id}" data-res="APROBADO" title="Registrar aprobado">✓ Aprobó</button>
               <button class="btn chico btn-err-res" style="background:var(--error);color:#fff" data-id="${x.agenda_id}" data-res="REPROBADO" title="Registrar reprobado">✗ Reprobó</button>
               <button class="btn chico btn-err-res sec" data-id="${x.agenda_id}" data-res="NO ASISTIO" title="Registrar inasistencia">🚫 No asistió</button>
-              <button class="btn chico sec btn-err-editar" data-id="${x.agenda_id}" title="Editar en planilla">✏️</button>
+              <button class="btn chico sec btn-err-editar" data-id="${x.agenda_id}" title="Editar en planilla">✏️</button>${btnNoVino}
             </div>`;
         } else {
           acciones = `
             <div class="acciones-error-wrap">
               <button class="btn chico btn-err-editar" data-id="${x.agenda_id}" title="Editar en esta misma planilla">✏️ Editar</button>
               <button class="btn chico peligro btn-err-liberar" data-id="${x.agenda_id}" data-desc="${esc(x.nombre || x.rut || 'cita')} (${esc(fFecha(x.fecha))} ${esc(x.hora)})" title="Liberar este cupo">🗑️ Liberar</button>
-              <button class="btn chico sec btn-err-espera" data-id="${x.agenda_id}" data-desc="${esc(x.nombre || x.rut || 'cita')}" title="Pasar a lista de espera">🔄 Espera</button>
+              <button class="btn chico sec btn-err-espera" data-id="${x.agenda_id}" data-desc="${esc(x.nombre || x.rut || 'cita')}" title="Pasar a lista de espera">🔄 Espera</button>${btnNoVino}
             </div>`;
         }
       }
@@ -162,8 +164,27 @@ async function renderErrores() {
         if (mot === null) return;
         try {
           await api(`/agenda/${id}/reagendar`, { method: 'POST', body: { motivo: mot.trim() || 'Reagendamiento desde reporte de errores' } });
-          toast('Candidato derivado a Lista de Espera con prioridad · Horario liberado', 'ok');
+          toast('Marcado como pendiente de reagendar', 'ok');
           cacheGet.delete('/errores');
+          cargar();
+        } catch (e) {
+          toast(e.message, 'err');
+        }
+      };
+    });
+
+    // Wire up: No vino
+    $('#e-body').querySelectorAll('.btn-err-novino').forEach((btn) => {
+      btn.onclick = async () => {
+        const id = Number(btn.dataset.id);
+        if (!confirm(`¿Registrar que ${btn.dataset.desc} no vino el ${btn.dataset.cita}?
+
+Se anota la falta, el cupo queda libre y pasa a la lista de espera con menor prioridad según sus faltas.`)) return;
+        try {
+          const r = await api(`/agenda/${id}/no-vino`, { method: 'POST' });
+          toast(`Falta registrada · ${r.faltas} falta(s) en total · cupo liberado`, 'ok');
+          cacheGet.delete('/errores');
+          cacheGet.delete('/lista-espera');
           cargar();
         } catch (e) {
           toast(e.message, 'err');
@@ -322,7 +343,7 @@ async function renderErrores() {
           if (mot === null) return;
           try {
             await api(`/agenda/${id}/reagendar`, { method: 'POST', body: { motivo: mot.trim() || 'Reagendamiento desde reporte de errores' } });
-            toast('Candidato derivado a Lista de Espera con prioridad · Horario liberado', 'ok');
+            toast('Marcado como pendiente de reagendar', 'ok');
             cacheGet.delete('/errores');
             cargar();
           } catch (e) {

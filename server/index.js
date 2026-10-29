@@ -20,6 +20,7 @@ const feriados = require('./feriados');
 const validar = require('./validar');
 const papelera = require('./papelera');
 const cola = require('./cola');
+const faltas = require('./faltas');
 const bloqueo = require('./bloqueo');
 const pesada = require('./pesada');
 const correo = require('./correo');
@@ -806,18 +807,18 @@ function limpiarSobrecuposVacios() {
   });
 }
 
-app.post('/api/agenda/:id/liberar', wrap((req, res) => {
-  const id = Number(req.params.id);
-  const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
-  if (!bloque) throw bad('Bloque no encontrado', 404);
-  const actor = actorDe(req);
-  const motivo = (req.body && req.body.motivo) || 'Examinador no disponible';
+// Libera el bloque: guarda en papelera, encola a la persona (salvo opciones.encolar === false),
+// borra o limpia la fila segun el cupo y reajusta clases pesadas y sobrecupos vacios.
+function liberarBloque(bloque, actor, motivo, opciones = {}) {
+  const id = bloque.id;
   const teniaPersona = Boolean(bloque.rut || bloque.nombre);
+  const encolar = opciones.encolar !== false;
+  const motivoPapelera = opciones.motivoPapelera || 'liberar';
 
   let eliminado = false;
   tx(() => {
-    if (teniaPersona) cola.encolar(bloque, motivo, actor);
-    if (teniaPersona || bloque.bloqueado) papelera.guardar(bloque, 'liberar', actor);
+    if (teniaPersona && encolar) cola.encolar(bloque, motivo, actor);
+    if (teniaPersona || bloque.bloqueado) papelera.guardar(bloque, motivoPapelera, actor);
 
     // Contar cuantos bloques existen en total para esa fecha, hora y examinador
     const totalEnHora = db.prepare(
@@ -844,8 +845,46 @@ app.post('/api/agenda/:id/liberar', wrap((req, res) => {
     }
     limpiarSobrecuposVacios();
   });
+  return { teniaPersona, eliminado };
+}
+
+app.post('/api/agenda/:id/liberar', wrap((req, res) => {
+  const id = Number(req.params.id);
+  const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
+  if (!bloque) throw bad('Bloque no encontrado', 404);
+  const motivo = (req.body && req.body.motivo) || 'Examinador no disponible';
+  const { teniaPersona, eliminado } = liberarBloque(bloque, actorDe(req), motivo);
   logReq(req, id, 'liberar', `${bloque.fecha} ${bloque.hora} ${bloque.nombre || bloque.bloqueo_motivo || ''}`);
   res.json({ ok: true, encolado: teniaPersona, eliminado });
+}));
+
+// "No vino": anota la falta por RUT, libera el cupo y deja a la persona en la lista de espera
+// marcada como 'no vino'. Si ya esperaba en la cola no se duplica.
+const yaEsperando = (bloque) => {
+  const clave = faltas.clave(bloque);
+  return db.prepare(`SELECT rut, nombre FROM cola_reagendar WHERE estado = 'pendiente'`).all()
+    .some((c) => faltas.clave(c) === clave);
+};
+
+// Flujo "No vino": falta por RUT, cupo liberado y persona en la cola (sin duplicar). Devuelve el total de faltas.
+function registrarNoVino(bloque, actor) {
+  return tx(() => {
+    faltas.registrar(bloque, actor);
+    if (!yaEsperando(bloque)) cola.encolar(bloque, 'NO VINO A SU EXAMEN', actor, 'no_vino');
+    liberarBloque(bloque, actor, 'NO VINO A SU EXAMEN', { encolar: false, motivoPapelera: 'no_vino' });
+    return faltas.contarPorRut(faltas.clave(bloque));
+  });
+}
+
+app.post('/api/agenda/:id/no-vino', wrap((req, res) => {
+  const id = Number(req.params.id);
+  const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
+  if (!bloque) throw bad('Bloque no encontrado', 404);
+  if (!(bloque.rut || bloque.nombre)) throw bad('El bloque no tiene una cita.');
+  if (bloque.fecha > hoyISO()) throw bad('Solo se puede marcar "No vino" en citas de hoy o anteriores.');
+  const total = registrarNoVino(bloque, actorDe(req));
+  logReq(req, id, 'no_vino', `${bloque.fecha} ${bloque.hora} ${bloque.nombre || bloque.rut || ''}`);
+  res.json({ ok: true, faltas: total });
 }));
 
 // ---------- VARIAS PERSONAS EN LA MISMA HORA ----------
@@ -1166,11 +1205,30 @@ app.post('/api/agenda/:id/resultado', wrap((req, res) => {
   const resultado = (req.body && req.body.resultado) || null;
   const cats = catalogo('resultado');
   if (resultado && !cats.includes(resultado)) throw bad(`Resultado no valido: ${resultado}`);
-  const r = db.prepare(`UPDATE agenda SET resultado = ?, actualizado_en = datetime('now','localtime')
-    WHERE id = ? AND (rut IS NOT NULL OR nombre IS NOT NULL) AND bloqueado = 0`).run(resultado, id);
-  if (!r.changes) throw bad('El bloque no tiene una cita.', 404);
+  const bloque = db.prepare('SELECT * FROM agenda WHERE id = ?').get(id);
+  if (!bloque || bloque.bloqueado || !(bloque.rut || bloque.nombre)) throw bad('El bloque no tiene una cita.', 404);
+  const actor = actorDe(req);
+
+  // NO ASISTIO de hoy o anterior: mismo flujo que "No vino" (libera el cupo y suma la falta).
+  if (resultado === 'NO ASISTIO' && bloque.fecha <= hoyISO()) {
+    const total = registrarNoVino(bloque, actor);
+    logReq(req, id, 'no_vino', `${bloque.fecha} ${bloque.hora} ${bloque.nombre || bloque.rut || ''}`);
+    return res.json({ ok: true, faltas: total, liberada: true });
+  }
+
+  // REPROBADO: la fila conserva el resultado y la persona queda esperando para volver a rendir.
+  // Cambiar a otro valor retira la entrada 'reprobo' que creo esta cita.
+  const reprobo = resultado === 'REPROBADO';
+  tx(() => {
+    db.prepare(`UPDATE agenda SET resultado = ?, actualizado_en = datetime('now','localtime') WHERE id = ?`).run(resultado, id);
+    if (reprobo && !yaEsperando(bloque)) cola.encolar(bloque, 'REPROBO SU EXAMEN - VUELVE A RENDIR', actor, 'reprobo');
+    if (!reprobo) {
+      db.prepare(`UPDATE cola_reagendar SET estado='descartado', resuelto_en=? WHERE estado='pendiente' AND tipo='reprobo' AND origen_agenda_id=?`)
+        .run(ahoraTS(), id);
+    }
+  });
   logReq(req, id, 'editar', `resultado = ${resultado || '(borrado)'}`);
-  res.json({ ok: true });
+  res.json(reprobo ? { ok: true, lista_espera: true } : { ok: true });
 }));
 
 // ---------- TIPO DE CITA ----------
