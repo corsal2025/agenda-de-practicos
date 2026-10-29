@@ -39,7 +39,11 @@ async function renderErrores() {
   let ultimoReporte = null;
   const cargar = () => cargarVista('errores', '/errores', (rep) => {
     const hoyStr = typeof hoy === 'function' ? hoy() : new Date().toISOString().slice(0, 10);
-    const hallazgosVigentes = (rep.hallazgos || []).filter((x) => !x.fecha || x.fecha >= hoyStr);
+    const hallazgosVigentes = (rep.hallazgos || []).filter((x) => {
+      if (x.fecha && x.fecha < hoyStr) return false;
+      if (typeof pareceMarcador === 'function' && (pareceMarcador(x.rut) || pareceMarcador(x.nombre))) return false;
+      return true;
+    });
     const resumen = hallazgosVigentes.reduce((acc, h) => {
       acc[h.tipo] = (acc[h.tipo] || 0) + 1;
       return acc;
@@ -65,6 +69,7 @@ async function renderErrores() {
     const busq = (filtErr.q || '').trim().toLowerCase();
     const rows = (rep.hallazgos || []).filter((x) => {
       if (x.fecha && x.fecha < hoyStr) return false;
+      if (typeof pareceMarcador === 'function' && (pareceMarcador(x.rut) || pareceMarcador(x.nombre))) return false;
       if (filtErr.tipo && x.tipo !== filtErr.tipo) return false;
       if (busq) {
         const texto = [x.rut, x.nombre, x.examinador, x.mensaje, x.fecha, x.hora, ETIQUETA[x.tipo] || x.tipo].join(' ').toLowerCase();

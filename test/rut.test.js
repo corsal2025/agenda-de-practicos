@@ -34,5 +34,9 @@ test('pareceMarcador detecta textos que no son RUT', () => {
   assert.ok(rut.pareceMarcador('licencia medica'));
   assert.ok(rut.pareceMarcador('DIA ADMINISTRATIVO'));
   assert.ok(rut.pareceMarcador('FERIADO'));
+  assert.ok(rut.pareceMarcador('BLOQUEADO'));
+  assert.ok(rut.pareceMarcador('TERRENO'));
+  assert.ok(rut.pareceMarcador('COMPENSATORIO'));
+  assert.ok(rut.pareceMarcador('SUSPENDIDO'));
   assert.ok(!rut.pareceMarcador('12.345.678-5'));
 });

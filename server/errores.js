@@ -58,7 +58,7 @@ function reporte(fechaDesde) {
 
   for (const f of filas) {
     if (f.fecha < desde) continue;
-    const esMarcador = rut.pareceMarcador(f.rut) || rut.pareceMarcador(f.nombre);
+    const esMarcador = Boolean(f.bloqueado) || Boolean(f.bloqueo_motivo) || rut.pareceMarcador(f.rut) || rut.pareceMarcador(f.nombre);
     const ocupada = Boolean(f.rut || f.nombre) && !f.bloqueado && !esMarcador;
 
     // 1) Cita incompleta
@@ -72,7 +72,7 @@ function reporte(fechaDesde) {
     }
 
     // 2) RUT invalido (solo para citas de contribuyentes reales)
-    if (ocupada && f.rut && !rut.pareceMarcador(f.rut) && !rut.esValido(f.rut)) {
+    if (ocupada && f.rut && !rut.pareceMarcador(f.rut) && !rut.pareceMarcador(f.nombre) && !rut.esValido(f.rut)) {
       hallazgos.push({ ...base(f), tipo: 'RUT_INVALIDO', severidad: 'warning',
         mensaje: `RUT con digito verificador invalido: ${f.rut}` });
     }

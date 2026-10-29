@@ -418,9 +418,10 @@ function pintarTablaAgenda(cont, filasOriginales, fecha, exs) {
       // Formatear RUT y Teléfono sin posibilidad de salto de línea
       const rutFmt = b.rut ? esc(b.rut).replace(/-/g, '&#8209;') : 'sin RUT';
       const telFmt = b.contacto ? esc(fTel(b.contacto)).replace(/ /g, '&nbsp;') : '';
-      // RUT o telefono con formato incorrecto: se marcan en rojo hasta corregirlos
-      const errRut = errorDato('rut', b.rut);
-      const errTel = errorDato('contacto', b.contacto);
+      // RUT o telefono con formato incorrecto: se marcan en rojo hasta corregirlos (excluyendo notas o bloqueos de agenda)
+      const esMarc = (typeof pareceMarcador === 'function' && (pareceMarcador(b.rut) || pareceMarcador(b.nombre)));
+      const errRut = esMarc ? null : errorDato('rut', b.rut);
+      const errTel = esMarc ? null : errorDato('contacto', b.contacto);
       const tipoSel = normalizarTipoCita(b.tipo_cita);
       const esPrioridad = tipoSel === 'REAGENDAMIENTO POR NOSOTROS';
 
@@ -819,7 +820,7 @@ function pintarTablaAgenda(cont, filasOriginales, fecha, exs) {
     const agendar = e.target.closest('.btn-agendar-tabla');
     if (agendar) {
       e.stopPropagation();
-      const id = Number(agendar.dataset.id);
+      const id = Number(agendar.dataset.id || agendar.getAttribute('data-id'));
       const fnAbrir = (typeof abrirSlotPorId === 'function') ? abrirSlotPorId : window.abrirSlotPorId;
       if (id && fnAbrir) fnAbrir(id, () => { if ($('#a-grid')) renderAgenda(); });
       return;
@@ -839,7 +840,7 @@ function pintarTablaAgenda(cont, filasOriginales, fecha, exs) {
   cont.querySelectorAll('.btn-agendar-tabla').forEach((btn) => {
     btn.onclick = (e) => {
       e.stopPropagation();
-      const id = Number(btn.dataset.id);
+      const id = Number(btn.dataset.id || btn.getAttribute('data-id'));
       const fnAbrir = (typeof abrirSlotPorId === 'function') ? abrirSlotPorId : window.abrirSlotPorId;
       if (id && fnAbrir) fnAbrir(id, () => { if ($('#a-grid')) renderAgenda(); });
     };

@@ -7,9 +7,9 @@ const vm = require('node:vm');
 
 // validar-dato.js es un script del navegador: se evalua en un contexto aislado.
 // rutEsValido vive en core.js; aqui se simula para probar solo la regla de cada dato.
-function cargar(rutEsValido) {
+function cargar(rutEsValido, pareceMarcador) {
   const codigo = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'validar-dato.js'), 'utf8');
-  const ctx = { rutEsValido };
+  const ctx = { rutEsValido, pareceMarcador };
   vm.createContext(ctx);
   vm.runInContext(codigo, ctx);
   return ctx;
@@ -46,6 +46,13 @@ test('errorDato: RUT se valida con rutEsValido', () => {
   assert.match(invalido.errorDato('rut', '12.345.678-9'), /RUT inválido/);
   const valido = cargar(() => true);
   assert.equal(valido.errorDato('rut', '12.345.678-5'), null);
+});
+
+test('errorDato: bloqueos y notas como VACACIONES o FERIADO no devuelven RUT invalido', () => {
+  const ctx = cargar(() => false, (v) => /VACACION|FERIADO|BLOQUE/i.test(v));
+  assert.equal(ctx.errorDato('rut', 'VACACIONES'), null);
+  assert.equal(ctx.errorDato('rut', 'FERIADO'), null);
+  assert.equal(ctx.errorDato('rut', 'BLOQUEADO'), null);
 });
 
 test('errorDato: otros campos no se validan aqui', () => {

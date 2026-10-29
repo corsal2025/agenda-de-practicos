@@ -110,7 +110,11 @@ function filaABloque(fila, colMap = COL) {
 
   const fechaTramite = aISO(fila[c.fecha_tramite]);
   const nombreRaw = N.nombre(fila[c.nombre]);
-  const motivoBloqueo = !r.valor ? N.bloqueo(nombreRaw) : null;
+  const textoRut = N.s(fila[c.rut]);
+  const esMarcadorRut = rut.pareceMarcador(textoRut);
+  const motivoBloqueo = (!r.valor || esMarcadorRut)
+    ? (N.bloqueo(nombreRaw) || N.bloqueo(textoRut) || (esMarcadorRut ? textoRut.toUpperCase() : null))
+    : N.bloqueo(nombreRaw);
 
   // Columnas extendidas (export de este dashboard): se leen igual este de bloqueos u ocupadas.
   const cupo = cupoDesdeFila(fila[c.cupo]);

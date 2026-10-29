@@ -52,8 +52,14 @@ test('conflicto: cita 13:00 con examinador en D/A5 a las 12:30', () => {
 test('bloqueos y notas tipo VACACIONES no generan RUT_INVALIDO', () => {
   cita('10:30', { rut: 'VACACIONES', nombre: 'VACACIONES' });
   cita('11:00', { bloqueado: 1, bloqueo_motivo: 'LICENCIA MEDICA', rut: 'LICENCIA MEDICA' });
+  cita('11:30', { rut: 'FERIADO', nombre: null });
+  cita('12:00', { rut: null, nombre: 'BLOQUEADO' });
   assert.ok(!tipos('10:30').includes('RUT_INVALIDO'));
   assert.ok(!tipos('11:00').includes('RUT_INVALIDO'));
+  assert.ok(!tipos('11:30').includes('RUT_INVALIDO'));
+  assert.ok(!tipos('11:30').includes('INCOMPLETA'));
+  assert.ok(!tipos('12:00').includes('RUT_INVALIDO'));
+  assert.ok(!tipos('12:00').includes('INCOMPLETA'));
 });
 
 test('reporte de errores excluye citas e inconsistencias pasadas (< hoy)', () => {

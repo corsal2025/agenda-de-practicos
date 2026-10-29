@@ -455,10 +455,10 @@ function ruta() {
 window.addEventListener('resize', () => setTimeout(ajustarOffsetsFijos, 0));
 window.addEventListener('hashchange', ruta);
 
-const MARCADOR_RE = /VACACION|LICENCIA|ADMINISTRATIVO|FERIADO|BLOQUE|PERMISO|FIESTAS PATRIAS|CAPACITACI|COMET[IÍ]DO|TRASLADO|NO USAR|POSIBLES|HELLION|NO EXISTE|FALTA RUT|LLAMAR|SIN SISTEMA/i;
+const MARCADOR_RE = /VACACION|LICENCIA|ADMINISTRATIVO|FERIADO|BLOQUE|PERMISO|FIESTAS PATRIAS|CAPACITACI|COMET[IÍ]DO|TRASLADO|TERRENO|NO USAR|POSIBLES|HELLION|NO EXISTE|FALTA RUT|LLAMAR|SIN SISTEMA|COMPENSATORIO|SUSPENDID/i;
 function pareceMarcador(v) {
   if (!v) return false;
-  return MARCADOR_RE.test(String(v).trim());
+  return MARCADOR_RE.test(String(v).trim().toUpperCase());
 }
 
 function textoForzar(b) {

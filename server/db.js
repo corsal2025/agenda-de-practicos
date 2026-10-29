@@ -236,37 +236,56 @@ function migrarBloqueosTexto() {
         OR rut LIKE '%ADMINISTRATIVO%' OR nombre LIKE '%ADMINISTRATIVO%'
         OR rut LIKE '%FERIADO%' OR nombre LIKE '%FERIADO%'
         OR rut LIKE '%BLOQUE%' OR nombre LIKE '%BLOQUE%'
+        OR rut LIKE '%PERMISO%' OR nombre LIKE '%PERMISO%'
+        OR rut LIKE '%TERRENO%' OR nombre LIKE '%TERRENO%'
+        OR rut LIKE '%TRASLADO%' OR nombre LIKE '%TRASLADO%'
+        OR rut LIKE '%CAPACITA%' OR nombre LIKE '%CAPACITA%'
+        OR rut LIKE '%COMETIDO%' OR nombre LIKE '%COMETIDO%'
+        OR rut LIKE '%SUSPENDID%' OR nombre LIKE '%SUSPENDID%'
+        OR rut LIKE '%COMPENSATORIO%' OR nombre LIKE '%COMPENSATORIO%'
       )
   `).all();
-  if (!rows.length) return;
+  if (rows.length) {
+    const upd = db.prepare(`
+      UPDATE agenda
+      SET bloqueado = 1,
+          bloqueo_motivo = ?,
+          rut = NULL,
+          nombre = NULL,
+          actualizado_en = datetime('now', 'localtime')
+      WHERE id = ?
+    `);
 
-  const upd = db.prepare(`
-    UPDATE agenda
-    SET bloqueado = 1,
-        bloqueo_motivo = ?,
-        rut = NULL,
-        nombre = NULL,
-        contacto = NULL,
-        correo = NULL,
-        actualizado_en = datetime('now', 'localtime')
-    WHERE id = ?
-  `);
-
-  tx(() => {
-    for (const r of rows) {
-      let motivo = r.bloqueo_motivo;
-      const texto = `${r.rut || ''} ${r.nombre || ''}`.toUpperCase();
-      if (!motivo) {
-        if (texto.includes('VACACION')) motivo = 'VACACIONES';
-        else if (texto.includes('LICENCIA')) motivo = 'LICENCIA MEDICA';
-        else if (texto.includes('ADMINISTRATIVO')) motivo = 'PERMISO ADMINISTRATIVO';
-        else if (texto.includes('FERIADO')) motivo = 'FERIADO LEGAL';
-        else if (texto.includes('TRASLADO') || texto.includes('TERRENO')) motivo = 'TERRENO';
-        else motivo = 'BLOQUEADO';
+    tx(() => {
+      for (const r of rows) {
+        let motivo = r.bloqueo_motivo;
+        const texto = `${r.rut || ''} ${r.nombre || ''}`.toUpperCase();
+        if (!motivo) {
+          if (texto.includes('VACACION')) motivo = 'VACACIONES';
+          else if (texto.includes('LICENCIA')) motivo = 'LICENCIA MEDICA';
+          else if (texto.includes('ADMINISTRATIVO')) motivo = 'PERMISO ADMINISTRATIVO';
+          else if (texto.includes('FERIADO')) motivo = 'FERIADO LEGAL';
+          else if (texto.includes('TRASLADO') || texto.includes('TERRENO')) motivo = 'TERRENO';
+          else if (texto.includes('PERMISO')) motivo = 'PERMISO';
+          else if (texto.includes('CAPACITA')) motivo = 'CAPACITACION';
+          else if (texto.includes('COMETIDO')) motivo = 'COMETIDO';
+          else if (texto.includes('COMPENSATORIO')) motivo = 'COMPENSATORIO';
+          else if (texto.includes('SUSPENDID')) motivo = 'SUSPENDIDO';
+          else motivo = 'BLOQUEADO';
+        }
+        upd.run(motivo, r.id);
       }
-      upd.run(motivo, r.id);
-    }
-  });
+    });
+  }
+
+  // Garantizar que ningún bloque inhabilitado mantenga residuos de RUT o nombre
+  db.prepare(`
+    UPDATE agenda
+    SET rut = NULL,
+        nombre = NULL
+    WHERE bloqueado = 1
+      AND (rut IS NOT NULL OR nombre IS NOT NULL)
+  `).run();
 }
 migrarBloqueosTexto();
 
