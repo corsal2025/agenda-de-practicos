@@ -82,14 +82,14 @@ async function renderPorConfirmar() {
           <thead>
             <tr>
               <th class="c pc-chk"></th>
-              <th class="c">Fecha</th>
-              <th class="c">Hora</th>
-              <th>Postulante</th>
-              <th class="c">RUT</th>
-              <th class="c">Clase</th>
-              <th class="c">Teléfono</th>
-              <th>Correo</th>
-              <th class="c" style="min-width:270px">Gestión de asistencia</th>
+              <th class="c pc-fecha">Fecha</th>
+              <th class="c pc-hora">Hora</th>
+              <th class="pc-nombre">Postulante</th>
+              <th class="c pc-rut">RUT</th>
+              <th class="c pc-clase">Clase</th>
+              <th class="c pc-tel">Teléfono</th>
+              <th class="pc-correo">Correo</th>
+              <th class="c pc-accion" style="min-width:270px">Gestión de asistencia</th>
             </tr>
           </thead>
           <tbody id="pc-tbody">
@@ -158,12 +158,12 @@ async function renderPorConfirmar() {
       return `
       <tr data-id="${r.id}">
         <td class="c pc-chk"><input type="checkbox" data-sel="${r.id}" ${seleccion.has(r.id) ? 'checked' : ''} aria-label="Seleccionar"></td>
-        <td class="c nw"><b>${esc(fFecha(r.fecha))}</b></td>
-        <td class="c nw"><b>${esc(r.hora)}</b></td>
+        <td class="c nw pc-fecha"><b>${esc(fFecha(r.fecha))}</b></td>
+        <td class="c nw pc-hora"><b>${esc(r.hora)}</b></td>
         <td class="pc-nombre"><b>${esc(nom(r.nombre) || '(Sin nombre)')}</b></td>
-        <td class="c num nw" style="font-weight:600">${esc(r.rut || '-')}</td>
-        <td class="c">${r.clase ? clasesTagsHtml(r.clase) : '<span class="muted">-</span>'}</td>
-        <td class="c num nw">
+        <td class="c num nw pc-rut" style="font-weight:600">${esc(r.rut || '-')}</td>
+        <td class="c pc-clase">${r.clase ? clasesTagsHtml(r.clase) : '<span class="muted">-</span>'}</td>
+        <td class="c num nw pc-tel-celda">
           ${r.contacto ? `
             <span class="pc-tel">
               <a href="tel:${esc(r.contacto)}" style="text-decoration:none;font-weight:600;color:var(--azul)">📞 ${esc(fTel(r.contacto))}</a>
@@ -176,7 +176,7 @@ async function renderPorConfirmar() {
             ? `<a href="mailto:${esc(correoTxt)}" style="color:var(--azul)" title="${esc(correoTxt)}">${esc(correoTxt)}</a>`
             : (correoTxt ? `<span class="muted" title="Valor registrado: ${esc(correoTxt)}">Correo inválido</span>` : '<span class="muted">Sin correo</span>')}
         </td>
-        <td class="c pc-acciones-celda">
+        <td class="c pc-acciones-celda pc-accion">
           <div class="pc-btn-grupo">
             <button class="btn chico" data-si="${r.id}" style="background:#10b981;border-color:#059669;color:#fff;font-weight:700">✔ Confirmó</button>
             <button class="btn chico sec" data-no="${r.id}" style="color:#b91c1c;font-weight:600">✖ No asiste</button>
