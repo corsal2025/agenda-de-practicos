@@ -106,8 +106,12 @@ button { font: inherit; cursor: pointer; }
 }
 
 header.top {
-  background: var(--papel); border-bottom: 1px solid var(--linea);
-  position: sticky; top: 0; z-index: 30;
+  background: var(--fondo-blanco, var(--papel, #ffffff));
+  border-bottom: 1px solid var(--linea);
+  position: sticky;
+  top: 0;
+  z-index: 900;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 /* Linea de carretera (amarilla discontinua) bajo la barra superior */
 header.top::after {
@@ -220,13 +224,20 @@ header.top::after {
   z-index: 5;
 }
 
-/* Separadores del encabezado iguales en todas las columnas y tablas */
+/* Separadores del encabezado: ninguna tabla debe tener borde derecho en la última columna */
 #view table thead th {
   border-right: 1px solid rgba(255, 255, 255, 0.22) !important;
 }
 
-#view table thead th:last-child {
-  border-right: 0;
+#view table thead th:last-child,
+#modal-root table thead th:last-child,
+.tabla-scroll table thead th:last-child,
+.tabla-agenda-scroll table thead th:last-child,
+.tabla-agenda-elegante thead th:last-child,
+#tabla-agenda-main thead th:last-child,
+#tabla-disponibles-main thead th:last-child {
+  border-right: 0 !important;
+  border-right-color: transparent !important;
 }
 
 /* Hora y etiqueta D·A5 en una sola linea: las filas conservan la misma altura */
@@ -275,8 +286,8 @@ header.top::after {
 #view .tabla-agenda-scroll::-webkit-scrollbar-track:vertical,
 .tabla-agenda-scroll::-webkit-scrollbar-track:vertical {
   margin-top: var(--thead-h, var(--cab-alto, 45px)) !important;
-  background: #f1f5f9 !important;
-  border-left: 1px solid #cbd5e1;
+  background: transparent !important;
+  border-left: none !important;
 }
 
 .tabla-scroll::-webkit-scrollbar-track:horizontal,
@@ -295,6 +306,14 @@ header.top::after {
   background: #94a3b8;
   border-radius: 8px;
   border: 2px solid #f1f5f9;
+}
+
+.tabla-scroll::-webkit-scrollbar-thumb:hover,
+#view .tabla-scroll::-webkit-scrollbar-thumb:hover,
+#modal-root .tabla-scroll::-webkit-scrollbar-thumb:hover,
+#view .tabla-agenda-scroll::-webkit-scrollbar-thumb:hover,
+.tabla-agenda-scroll::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 .tabla-scroll::-webkit-scrollbar-corner,
@@ -318,8 +337,8 @@ header.top::after {
 :root[data-tema="oscuro"] #modal-root .tabla-scroll::-webkit-scrollbar-track:vertical,
 :root[data-tema="oscuro"] #view .tabla-agenda-scroll::-webkit-scrollbar-track:vertical,
 :root[data-tema="oscuro"] .tabla-agenda-scroll::-webkit-scrollbar-track:vertical {
-  background: #1e293b !important;
-  border-left: 1px solid #334155;
+  background: transparent !important;
+  border-left: none !important;
 }
 
 :root[data-tema="oscuro"] .tabla-scroll::-webkit-scrollbar-track:horizontal,
@@ -342,6 +361,14 @@ header.top::after {
 :root[data-tema="oscuro"] .tabla-agenda-scroll::-webkit-scrollbar-thumb {
   background: #475569;
   border: 2px solid #1e293b;
+}
+
+:root[data-tema="oscuro"] .tabla-scroll::-webkit-scrollbar-thumb:hover,
+:root[data-tema="oscuro"] #view .tabla-scroll::-webkit-scrollbar-thumb:hover,
+:root[data-tema="oscuro"] #modal-root .tabla-scroll::-webkit-scrollbar-thumb:hover,
+:root[data-tema="oscuro"] #view .tabla-agenda-scroll::-webkit-scrollbar-thumb:hover,
+:root[data-tema="oscuro"] .tabla-agenda-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 /* Tablas en ventana (modal): el marco tiene scroll propio, asi la barra horizontal queda debajo de las filas */
@@ -377,6 +404,7 @@ header.top::after {
   width: 130px !important;
   min-width: 120px !important;
   text-align: center;
+  border-right: 0 !important;
 }
 
 /* Texto centrado como en la Agenda; solo las columnas marcadas con .r quedan a la derecha */
@@ -418,11 +446,16 @@ header.top::after {
   width: 100%;
 }
 
-#view .tabla-scroll > table thead th:last-child {
+#view .tabla-scroll > table thead th:last-child,
+.tabla-agenda-scroll table thead th:last-child,
+.tabla-agenda-elegante thead th:last-child {
   border-right: 0 !important;
+  border-right-color: transparent !important;
 }
 
-#view .tabla-scroll > table tbody tr:last-child td {
+#view .tabla-scroll > table tbody tr:last-child td,
+.tabla-agenda-scroll table tbody tr:last-child td,
+.tabla-agenda-elegante tbody tr:last-child td {
   border-bottom: 0 !important;
 }
 
@@ -471,6 +504,13 @@ header.top::after {
   vertical-align: middle !important;
   white-space: nowrap !important;
 }
+#modal-root .tabla-scroll table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--azul-th) !important;
+  color: #ffffff !important;
+}
 #view .tabla-scroll table tbody td,
 #modal-root .tabla-scroll table tbody td {
   text-align: center !important;
@@ -478,9 +518,16 @@ header.top::after {
   border-right: 1px solid #cbd5e1;
   border-bottom: 1px solid #cbd5e1;
 }
+#view table tbody td:last-child,
+#modal-root table tbody td:last-child,
 #view .tabla-scroll table tbody td:last-child,
-#modal-root .tabla-scroll table tbody td:last-child {
-  border-right: 0;
+#modal-root .tabla-scroll table tbody td:last-child,
+.tabla-agenda-scroll table tbody td:last-child,
+.tabla-agenda-elegante tbody td:last-child,
+#tabla-agenda-main tbody td:last-child,
+#tabla-disponibles-main tbody td:last-child {
+  border-right: 0 !important;
+  border-right-color: transparent !important;
 }
 :root[data-tema="oscuro"] #view .tabla-scroll table tbody td,
 :root[data-tema="oscuro"] #modal-root .tabla-scroll table tbody td {
@@ -633,9 +680,9 @@ header.top nav button:hover { color: var(--tinta); }
 header.top nav button.activo { color: var(--azul-900); border-bottom-color: var(--azul); font-weight: 700; }
 .nav-badge {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 16px; height: 16px; margin-left: 5px; padding: 0 4px;
-  border-radius: 8px; background: var(--alerta); color: #fff;
-  font-size: 10px; font-weight: 800; line-height: 1;
+  min-width: 24px; height: 22px; margin-left: 8px; padding: 0 6px;
+  border-radius: 999px; background: var(--alerta, #d97706); color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 1; box-sizing: border-box; flex-shrink: 0;
 }
 /* Cualquier regla con display (flex, inline-flex...) le gana al atributo hidden
    del navegador: con esto, hidden siempre oculta (ej. el circulo vacio de la
@@ -712,10 +759,28 @@ main { padding: .75rem 24px 2.5rem; max-width: none; width: 100%; box-sizing: bo
 :root[data-tema="oscuro"] .cita-resumen-c b { color: #e0f2fe; }
 
 /* Modal Agendar cita (maqueta C): panel de resumen a la izquierda y formulario a la derecha */
-.modal.lateral.cita-c { width: min(640px, calc(100vw - 40px)); }
-.modal.lateral.cita-c .cuerpo { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 0 1rem; align-items: start; }
-.modal.lateral.cita-c .cuerpo > :not(.cita-resumen-c) { grid-column: 2; margin-bottom: .8rem; }
-.modal.lateral.cita-c .cita-resumen-c {
+.modal.lateral.cita-c,
+.modal.cita-c {
+  width: min(640px, calc(100vw - 40px));
+  height: auto;
+  min-height: auto;
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  border-radius: 22px;
+  border: 1px solid var(--linea);
+}
+.modal.lateral.cita-c .cuerpo,
+.modal.cita-c .cuerpo {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 0 1rem;
+  align-items: start;
+  flex: 0 1 auto;
+}
+.modal.lateral.cita-c .cuerpo > :not(.cita-resumen-c),
+.modal.cita-c .cuerpo > :not(.cita-resumen-c) { grid-column: 2; margin-bottom: .8rem; }
+.modal.lateral.cita-c .cita-resumen-c,
+.modal.cita-c .cita-resumen-c {
   grid-column: 1;
   grid-row: 1 / span 30;
   grid-template-columns: 1fr;
@@ -725,17 +790,27 @@ main { padding: .75rem 24px 2.5rem; max-width: none; width: 100%; box-sizing: bo
   top: 0;
   border-radius: 12px;
 }
-.modal.lateral.cita-c .cita-resumen-c > div { padding: .9rem 1rem; border-bottom: 1px solid #bfdbfe; }
-.modal.lateral.cita-c .cita-resumen-c > div:last-child { border-bottom: 0; border-radius: 0 0 12px 12px; }
-.modal.lateral.cita-c .cita-resumen-c > div:first-child { border-radius: 12px 12px 0 0; }
-.modal.lateral.cita-c .cita-resumen-c b { white-space: normal; font-size: 15px; }
-:root[data-tema="oscuro"] .modal.lateral.cita-c .cita-resumen-c > div { border-bottom-color: #334155; }
+.modal.lateral.cita-c .cita-resumen-c > div,
+.modal.cita-c .cita-resumen-c > div { padding: .9rem 1rem; border-bottom: 1px solid #bfdbfe; }
+.modal.lateral.cita-c .cita-resumen-c > div:last-child,
+.modal.cita-c .cita-resumen-c > div:last-child { border-bottom: 0; border-radius: 0 0 12px 12px; }
+.modal.lateral.cita-c .cita-resumen-c > div:first-child,
+.modal.cita-c .cita-resumen-c > div:first-child { border-radius: 12px 12px 0 0; }
+.modal.lateral.cita-c .cita-resumen-c b,
+.modal.cita-c .cita-resumen-c b { white-space: normal; font-size: 15px; }
+:root[data-tema="oscuro"] .modal.lateral.cita-c .cita-resumen-c > div,
+:root[data-tema="oscuro"] .modal.cita-c .cita-resumen-c > div { border-bottom-color: #334155; }
 @media (max-width: 700px) {
-  .modal.lateral.cita-c { width: 100%; }
-  .modal.lateral.cita-c .cuerpo { grid-template-columns: 1fr; }
-  .modal.lateral.cita-c .cuerpo > * { grid-column: 1 !important; }
-  .modal.lateral.cita-c .cita-resumen-c { position: static; grid-row: auto; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-bottom: .8rem; }
-  .modal.lateral.cita-c .cita-resumen-c > div { border-bottom: 0; }
+  .modal.lateral.cita-c,
+  .modal.cita-c { width: 100%; }
+  .modal.lateral.cita-c .cuerpo,
+  .modal.cita-c .cuerpo { grid-template-columns: 1fr; }
+  .modal.lateral.cita-c .cuerpo > *,
+  .modal.cita-c .cuerpo > * { grid-column: 1 !important; }
+  .modal.lateral.cita-c .cita-resumen-c,
+  .modal.cita-c .cita-resumen-c { position: static; grid-row: auto; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-bottom: .8rem; }
+  .modal.lateral.cita-c .cita-resumen-c > div,
+  .modal.cita-c .cita-resumen-c > div { border-bottom: 0; }
 }
 
 /* Boton Maximizar de las tablas (js/tabla-maximizar.js) */
@@ -744,7 +819,7 @@ main { padding: .75rem 24px 2.5rem; max-width: none; width: 100%; box-sizing: bo
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 14px !important;
   width: 100%;
 }
 .tabla-barra-max > .btn-max-tabla {
@@ -754,6 +829,27 @@ main { padding: .75rem 24px 2.5rem; max-width: none; width: 100%; box-sizing: bo
 }
 /* Con buscador o en fila de cabecera: el boton se integra en esa misma linea */
 .btn-max-tabla.tabla-btn-en-fila { margin-left: auto; flex: none; align-self: center; box-shadow: none; white-space: nowrap; }
+
+/* Espaciado profesional entre botones/acciones y tablas (respiro visual de 14px) */
+.fila-cab-tabla,
+.fila:has(#mov-borrar-btn) {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 14px !important;
+  gap: 12px !important;
+  flex-wrap: wrap !important;
+}
+
+.fila-cab-tabla h2,
+.fila:has(#mov-borrar-btn) h2 {
+  margin: 0 !important;
+}
+
+.fila-cab-tabla .btn,
+.fila:has(#mov-borrar-btn) .btn {
+  margin: 0 !important;
+}
 /* Maximizada: superficie de pagina, marco blanco con borde azul y una barra superior limpia */
 body.tabla-max-activa::before {
   content: '';
@@ -1010,13 +1106,11 @@ input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:f
   transition: border-color .12s, box-shadow .12s, background .12s;
 }
 .alerta-dato {
-  position: absolute; top: 6px; right: 7px; font-size: 13px; line-height: 1;
-  color: var(--alerta, #b45309); cursor: help;
+  display: none !important;
 }
-/* Aviso de dato faltante en la tabla de Agenda: parpadea para llamar la atencion */
+/* Aviso de dato faltante en la tabla de Agenda: ocultado según requerimiento */
 #view .tabla-agenda-elegante .alerta-dato {
-  display: inline-block;
-  animation: alerta-parpadea 1.2s ease-in-out infinite;
+  display: none !important;
 }
 
 @keyframes alerta-parpadea {
@@ -1812,6 +1906,14 @@ tbody tr:first-child td { border-top: 0; }
   border-left: 1px solid var(--linea);
   border-top: 1px solid var(--linea);
 }
+.tour-flecha.flecha-derecha {
+  right: -7px;
+  transform: rotate(135deg);
+}
+.tour-flecha.flecha-izquierda {
+  left: -7px;
+  transform: rotate(-45deg);
+}
 
 
 /* Badges de 1° vez y 2° vez en la agenda */
@@ -1867,6 +1969,126 @@ tbody tr:first-child td { border-top: 0; }
   max-height: calc(90vh - 130px);
   padding: 1.1rem;
 }
+/* ---------- modal asignar cupo (lista de espera) ---------- */
+.overlay:has(.modal-asignar-cupo) {
+  padding: 1.25rem 1rem;
+  align-items: center;
+}
+.modal.modal-asignar-cupo {
+  width: min(720px, 94vw);
+  max-height: calc(100vh - 50px);
+  display: flex;
+  flex-direction: column;
+}
+.modal.modal-asignar-cupo header {
+  padding: .75rem 1.15rem;
+  flex: 0 0 auto;
+}
+.modal.modal-asignar-cupo .cuerpo {
+  display: flex !important;
+  flex-direction: column;
+  padding: 1rem 1.25rem;
+  gap: .35rem;
+  overflow: hidden;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.modal.modal-asignar-cupo footer {
+  padding: .65rem 1.15rem;
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+.modal-asignar-cupo .modal-cupos-scroll,
+.modal-asignar-cupo .tabla-scroll {
+  max-height: 270px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  border: 1px solid var(--linea);
+  border-radius: var(--r-sm);
+  background-color: var(--papel, #ffffff);
+  background-image: linear-gradient(to bottom,
+    var(--azul-th) 0, var(--azul-th) calc(42px - 4px),
+    var(--marca-cian) calc(42px - 4px), var(--marca-cian) 42px,
+    transparent 42px) !important;
+  background-repeat: no-repeat !important;
+  background-size: 100% 100%;
+  margin-top: .25rem;
+  position: relative;
+}
+.modal-asignar-cupo .modal-cupos-scroll table,
+.modal-asignar-cupo .tabla-scroll table {
+  width: 100%;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  table-layout: fixed;
+}
+.modal-asignar-cupo .tabla-scroll th.col-fecha { width: 28%; }
+.modal-asignar-cupo .tabla-scroll th.col-hora  { width: 18%; }
+.modal-asignar-cupo .tabla-scroll th.col-exam  { width: 34%; }
+.modal-asignar-cupo .tabla-scroll th.col-accion{ width: 20%; }
+
+.modal-asignar-cupo .tabla-scroll table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 42px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  background: var(--azul-th) !important;
+  color: #ffffff !important;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  border-bottom: 4px solid var(--marca-cian) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
+  vertical-align: middle !important;
+}
+.modal-asignar-cupo .tabla-scroll table thead th:last-child {
+  border-right: 0 !important;
+  position: sticky;
+}
+/* Cobertura continua sobre la barra de scroll vertical para que no haya hueco ni corte */
+.modal-asignar-cupo .tabla-scroll table thead th:last-child::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -14px;
+  width: 14px;
+  height: 42px;
+  background: var(--azul-th);
+  border-bottom: 4px solid var(--marca-cian);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.modal-asignar-cupo .tabla-scroll::-webkit-scrollbar-track:vertical {
+  margin-top: 42px !important;
+  background: transparent !important;
+  border-left: none !important;
+}
+.modal-asignar-cupo .tabla-scroll table tbody td {
+  padding: 8px 10px;
+  height: 42px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--linea, #e2e8f0);
+  border-right: 1px solid var(--linea, #e2e8f0);
+  vertical-align: middle;
+}
+.modal-asignar-cupo .tabla-scroll table tbody td:last-child {
+  border-right: 0 !important;
+}
+.modal-asignar-cupo .tabla-scroll table tbody td:nth-child(3) {
+  text-align: left !important;
+  padding-left: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.modal-asignar-cupo .tabla-scroll table thead th.col-exam {
+  text-align: left !important;
+  padding-left: 12px;
+}
+
 .tabla-bloqueos-cont {
   max-height: 50vh;
   overflow-y: auto;
@@ -2539,6 +2761,13 @@ tbody tr:first-child td { border-top: 0; }
 
 /* Ficha de cita como panel lateral derecho (modal(..., 'lateral')) */
 .overlay:has(.modal.lateral) { padding: 0; justify-content: flex-end; overflow: hidden; }
+.overlay:has(.modal.lateral.cita-c),
+.overlay:has(.modal.cita-c) {
+  padding: 2.5rem 1rem;
+  justify-content: center;
+  align-items: flex-start;
+  overflow-y: auto;
+}
 .modal.lateral {
   width: min(500px, 100%); height: 100vh; height: 100dvh; border-radius: 0; border-width: 0 0 0 1px;
   display: flex; flex-direction: column; animation: deslizar .2s ease-out;
@@ -2547,6 +2776,24 @@ tbody tr:first-child td { border-top: 0; }
 .modal.lateral .cuerpo { flex: 1; overflow-y: auto; grid-template-columns: 1fr; }
 .modal.lateral footer { flex-wrap: wrap; }
 @keyframes deslizar { from { transform: translateX(100%); } to { transform: none; } }
+
+/* El modal de agendar cita (cita-c) se ajusta dinámicamente a su contenido real: sin espacio en blanco innecesario */
+#modal-root .modal.lateral.cita-c,
+#modal-root .modal.cita-c {
+  height: auto !important;
+  min-height: auto !important;
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  border-radius: 22px !important;
+  border: 1px solid var(--linea) !important;
+  animation: subir .16s ease-out !important;
+  box-shadow: 0 16px 48px rgba(16, 24, 40, .25) !important;
+}
+#modal-root .modal.lateral.cita-c .cuerpo,
+#modal-root .modal.cita-c .cuerpo {
+  flex: 0 1 auto !important;
+  overflow-y: auto;
+}
 
 /* Aviso de 3er intento en el editor de cita */
 .hist-sub { font-size: 13px; margin-top: 2px; }
@@ -2813,10 +3060,29 @@ header.top nav button[data-tab="jefatura"] .nav-ico { color: var(--azul); }
   background: var(--card-bg, #ffffff);
   border-right: 1.5px solid var(--azul-linea, #3a55c0) !important;
 }
-/* Celda FECHA con línea divisoria vertical */
+/* Celda FECHA con línea divisoria vertical y badge pegajoso (sticky) al scrollear */
 #view #tabla-disponibles-main tbody td.fecha-celda {
-  vertical-align: middle !important;
+  vertical-align: top !important;
+  padding-top: 10px !important;
   border-right: 2px solid var(--azul-linea, #3a55c0) !important;
+  background: var(--card-bg, #ffffff);
+}
+:root[data-tema="oscuro"] #view #tabla-disponibles-main tbody td.fecha-celda {
+  background: var(--papel, #1e293b);
+}
+#view #tabla-disponibles-main tbody td.fecha-celda .fecha-slot-tabla {
+  position: sticky;
+  top: calc(var(--thead-h, 45px) + 8px);
+  display: inline-flex;
+  margin: 0 auto;
+  z-index: 2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+:root[data-tema="oscuro"] #view #tabla-disponibles-main tbody td.fecha-celda .fecha-slot-tabla {
+  background: #1e3a8a;
+  color: #dbeafe;
+  border-color: #3b82f6;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 :root[data-tema="oscuro"] #view #tabla-disponibles-main tbody td.hora-celda {
   background: var(--papel, #1e293b);
@@ -3032,6 +3298,7 @@ input.tabla-busc-input:focus,
 .tabla-agenda-scroll {
   width: 100%;
   overflow-x: auto;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   max-height: calc(var(--tabla-alto, 80vh) - 16px);
   position: relative;
@@ -3044,11 +3311,6 @@ input.tabla-busc-input:focus,
 
 .tabla-agenda-barra-lateral > div {
   display: none !important;
-}
-
-/* En la Agenda (vista tabla) el scroll lateral lo hace solo la barra del marco: sin barra de pagina */
-body:has(#a-grid.tabla-agenda-wrap) {
-  overflow-x: clip;
 }
 
 :root[data-tema="oscuro"] .tabla-agenda-barra-lateral {
@@ -3080,6 +3342,11 @@ body:has(#a-grid.tabla-agenda-wrap) {
   position: sticky;
   top: 0;
   z-index: 10;
+}
+
+.tabla-agenda-elegante thead th:last-child {
+  border-right: 0 !important;
+  border-right-color: transparent !important;
 }
 
 .tabla-agenda-elegante thead th.th-nombre {
@@ -3123,6 +3390,11 @@ body:has(#a-grid.tabla-agenda-wrap) {
   text-align: center;
   color: var(--tinta);
   border: 1px solid #2563eb;
+}
+
+.tabla-agenda-elegante tbody td:last-child {
+  border-right: 0 !important;
+  border-right-color: transparent !important;
 }
 
 .tabla-agenda-elegante tbody tr:first-child td {
@@ -3260,6 +3532,87 @@ body:has(#a-grid.tabla-agenda-wrap) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap !important;
+}
+
+/* Columna Tipo de Cita */
+.tabla-agenda-elegante thead th.th-tipo-cita,
+.tabla-agenda-elegante tbody td.td-tipo-cita {
+  width: 230px;
+  min-width: 215px;
+  max-width: 240px;
+  white-space: nowrap !important;
+  text-align: center !important;
+  vertical-align: middle;
+}
+
+.select-tipo-cita {
+  display: block;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 225px;
+  height: 28px;
+  padding: 2px 6px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-align: center;
+  text-align-last: center;
+  border-radius: 6px;
+  border: 1.5px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  outline: none;
+  transition: all .15s ease-in-out;
+}
+
+.select-tipo-cita option {
+  text-align: center;
+  font-weight: 600;
+  padding: 4px 8px;
+}
+
+.select-tipo-cita:hover {
+  border-color: #94a3b8;
+}
+
+.select-tipo-cita:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+/* Estilo prioritario destacado cuando es REAGENDAMIENTO POR NOSOTROS */
+.select-tipo-cita.prioridad-alta {
+  background-color: #fef3c7 !important;
+  border-color: #f59e0b !important;
+  color: #92400e !important;
+  font-weight: 800 !important;
+  box-shadow: 0 0 0 1px #d97706, 0 1px 3px rgba(217, 119, 6, 0.15) !important;
+}
+
+.select-tipo-cita.prioridad-alta:hover,
+.select-tipo-cita.prioridad-alta:focus {
+  border-color: #d97706 !important;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.3) !important;
+}
+
+:root[data-tema="oscuro"] .select-tipo-cita {
+  background-color: var(--papel, #1e293b);
+  border-color: var(--linea, #334155);
+  color: var(--tinta, #f1f5f9);
+}
+
+:root[data-tema="oscuro"] .select-tipo-cita option {
+  background-color: var(--papel, #1e293b);
+  color: var(--tinta, #f1f5f9);
+}
+
+:root[data-tema="oscuro"] .select-tipo-cita.prioridad-alta {
+  background-color: #78350f !important;
+  border-color: #f59e0b !important;
+  color: #fef3c7 !important;
+  box-shadow: 0 0 0 1px #f59e0b, 0 1px 3px rgba(0, 0, 0, 0.3) !important;
 }
 
 /* El correo se escribe en minusculas en el editor de la tabla (el resto de campos siguen en mayusculas) */
@@ -4638,10 +4991,18 @@ nav#nav button[data-tab="errores"] .nav-ico     { color: var(--error); }
 
 nav#nav button .nav-badge {
   margin-left: auto;
-  font-size: 10px;
-  font-weight: 800;
-  padding: 1px 6px;
-  border-radius: 10px;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 /* Modo Plegado (~60px) */
@@ -4755,6 +5116,14 @@ html.sidebar-plegado #view {
 #view #tabla-agenda-main tbody td {
   border-color: var(--linea) !important;
   padding: 7px 10px;
+}
+
+#view #tabla-agenda-main thead th:last-child,
+#view #tabla-agenda-main tbody td:last-child,
+#view #tabla-disponibles-main thead th:last-child,
+#view #tabla-disponibles-main tbody td:last-child {
+  border-right: 0 !important;
+  border-right-color: transparent !important;
 }
 
 #view #tabla-agenda-main tbody tr.dia-inicio > td,

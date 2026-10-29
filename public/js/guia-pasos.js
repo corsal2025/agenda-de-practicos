@@ -1,6 +1,6 @@
 /* ================= GUÍA INTERACTIVA / SIMULADOR ================= */
 // Cada paso: { seccion, tab?, target, fallback?, listo?, titulo, icono, descripcion, pose? }
-//  - tab: pestaña que se abre (irA) antes de apuntar al target.
+//  - tab: pestaña que se abre (tourNavegar) antes de apuntar al target.
 //  - listo: selector (o función) que indica que la vista ya pintó; por defecto, el propio target.
 //  - fallback: elemento a resaltar si el target no existe (p. ej. no hay datos para esa fecha).
 // El número del título se antepone automáticamente según la posición del paso.
@@ -19,7 +19,7 @@ const PASOS_TOUR = [
     target: '#nav',
     titulo: 'Pestañas y módulos principales',
     icono: '🧭',
-    descripcion: 'Desde aquí accedes a todos los módulos: <b>Citas disponibles</b>, <b>Agenda</b>, <b>Lista de espera</b>, <b>Por confirmar</b>, <b>Estadísticas</b>, <b>Jefatura</b>, <b>Papelera</b>, <b>Datos</b> y <b>Reporte de errores</b>. Los números de color junto a algunas pestañas son avisos pendientes. Esta guía los recorre uno por uno.'
+    descripcion: 'Desde aquí accedes a todos los módulos: <b>Citas disponibles</b>, <b>Agenda</b>, <b>Lista de espera</b>, <b>Confirmaciones</b>, <b>Por vencer</b>, <b>Estadísticas</b>, <b>Jefatura</b>, <b>Papelera</b>, <b>Reporte de errores</b> y <b>Ajustes</b>. Los números de color junto a algunas pestañas son avisos pendientes. Esta guía los recorre uno por uno.'
   },
   {
     seccion: 'Entorno general',
@@ -41,7 +41,8 @@ const PASOS_TOUR = [
   {
     seccion: 'Citas disponibles',
     tab: 'disponibles',
-    target: '#view > .panel.no-print',
+    target: '.disp-filtros',
+    fallback: '#view > .panel.no-print',
     listo: '#d-buscar',
     titulo: 'Citas disponibles: filtros de búsqueda',
     icono: '🗓️',
@@ -50,12 +51,12 @@ const PASOS_TOUR = [
   {
     seccion: 'Citas disponibles',
     tab: 'disponibles',
-    target: '#d-body button[data-id]',
-    fallback: '#d-body',
+    target: '#d-body .btn-agendar-tabla, #d-body button[data-id]',
+    fallback: '#tabla-disponibles-main',
     listo: tourSinCargando('#d-body'),
     titulo: 'Reservar un cupo (+ Agendar)',
     icono: '✍️',
-    descripcion: 'Cada fila es un bloque libre. <b>+ Agendar</b> abre de inmediato el formulario: <b>nombre, RUT</b> (con validación y autoformato), <b>celular</b>, <b>clase(s)</b> (puedes marcar más de una) y <b>correo</b>. No requiere login ni elegir usuario, ya que el control lo gestiona el sistema institucional. Para clases pesadas fuera de su horario aparece la casilla <b>Forzar</b>. Termina con <b>Confirmar y agendar cita</b>.'
+    descripcion: 'Cada fila es un bloque libre. <b>+ Agendar</b> abre de inmediato el formulario: <b>nombre, RUT</b> (con validación y autoformato), <b>celular</b>, <b>clase(s)</b> (puedes marcar más de una) y <b>correo</b>. No requiere elegir usuario, el control lo gestiona el sistema. Para clases pesadas fuera de su horario aparece la casilla <b>Forzar</b>. Termina con <b>Confirmar y agendar cita</b>.'
   },
 
   /* ---------- Agenda ---------- */
@@ -63,6 +64,8 @@ const PASOS_TOUR = [
     seccion: 'Agenda',
     tab: 'agenda',
     target: '#a-fecha',
+    fallback: '.agenda-toolbar',
+    listo: '#a-fecha',
     titulo: 'Agenda: navegación por fechas',
     icono: '📅',
     descripcion: 'Elige la fecha en el calendario o usa las flechas <b>← →</b> para saltar al día anterior o siguiente con agenda. El botón <b>Hoy</b> te devuelve de inmediato a la jornada actual.'
@@ -71,6 +74,7 @@ const PASOS_TOUR = [
     seccion: 'Agenda',
     tab: 'agenda',
     target: '#a-exam',
+    fallback: '.agenda-toolbar',
     titulo: 'Filtro de examinadores',
     icono: '👤',
     descripcion: 'Ve la grilla con <b>todos</b> los examinadores en columnas paralelas, o selecciona uno para concentrarte en sus citas y cupos.'
@@ -78,18 +82,42 @@ const PASOS_TOUR = [
   {
     seccion: 'Agenda',
     tab: 'agenda',
-    target: '#a-grid',
-    titulo: 'Edición rápida en planilla y botón + Agendar cita',
+    target: '#a-grid .btn-agendar-tabla, #a-grid tr.fila-libre',
+    fallback: '#a-grid',
+    titulo: 'Cupos libres y agendamiento rápido',
     icono: '⚡',
-    descripcion: 'En la grilla diaria, los bloques libres tienen el botón <b>+ Agendar cita</b> para citar al instante. En las citas agendadas, puedes hacer <b>clic directo sobre cualquier dato</b> (RUT, nombre, teléfono, etc.) para editarlo en línea con protección contra cambios simultáneos.'
+    descripcion: 'En la grilla diaria, los bloques libres tienen el botón <b>+ Agendar cita</b> para citar al instante con apertura directa del diálogo y validación automática de RUT y teléfono.'
   },
   {
     seccion: 'Agenda',
     tab: 'agenda',
-    target: '#a-grid',
+    target: '#a-grid tr.fila-ocupada td.td-nombre, #a-grid tr.fila-ocupada td.td-rut, #a-grid td.td-nombre, #a-grid td.td-rut',
+    fallback: '#a-grid',
+    listo: tourSinCargando('#a-grid'),
+    titulo: 'Edición rápida en planilla',
+    icono: '✏️',
+    descripcion: 'En las citas agendadas, puedes hacer <b>clic directo sobre cualquier celda</b> (nombre, RUT, teléfono, correo) para editar los datos en línea al instante, con protección contra modificaciones simultáneas.'
+  },
+  {
+    seccion: 'Agenda',
+    tab: 'agenda',
+    target: '#a-grid tr.fila-ocupada .td-tipo-cita select, #a-grid .td-tipo-cita select, #a-grid th.th-tipo-cita, #a-grid .td-tipo-cita',
+    fallback: '#a-grid th.th-tipo-cita, #a-grid',
+    listo: tourSinCargando('#a-grid'),
+    titulo: 'Tipo de cita y reagendamientos',
+    icono: '🏷️',
+    descripcion: 'La columna <b>TIPO DE CITA</b> permite clasificar cada cupo al instante (<i>NORMAL</i>, <i>REAGENDAMIENTO PRESENCIAL</i>, <i>LLAMADA</i>, <i>CORREO</i> o <i>POR NOSOTROS</i>). Al cambiar la opción en el selector, el estado se guarda automáticamente.'
+  },
+  {
+    seccion: 'Agenda',
+    tab: 'agenda',
+    target: '#a-grid tr.fila-ocupada .accion-celda-wrap, #a-grid .accion-celda-wrap, #a-grid .td-accion .btn-tabla-liberar, #a-grid th.th-accion, #a-grid th.th-acciones',
+    fallback: '#a-grid th.th-accion, #a-grid th.th-acciones, #a-grid',
+    listo: tourSinCargando('#a-grid'),
     titulo: 'Acciones de cita y sobrecupos automáticos',
     icono: '👥',
-    descripcion: 'Cada cita cuenta con botones rápidos: <b>liberar cupo (🗑️)</b>, <b>derivar a Lista de espera (🔄)</b> y <b>agregar otra persona en la misma hora (👤+)</b>. Si se cancela la creación o se libera la hora extra, el sobrecupo se elimina automáticamente sin dejar filas vacías huérfanas.'
+    descripcion: 'Cada cita cuenta con botones rápidos: <b>liberar cupo (🗑️)</b>, <b>derivar a Lista de espera (🔄)</b> y <b>agregar otra persona en la misma hora (👤+)</b>. Si se cancela la creación o se libera la hora extra, el sobrecupo se elimina automáticamente sin dejar filas vacías huérfanas.',
+    lado: 'izquierda'
   },
   {
     seccion: 'Agenda',
@@ -106,7 +134,7 @@ const PASOS_TOUR = [
     target: '#a-bloqdia',
     titulo: 'Bloquear días u horas',
     icono: '🔐',
-    descripcion: 'Inhabilita franjas por licencias, feriados, capacitaciones o terreno. En el diálogo eliges <b>Día(s) completo(s)</b> (con <i>Ajustar a semanas completas lun–vie</i>) o <b>Por horas / bloques</b> (chips por hora, rango rápido, Mañana, Mediodía y aplicar a varios días), el <b>examinador</b> (o todos) y el <b>motivo</b>. Con la casilla <b>Incluir bloques que ya tienen cita</b> activa, esos postulantes pasan automáticamente a <b>Lista de espera</b> para proteger su cupo.',
+    descripcion: 'Inhabilita franjas por licencias, feriados, capacitaciones o terreno. En el diálogo eliges <b>Día(s) completo(s)</b> o <b>Por horas / bloques</b>, el <b>examinador</b> y el <b>motivo</b>. Con la casilla <b>Incluir bloques que ya tienen cita</b> activa, esos postulantes pasan automáticamente a <b>Lista de espera</b>.',
     pose: 'alerta'
   },
   {
@@ -120,36 +148,37 @@ const PASOS_TOUR = [
   {
     seccion: 'Agenda',
     tab: 'agenda',
-    target: '#a-acciones-dia',
+    target: '#a-imprimir',
+    fallback: '#a-acciones-dia',
     titulo: 'Imprimir el día',
     icono: '🖨️',
-    descripcion: '<b>Imprimir día</b> genera el informe de la fecha y el examinador seleccionados, ordenado por hora (eliges formato, orientación y diseño: una hoja o una por examinador/a).'
+    descripcion: '<b>Imprimir día</b> genera el informe de la fecha y examinador seleccionados, ordenado cronológicamente por hora (eliges formato, orientación y diseño: hoja unificada o una por examinador/a).'
   },
 
   /* ---------- Lista de espera ---------- */
   {
     seccion: 'Lista de espera',
     tab: 'espera',
-    target: '#le-tabla button[data-le]',
+    target: '#le-tabla button[data-le], #le-tabla tr',
     fallback: '#le-tabla',
     listo: tourSinCargando('#le-tabla'),
     titulo: 'Lista de espera: quién espera un cupo',
     icono: '⏱️',
-    descripcion: 'Reúne la <b>cola de reagendar</b> y a quienes <b>quieren adelantar</b> su cita, en orden de prioridad. Filtra por origen, clase o texto. <b>Cupos disponibles</b> cuenta los cupos libres compatibles de los próximos 30 días; <b>Buscar cupo</b> los lista y <b>Asignar</b> los agenda (pide confirmación).'
+    descripcion: 'Reúne la <b>cola de reagendar</b> y a quienes <b>quieren adelantar</b> su cita, ordenados por prioridad. Filtra por origen, clase o texto. <b>Cupos disponibles</b> cuenta los cupos libres compatibles de los próximos 30 días; <b>Buscar cupo</b> los lista y <b>Asignar</b> los agenda de inmediato.'
   },
 
-  /* ---------- Por confirmar ---------- */
+  /* ---------- Confirmaciones (antes Por confirmar) ---------- */
   {
-    seccion: 'Por confirmar',
+    seccion: 'Confirmaciones',
     tab: 'porconfirmar',
     target: '#pc-total-badge',
     listo: tourSinCargando('#pc-total-badge'),
-    titulo: 'Por confirmar: citas pendientes',
+    titulo: 'Confirmaciones: citas pendientes',
     icono: '📋',
-    descripcion: 'Lista a los postulantes citados que <b>aún no confirman asistencia</b>. El contador muestra cuántos hay y <b>↻ Actualizar</b> recarga la lista.'
+    descripcion: 'Lista a los postulantes citados que <b>aún no confirman asistencia</b>. El contador muestra cuántos hay y <b>↻ Actualizar</b> recarga la lista al instante.'
   },
   {
-    seccion: 'Por confirmar',
+    seccion: 'Confirmaciones',
     tab: 'porconfirmar',
     target: '#pc-q',
     titulo: 'Buscar en la lista',
@@ -157,7 +186,7 @@ const PASOS_TOUR = [
     descripcion: 'Filtra al instante por <b>RUT, nombre o teléfono</b> mientras escribes.'
   },
   {
-    seccion: 'Por confirmar',
+    seccion: 'Confirmaciones',
     tab: 'porconfirmar',
     target: '#pc-rango',
     titulo: 'Rango de fechas',
@@ -165,17 +194,17 @@ const PASOS_TOUR = [
     descripcion: 'Elige ver los próximos <b>7, 15 o 30 días</b>, o <b>todas las fechas futuras</b>.'
   },
   {
-    seccion: 'Por confirmar',
+    seccion: 'Confirmaciones',
     tab: 'porconfirmar',
     target: '#pc-tbody .btn-sms',
     fallback: '#pc-tbody',
     listo: tourSinCargando('#pc-total-badge'),
     titulo: 'Contactar al postulante',
     icono: '📞',
-    descripcion: 'En cada fila tienes el <b>teléfono</b>, el enlace de <b>SMS</b> con un mensaje que pide confirmar o reagendar, y el <b>correo</b>. Si falta el dato, la fila indica <i>Sin teléfono</i> o <i>Sin correo</i>.'
+    descripcion: 'En cada fila tienes el <b>teléfono</b>, el enlace de <b>SMS</b> con un mensaje que pide confirmar o reagendar, y el <b>correo</b> institucional.'
   },
   {
-    seccion: 'Por confirmar',
+    seccion: 'Confirmaciones',
     tab: 'porconfirmar',
     target: '#pc-tbody button[data-si]',
     fallback: '#pc-tbody',
@@ -185,38 +214,38 @@ const PASOS_TOUR = [
     descripcion: '<b>✔ Confirmó</b> registra la asistencia; <b>✖ No asiste</b> registra que no vendrá. En ambos casos la fila sale de la lista de pendientes.'
   },
   {
-    seccion: 'Por confirmar',
+    seccion: 'Confirmaciones',
     tab: 'porconfirmar',
     target: '#pc-tbody button[data-reag]',
     fallback: '#pc-tbody',
     listo: tourSinCargando('#pc-total-badge'),
     titulo: 'Derivar a Lista de espera',
     icono: '🔄',
-    descripcion: '<b>🔄 Reagendar</b> envía al postulante a la Lista de espera y abre su panel para asignarle un nuevo cupo.'
+    descripcion: '<b>🔄 Reagendar</b> envía al postulante a la Lista de espera y abre su panel para asignarle un nuevo cupo compatible.'
   },
   {
-    seccion: 'Por confirmar',
+    seccion: 'Confirmaciones',
     tab: 'porconfirmar',
     target: '#btn-enviar-correos-masivos',
     titulo: 'Enviar correos a pendientes',
     icono: '✉️',
-    descripcion: 'Envía el <b>enlace de confirmación por correo</b> a todos los postulantes citados que tengan correo registrado (pide confirmación antes). Si el servicio de correo (SMTP) no está activo, solo se generan los enlaces y el sistema te lo avisa.'
+    descripcion: 'Envía el <b>enlace de confirmación por correo</b> a todos los postulantes citados que tengan correo registrado (pide confirmación antes). Si el servicio de correo SMTP no está activo, solo se generan los enlaces y el sistema te lo avisa.'
   },
   {
-    seccion: 'Por confirmar',
+    seccion: 'Confirmaciones',
     tab: 'porconfirmar',
     target: '#btn-correo-prueba',
     titulo: 'Correo de prueba',
     icono: '🧪',
-    descripcion: 'Envía los correos de confirmación de prueba a <b>la dirección que tú indiques</b>, para revisar cómo se ven antes de enviar los reales.'
+    descripcion: 'Envía los correos de confirmación de prueba a <b>la dirección que tú indiques</b>, para revisar cómo se ven antes de enviar a postulantes reales.'
   },
   {
-    seccion: 'Por confirmar',
+    seccion: 'Confirmaciones',
     tab: 'porconfirmar',
     target: '.pc-toolbar',
     titulo: 'Selección múltiple y envíos por lote',
     icono: '☑️',
-    descripcion: 'Marca las <b>casillas</b> de cada fila (o la del encabezado para todas). Luego usa <b>Enviar correo de confirmación</b> para mandar el correo solo a los seleccionados (requiere el servicio de correo SMTP configurado), o <b>WhatsApp a seleccionados</b> para abrir una <b>cola de WhatsApp</b>: cada clic abre wa.me con el mensaje listo, <b>una persona a la vez</b>.'
+    descripcion: 'Marca las <b>casillas</b> de cada fila (o la del encabezado para todas). Luego usa <b>Enviar correo de confirmación</b> para mandar el correo solo a los seleccionados, o <b>SMS a seleccionados</b> para abrir una <b>cola de SMS</b> asistida.'
   },
 
   /* ---------- Por vencer ---------- */
@@ -226,7 +255,7 @@ const PASOS_TOUR = [
     target: '#ven-filtro',
     titulo: 'Trámites por vencer',
     icono: '⌛',
-    descripcion: 'Lista las citas según el vencimiento de su trámite. Filtra por los que vencen en <b>7 días</b> o <b>30 días</b> o menos, los <b>vencidos</b> o <b>todos</b>.'
+    descripcion: 'Lista las citas según el vencimiento de su trámite. Filtra por los que vencen en <b>7 días</b>, <b>30 días</b>, los <b>vencidos</b> o <b>todos</b>.'
   },
   {
     seccion: 'Por vencer',
@@ -263,7 +292,7 @@ const PASOS_TOUR = [
     tab: 'analitica',
     target: '#view .grid2',
     listo: '#an-kpis .kpi',
-    titulo: 'Gráficos',
+    titulo: 'Gráficos analíticos',
     icono: '📈',
     descripcion: 'Resultado de exámenes, citas por examinador, por clase, por funcionario/a, tipo de cita, citas por día y agendamientos por día.'
   },
@@ -281,6 +310,7 @@ const PASOS_TOUR = [
     seccion: 'Estadísticas',
     tab: 'analitica',
     target: '.panel:has(#esc-tabla)',
+    fallback: '#view .grid2',
     listo: tourSinCargando('#esc-tabla'),
     titulo: 'Resultados por escuela de conductores',
     icono: '🏫',
@@ -339,95 +369,15 @@ const PASOS_TOUR = [
     pose: 'alerta'
   },
 
-  /* ---------- Datos ---------- */
-  {
-    seccion: 'Datos',
-    tab: 'datos',
-    target: '.panel:has(#im-btn)',
-    fallback: '#im-btn',
-    listo: '#im-btn',
-    titulo: 'Datos: importar desde Excel',
-    icono: '📥',
-    descripcion: 'Selecciona un archivo <b>.xlsx o .xls</b> y pulsa <b>Importar</b>. Sin marcar <i>Reemplazar todo</i>, el sistema hace un <b>backup antes</b> y fusiona las citas por fecha, hora y examinador. Con la casilla marcada se <b>borra lo actual</b>: úsala con cuidado.'
-  },
-  {
-    seccion: 'Datos',
-    tab: 'datos',
-    target: 'a[href="/api/export"]',
-    listo: '#im-btn',
-    titulo: 'Exportar a Excel',
-    icono: '📤',
-    descripcion: 'Descarga las citas en <b>formato dashboard</b> o en el <b>formato Excel original</b> (el segundo botón).'
-  },
-  {
-    seccion: 'Datos',
-    tab: 'datos',
-    target: '#bk-btn',
-    listo: '#bk-btn',
-    titulo: 'Backup de la base',
-    icono: '💾',
-    descripcion: '<b>Crear backup de la base</b> guarda una copia de seguridad de todos los datos y te informa el nombre del archivo creado.'
-  },
-  {
-    seccion: 'Datos',
-    tab: 'datos',
-    target: '.panel:has(#gb-btn)',
-    fallback: '#gb-btn',
-    listo: '#gb-btn',
-    titulo: 'Generar bloques de agenda',
-    icono: '🧱',
-    descripcion: 'Indica <b>Desde / Hasta</b> y pulsa <b>Generar</b> para crear los bloques que falten (días hábiles, por examinador activo). No pisa lo existente.'
-  },
-  {
-    seccion: 'Datos',
-    tab: 'datos',
-    target: '.panel:has(#fe-add)',
-    fallback: '#fe-add',
-    listo: '#fe-add',
-    titulo: 'Feriados y días inhábiles',
-    icono: '🎌',
-    descripcion: 'Agrega un feriado con su fecha (y nombre opcional) o quita uno con la <b>×</b>. Después de cambiarlos, vuelve a generar los bloques del período afectado.'
-  },
-  {
-    seccion: 'Datos',
-    tab: 'datos',
-    target: '.panel:has(#cat-cont)',
-    fallback: '#cat-cont',
-    listo: '#cat-cont',
-    titulo: 'Listas desplegables',
-    icono: '📚',
-    descripcion: 'Administra las opciones de los catálogos del sistema (clases, motivos, etc.): agrega un valor nuevo o quítalo con la <b>×</b>. Aquí también agregas las <b>escuelas de conductores</b> y los <b>tipos de reagendamiento</b>: escribe el nombre en la lista correspondiente y pulsa <b>Agregar</b>; quedará disponible de inmediato en la ficha de la cita.'
-  },
-  {
-    seccion: 'Datos',
-    tab: 'datos',
-    target: '.grid2:has(#ex-cont)',
-    fallback: '#ex-cont',
-    listo: '#ex-cont',
-    titulo: 'Examinadores y funcionarios/as',
-    icono: '👥',
-    descripcion: 'Agrega nuevas personas y marca o desmarca <b>activo</b> para que aparezcan (o no) en la agenda y en los formularios.'
-  },
-  {
-    seccion: 'Datos',
-    tab: 'datos',
-    target: '.panel:has(#mov-body)',
-    fallback: '#mov-body',
-    listo: '#mov-body',
-    titulo: 'Últimos movimientos',
-    icono: '🕘',
-    descripcion: 'Bitácora de acciones recientes: fecha, acción, quién la hizo y el detalle.'
-  },
-
-  /* ---------- Reporte de errores ---------- */
+  /* ---------- Reporte de errores (posición 9 en el menú) ---------- */
   {
     seccion: 'Reporte de errores',
     tab: 'errores',
     target: '#e-refresh',
     listo: '#e-refresh',
-    titulo: 'Reporte de errores',
+    titulo: 'Reporte de errores: calidad de datos',
     icono: '⚠️',
-    descripcion: 'Revisa la calidad de los datos: citas incompletas, RUT inválido, duplicados, sin teléfono o correo, conflictos de clase en el bloque D/A5, etc. <b>Recalcular</b> actualiza el análisis.',
+    descripcion: 'Revisa la calidad de los datos: citas incompletas, RUT inválido, duplicados, sin teléfono o correo, y conflictos de clase en el bloque D/A5. <b>Recalcular</b> actualiza el análisis en tiempo real.',
     pose: 'alerta'
   },
   {
@@ -442,12 +392,93 @@ const PASOS_TOUR = [
   {
     seccion: 'Reporte de errores',
     tab: 'errores',
-    target: '#e-body button[data-id]',
+    target: '#e-body .btn-err-editar, #e-body button[data-id]',
     fallback: '#e-body',
     listo: tourSinCargando('#e-body'),
     titulo: 'Abrir y corregir la cita',
     icono: '🛠️',
     descripcion: '<b>✏️ Editar</b> corrige los datos en la misma planilla, <b>🗑️ Liberar</b> deja el cupo libre y <b>🔄 Espera</b> envía al postulante a la Lista de espera. Si la tabla dice <i>Nada que mostrar</i>, no hay errores. ¡Eso es lo ideal!',
     pose: 'celebra'
+  },
+
+  /* ---------- Ajustes (posición 10 en el menú, antes Datos) ---------- */
+  {
+    seccion: 'Ajustes',
+    tab: 'datos',
+    target: '#im-btn',
+    fallback: '.panel:has(#im-btn)',
+    listo: '#im-btn',
+    titulo: 'Ajustes: importar desde Excel',
+    icono: '📥',
+    descripcion: 'Selecciona un archivo <b>.xlsx o .xls</b> y pulsa <b>Importar</b>. Sin marcar <i>Reemplazar todo</i>, el sistema hace un <b>backup previo automático</b> y fusiona las citas por fecha, hora y examinador. Con la casilla marcada se <b>borra lo actual</b>: úsala con cuidado.'
+  },
+  {
+    seccion: 'Ajustes',
+    tab: 'datos',
+    target: 'a[href*="/api/export"]',
+    fallback: '.panel:has(#im-btn)',
+    listo: '#im-btn',
+    titulo: 'Exportar a Excel',
+    icono: '📤',
+    descripcion: 'Descarga las citas en <b>formato Excel completo (Todos los datos)</b>, en <b>formato dashboard</b> o en el <b>formato Excel original</b> según lo que necesites.'
+  },
+  {
+    seccion: 'Ajustes',
+    tab: 'datos',
+    target: '#bk-btn',
+    listo: '#bk-btn',
+    titulo: 'Backup de la base',
+    icono: '💾',
+    descripcion: '<b>Crear backup de la base</b> guarda una copia de seguridad SQLite con respaldo de transacciones activas y te informa el nombre del archivo creado.'
+  },
+  {
+    seccion: 'Ajustes',
+    tab: 'datos',
+    target: '#gb-btn',
+    fallback: '.panel:has(#gb-btn)',
+    listo: '#gb-btn',
+    titulo: 'Generar bloques de agenda',
+    icono: '🧱',
+    descripcion: 'Indica <b>Desde / Hasta</b> y pulsa <b>Generar</b> para crear los bloques que falten (días hábiles, por examinador activo). Respeta lo existente y no pisa citas ya creadas.'
+  },
+  {
+    seccion: 'Ajustes',
+    tab: 'datos',
+    target: '.panel:has(#fe-add)',
+    fallback: '#fe-add',
+    listo: '#fe-add',
+    titulo: 'Feriados y días inhábiles',
+    icono: '🎌',
+    descripcion: 'Agrega un feriado con su fecha (y nombre opcional), sincroniza con feriados oficiales o quita uno con la <b>×</b>. Después de cambiarlos, vuelve a generar los bloques del período afectado.'
+  },
+  {
+    seccion: 'Ajustes',
+    tab: 'datos',
+    target: '.panel:has(#cat-cont)',
+    fallback: '#cat-cont',
+    listo: '#cat-cont',
+    titulo: 'Listas desplegables y catálogos',
+    icono: '📚',
+    descripcion: 'Administra las opciones de los catálogos del sistema (clases, motivos de bloqueo, etc.). Aquí también agregas las <b>escuelas de conductores</b> y los <b>tipos de reagendamiento</b>: pulsa <b>Agregar</b> y quedarán disponibles de inmediato en la ficha de la cita.'
+  },
+  {
+    seccion: 'Ajustes',
+    tab: 'datos',
+    target: '.grid2:has(#ex-cont), .panel:has(#ex-cont)',
+    fallback: '#ex-cont',
+    listo: '#ex-cont',
+    titulo: 'Examinadores y funcionarios/as',
+    icono: '👥',
+    descripcion: 'Agrega nuevas personas y marca o desmarca <b>activo</b> para que aparezcan (o no) en la agenda y en los formularios.'
+  },
+  {
+    seccion: 'Ajustes',
+    tab: 'datos',
+    target: '.panel:has(#mov-body)',
+    fallback: '#mov-body',
+    listo: '#mov-body',
+    titulo: 'Últimos movimientos',
+    icono: '🕘',
+    descripcion: 'Bitácora de auditoría con las acciones recientes: fecha y hora exacta, acción ejecutada, quién la realizó y el detalle de los cambios.'
   }
 ];

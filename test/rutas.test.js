@@ -238,6 +238,33 @@ test('cola-reagendar asignar: destino ocupado nuevo parte sin banderas heredadas
   assert.equal(leer(destino.id).rut, '11.111.111-1');
 });
 
+test('cola-reagendar asignar: destino ocupado o bloqueado responde 400 o 409', async () => {
+  const dia = diaNuevo();
+  const origen = ocupado(dia, '09:00');
+  await api('POST', `/agenda/${origen.id}/liberar`, {});
+  const item = db.prepare("SELECT * FROM cola_reagendar WHERE origen_agenda_id = ? AND estado='pendiente'").get(origen.id);
+  const destinoOcupado = ocupado(dia, '10:00', { rut: '99.999.999-9', nombre: 'OTRO' });
+  const rOcupado = await api('POST', `/cola-reagendar/${item.id}/asignar`, { destino_id: destinoOcupado.id });
+  assert.equal(rOcupado.status, 400);
+
+  const destinoBloqueado = slot(dia, '10:30', { bloqueado: 1, bloqueo_motivo: 'TERRENO' });
+  const rBloqueado = await api('POST', `/cola-reagendar/${item.id}/asignar`, { destino_id: destinoBloqueado.id });
+  assert.equal(rBloqueado.status, 400);
+});
+
+test('cola-reagendar asignar: clase pesada a las 12:30 con dependientes ocupados responde 409', async () => {
+  const dia = diaNuevo();
+  const origen = ocupado(dia, '09:00', { clase: 'D' });
+  await api('POST', `/agenda/${origen.id}/liberar`, {});
+  const item = db.prepare("SELECT * FROM cola_reagendar WHERE origen_agenda_id = ? AND estado='pendiente'").get(origen.id);
+  const destino1230 = slot(dia, '12:30');
+  ocupado(dia, '13:00', { rut: '22.222.222-2', nombre: 'OTRA PERSONA' });
+
+  const r = await api('POST', `/cola-reagendar/${item.id}/asignar`, { destino_id: destino1230.id });
+  assert.equal(r.status, 409);
+  assert.match(r.datos.error, /No se puede asignar cita pesada/);
+});
+
 // ---------- 8) no agendar sobre un bloque bloqueado ----------
 test('PUT que ocuparia un bloque bloqueado responde 409 y no lo desbloquea', async () => {
   const b = slot(diaNuevo(), '09:00', { bloqueado: 1, bloqueo_motivo: 'LICENCIA MEDICA' });
@@ -405,7 +432,7 @@ test('la plantilla de correo escapa los datos del postulante', () => {
   const mal = '<img src=x onerror=alert(1)>';
   const { html, text } = plantilla({
     titulo: 'T', intro: 'I',
-    bloque: { nombre: mal, rut: '"><b>', fecha: '2026-01-02', hora: '<u>', examinador: "O'Brien & Co", clase: '<C>' },
+    bloque: { nombre: `${mal} O'Brien & Co`, rut: '"><b>', fecha: '2026-01-02', hora: '<u>', examinador: "Ignorado", clase: '<C>' },
     links: { confirmar: 'http://x/c?a=1&b=2', reagendar: 'http://x/r' },
   });
   assert.ok(!html.includes(mal));
@@ -413,6 +440,10 @@ test('la plantilla de correo escapa los datos del postulante', () => {
   assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));
   assert.ok(html.includes('O&#39;Brien &amp; Co'));
   assert.ok(html.includes('href="http://x/c?a=1&amp;b=2"'));
+  assert.ok(!html.includes('Examinador'), 'no debe incluir examinador en HTML');
+  assert.ok(!text.includes('Examinador'), 'no debe incluir examinador en texto plano');
+  assert.ok(!html.includes('Ignorado'));
+  assert.ok(!text.includes('Ignorado'));
   assert.ok(text.includes(mal), 'la version texto plano no se escapa');
 });
 
@@ -422,6 +453,20 @@ test('un error inesperado responde 500 generico sin filtrar el detalle interno',
   const r = await api('PUT', '/examinadores/1', { nombre: 'DOMINGO NAVARRO' });
   assert.equal(r.status, 400);
   assert.equal(r.datos.error, 'El examinador ya existe');
+});
+
+test('DELETE /examinadores/:id: con citas marca eliminado=1 y desaparece de /api/meta', async () => {
+  db.prepare('INSERT INTO examinadores (nombre, activo) VALUES (?, 1)').run('EXAMINADOR PRUEBA ELIMINAR');
+  const ex = db.prepare('SELECT id FROM examinadores WHERE nombre = ?').get('EXAMINADOR PRUEBA ELIMINAR');
+  slot(diaNuevo(), '10:00', { examinador_id: ex.id, rut: '11.111.111-1', nombre: 'JUAN TEST' });
+
+  const r = await api('DELETE', `/examinadores/${ex.id}`);
+  assert.equal(r.status, 200);
+  assert.equal(r.datos.ok, true);
+  assert.equal(r.datos.eliminado, true);
+
+  const meta = (await api('GET', '/meta')).datos;
+  assert.ok(!meta.examinadores.some((e) => e.id === ex.id), 'El examinador eliminado no debe figurar en /api/meta');
 });
 
 test('los errores previstos (bad) conservan su estado y mensaje', async () => {
@@ -683,7 +728,7 @@ test('PUT: escuela de conductores solo se guarda en clases D y A5', async () => 
   const b1 = slot(diaNuevo(), '09:00');
   await api('PUT', `/agenda/${b1.id}`, { rut: '11.111.111-1', nombre: 'Juan', clase: 'B', correo: 'juan@x.cl', escuela_conductores: escuela });
   assert.equal(leer(b1.id).escuela_conductores, null);
-  const b2 = slot(diaNuevo(), '09:00');
+  const b2 = slot(diaNuevo(), '12:30');
   const r = await api('PUT', `/agenda/${b2.id}`, { rut: '11.111.111-1', nombre: 'Juan', clase: 'D', correo: 'juan@x.cl', escuela_conductores: escuela, forzar: true });
   assert.equal(r.status, 200, r.texto);
   assert.equal(leer(b2.id).escuela_conductores, escuela);
@@ -758,6 +803,11 @@ test('tramites-por-vencer: ordena por dias restantes y aplica filtros', async ()
   assert.deepEqual(ids((await api('GET', '/tramites-por-vencer?filtro=30')).datos), [proximo.id]);
   assert.deepEqual(ids((await api('GET', '/tramites-por-vencer?filtro=vencidos')).datos), [claseB.id, vencido.id]);
   assert.equal((await api('GET', '/tramites-por-vencer?filtro=x')).status, 400);
+
+  // Cita con fecha pasada no debe aparecer aunque tenga fecha_inicio_tramite
+  const pasada = slot(hoyMas(-10), '10:00', { rut: '99-K', nombre: 'PASADA NO MOSTRAR', clase: 'D', fecha_inicio_tramite: hoyMas(-150) });
+  const sinPasada = (await api('GET', '/tramites-por-vencer')).datos;
+  assert.ok(!sinPasada.some((r) => r.id === pasada.id), 'Las citas pasadas deben ser excluidas');
 });
 
 test('estadisticas-escuelas: cuenta aprobados/reprobados y respeta el rango de fechas', async () => {
@@ -924,26 +974,27 @@ test('/api/meta incluye motivos_bloqueo desde el servidor', async () => {
   assert.deepEqual(r.datos.motivos_bloqueo, MOTIVOS_BLOQUEO);
 });
 
-// ---------- guardar cita nueva espera y devuelve el resultado del correo ----------
+// ---------- guardar cita nueva dispara el correo de confirmacion de forma asincrona ----------
 const NUEVA = { rut: '22.222.222-2', nombre: 'Maria', clase: 'B', correo: 'm@x.cl' };
 
-test('PUT cita nueva: devuelve correo.estado = enviado cuando el envio resulta', async () => {
+test('PUT cita nueva: responde de inmediato con correo.estado = enviando y envia en segundo plano', async () => {
   const b = slot(diaNuevo(), '09:00');
   const r = await api('PUT', `/agenda/${b.id}`, NUEVA);
   assert.equal(r.status, 200, r.texto);
-  assert.equal(r.datos.correo.estado, 'enviado');
-  assert.equal(leer(b.id).correo_confirmacion_enviado, 1, 'el envio ya terminó cuando responde');
+  assert.ok(['enviado', 'enviando'].includes(r.datos.correo.estado));
+  await new Promise((res) => setTimeout(res, 30));
+  assert.equal(leer(b.id).correo_confirmacion_enviado, 1, 'el envio en segundo plano marco la cita');
 });
 
-test('PUT cita nueva: correo fallido informa el motivo real', async () => {
+test('PUT cita nueva: error de correo en segundo plano no bloquea la respuesta HTTP', async () => {
   const b = slot(diaNuevo(), '09:00');
   const original = confirmacionReal;
   confirmacionReal = async () => { correo.ultimoError = Object.assign(new Error('Invalid login'), { code: 'EAUTH' }); return false; };
   try {
     const r = await api('PUT', `/agenda/${b.id}`, NUEVA);
     assert.equal(r.status, 200, r.texto);
-    assert.equal(r.datos.correo.estado, 'fallido');
-    assert.match(r.datos.correo.motivo, /EAUTH/);
+    assert.ok(['fallido', 'enviando'].includes(r.datos.correo.estado));
+    await new Promise((res) => setTimeout(res, 30));
     assert.equal(leer(b.id).correo_confirmacion_enviado, 0);
   } finally { confirmacionReal = original; correo.ultimoError = null; }
 });

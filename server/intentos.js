@@ -40,4 +40,12 @@ function bloqueoTercerIntento(db, { rut, clase, excluirId }) {
   return null;
 }
 
-module.exports = { reprobadosPorClase, bloqueoTercerIntento, clasesDe, MOTIVO_MINIMO, LIMITE_REPROBADOS };
+function compartenClase(claseA, claseB) {
+  const listaA = clasesDe(claseA);
+  const listaB = clasesDe(claseB);
+  if (!listaA.length || !listaB.length) return true; // sin clase explícita se asume conflicto
+  const setB = new Set(listaB);
+  return listaA.some((c) => setB.has(c));
+}
+
+module.exports = { reprobadosPorClase, bloqueoTercerIntento, clasesDe, compartenClase, MOTIVO_MINIMO, LIMITE_REPROBADOS };

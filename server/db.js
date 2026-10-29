@@ -10,6 +10,7 @@ fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
 const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA foreign_keys = ON;');
+db.exec('PRAGMA busy_timeout = 5000;');
 db.exec(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
 db.exec(`
 CREATE TABLE IF NOT EXISTS cola_reagendar (
@@ -58,6 +59,9 @@ if (db.prepare('PRAGMA table_info(agenda)').all().some((c) => c.name === 'escuel
   db.exec('UPDATE agenda SET escuela_conductores = escuela_condutores WHERE escuela_conductores IS NULL AND escuela_condutores IS NOT NULL');
 }
 asegurarColumna('agenda', 'tipo_reagendamiento', 'tipo_reagendamiento TEXT');
+asegurarColumna('examinadores', 'eliminado', 'eliminado INTEGER NOT NULL DEFAULT 0');
+// Si habia examinadores previamente desactivados (como el duplicado ANGELO IBANI con activo = 0), marcarlos eliminado = 1
+db.exec("UPDATE examinadores SET eliminado = 1 WHERE activo = 0 AND (eliminado = 0 OR eliminado IS NULL)");
 asegurarColumna('movimientos', 'actor', 'actor TEXT');
 asegurarColumna('funcionarios', 'usuario', 'usuario TEXT');
 asegurarColumna('funcionarios', 'clave_hash', 'clave_hash TEXT');
@@ -134,6 +138,21 @@ function migrarCupoAgenda() {
 }
 migrarCupoAgenda();
 
+// Purga automatica de bloques vacios de 08:30 desde el 9 de noviembre de 2026
+function purgarHoras0830Inactivas() {
+  try {
+    db.exec(`
+      DELETE FROM agenda 
+      WHERE fecha >= '2026-11-09' 
+        AND hora = '08:30' 
+        AND (rut IS NULL OR trim(rut) = '') 
+        AND (nombre IS NULL OR trim(nombre) = '') 
+        AND (bloqueado = 0 OR bloqueado IS NULL)
+    `);
+  } catch (_) {}
+}
+purgarHoras0830Inactivas();
+
 // --- Semillas (solo si faltan) ---
 function seed() {
   const insExam = db.prepare('INSERT OR IGNORE INTO examinadores (nombre) VALUES (?)');
@@ -143,8 +162,22 @@ function seed() {
   FUNCIONARIOS.forEach((n) => insFun.run(n));
 
   const insCat = db.prepare('INSERT OR IGNORE INTO catalogos (tipo, valor, orden) VALUES (?, ?, ?)');
+  const upsertCat = db.prepare(`
+    INSERT INTO catalogos (tipo, valor, orden, activo) VALUES (?, ?, ?, 1)
+    ON CONFLICT(tipo, valor) DO UPDATE SET orden = excluded.orden, activo = 1
+  `);
   for (const [tipo, valores] of Object.entries(CATALOGOS)) {
-    valores.forEach((v, i) => insCat.run(tipo, v, i));
+    valores.forEach((v, i) => {
+      if (tipo === 'tipo_cita') {
+        upsertCat.run(tipo, v, i);
+      } else {
+        insCat.run(tipo, v, i);
+      }
+    });
+  }
+  if (CATALOGOS.tipo_cita && CATALOGOS.tipo_cita.length) {
+    const placeholders = CATALOGOS.tipo_cita.map(() => '?').join(',');
+    db.prepare(`UPDATE catalogos SET activo = 0 WHERE tipo = 'tipo_cita' AND valor NOT IN (${placeholders})`).run(...CATALOGOS.tipo_cita);
   }
 }
 seed();

@@ -59,6 +59,7 @@ function avisoCorreoCita(correoRes) {
   if (!correoRes) return { texto: ok, tipo: 'ok' };
   switch (correoRes.estado) {
     case 'enviado':
+    case 'enviando':
       return { texto: `${ok} · Comprobante e instrucciones enviados por correo`, tipo: 'ok' };
     case 'fallido':
       return { texto: `Cita agendada, pero el correo NO se pudo enviar (${correoRes.motivo || 'causa desconocida'}). Avisa a la persona por otro medio.`, tipo: 'alerta' };
@@ -122,15 +123,22 @@ function abrirFormularioCita(b, alGuardar) {
     </div>
 
     <div class="campo ancho"><label>Licencias (puedes marcar varias)</label>
-      <div class="chk-clases" id="f-clase">${catalogoClases.map((cl) => `
-        <label class="chk-clase"><input type="checkbox" value="${esc(cl)}" ${clasesIniciales.includes(cl) ? 'checked' : ''}> ${esc(cl)}</label>
-      `).join('')}</div>
+      <div class="chk-clases" id="f-clase">${catalogoClases.map((cl) => {
+        const esPesada = clasesPesadas.includes(cl);
+        const bloqPesada = esPesada && b.hora && b.hora < '12:30';
+        return `
+        <label class="chk-clase" style="${bloqPesada ? 'opacity:0.55;cursor:not-allowed;' : ''}">
+          <input type="checkbox" value="${esc(cl)}" ${clasesIniciales.includes(cl) ? 'checked' : ''} ${bloqPesada ? 'disabled title="Solo disponible en bloques de las 12:30 en adelante"' : ''}>
+          ${esc(cl)}${bloqPesada ? ' <small style="font-size:10px;color:#dc2626;font-weight:700">(Solo desde 12:30)</small>' : ''}
+        </label>`;
+      }).join('')}</div>
     </div>
 
     <div class="campo"><label>Correo</label>
       <input id="f-correo" type="email" required placeholder="nombre@correo.com" value="${esc(b.correo || '')}">
     </div>
 
+    <div class="campo ancho" id="f-pesada-bloqueada-aviso" style="background:#fee2e2;color:#b91c1c;padding:.6rem .8rem;border-radius:6px;font-weight:700;font-size:12.5px;border:1px solid #f87171" hidden>⚠️ Las licencias Clase D y A5 solo pueden agendarse en bloques de las 12:30 en adelante.</div>
     <div class="campo ancho" id="zona-forzar" ${esPesada ? '' : 'hidden'}>
       <label><input type="checkbox" id="f-forzar"> <span id="f-forzar-txt">${esc(forzarTexto)}</span></label>
     </div>
@@ -213,8 +221,11 @@ function abrirFormularioCita(b, alGuardar) {
   const chequearPesada = () => {
     const clases = clasesMarcadas();
     const tienePesada = clases.some((cl) => clasesPesadas.includes(cl));
+    const esHoraInvalidaPesada = tienePesada && b.hora && b.hora < '12:30';
+    const zPesadaAviso = $('#f-pesada-bloqueada-aviso');
+    if (zPesadaAviso) zPesadaAviso.hidden = !esHoraInvalidaPesada;
     const zForzar = $('#zona-forzar');
-    if (zForzar) zForzar.hidden = !tienePesada;
+    if (zForzar) zForzar.hidden = !tienePesada || esHoraInvalidaPesada;
     const zForzarTxt = $('#f-forzar-txt');
     if (zForzarTxt && tienePesada) {
       zForzarTxt.textContent = typeof textoForzar === 'function' ? textoForzar(b) : forzarTexto;
@@ -311,12 +322,17 @@ function abrirFormularioCita(b, alGuardar) {
     if (!rutVal) { toast('El RUT es obligatorio', 'err'); $('#f-rut').focus(); return; }
     if (!formatearSiEsRut(rutVal)) { toast('El RUT ingresado no es válido (revisa el dígito verificador)', 'err'); $('#f-rut').focus(); return; }
     if (!clases.length) { toast('Debes marcar al menos una clase de licencia', 'err'); return; }
+    const tienePesada = clases.some((cl) => clasesPesadas.includes(cl));
+    if (tienePesada && b.hora && b.hora < '12:30') {
+      toast('Las licencias Clase D y A5 solo pueden agendarse en bloques de las 12:30 en adelante.', 'err');
+      return;
+    }
     if (!contacto) { toast('El número de celular es obligatorio', 'err'); $('#f-contacto').focus(); return; }
     if (!correoVal || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoVal)) { toast('Ingresa un correo electrónico válido', 'err'); $('#f-correo').focus(); return; }
     if ($('#f-fecha-inicio') && !$('#f-fecha-inicio').value) { toast('La fecha de inicio de trámite es obligatoria', 'err'); $('#f-fecha-inicio').focus(); return; }
 
     $('#btn-guardar').disabled = true;
-    $('#btn-guardar').textContent = 'Guardando y enviando correo...';
+    $('#btn-guardar').textContent = 'Guardando...';
 
     const comun = { visto_en: b.actualizado_en, comentarios: $('#f-coment') ? ($('#f-coment').value.trim() || null) : (b.comentarios || null) };
     try {
@@ -468,48 +484,50 @@ function pedirAutorizacionTercerIntento(datos) {
 }
 
 // Delegación global infalible para cualquier botón de agendar en cualquier tabla o vista
-document.addEventListener('click', (e) => {
-  const btn = e.target.closest('.btn-agendar-tabla, [data-accion="agendar"]');
-  if (!btn) return;
-  const id = Number(btn.dataset.id || btn.getAttribute('data-id'));
-  if (!id) return;
-  e.preventDefault();
-  e.stopPropagation();
-  abrirSlotPorId(id, () => {
-    if (typeof renderAgenda === 'function' && document.getElementById('a-grid')) {
-      renderAgenda();
-    } else if (typeof renderDisponibles === 'function' && document.getElementById('tabla-disponibles-main')) {
-      const btnB = document.getElementById('d-buscar');
-      if (btnB) btnB.click();
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-agendar-tabla, [data-accion="agendar"]');
+    if (!btn) return;
+    const id = Number(btn.dataset.id || btn.getAttribute('data-id'));
+    if (!id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    abrirSlotPorId(id, () => {
+      if (typeof renderAgenda === 'function' && document.getElementById('a-grid')) {
+        renderAgenda();
+      } else if (typeof renderDisponibles === 'function' && document.getElementById('tabla-disponibles-main')) {
+        const btnB = document.getElementById('d-buscar');
+        if (btnB) btnB.click();
+      }
+    });
+  });
+
+  // Atajo de teclado para agendar: tecla 'A' o 'Enter' sobre una fila seleccionada o libre
+  document.addEventListener('keydown', (e) => {
+    if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    if (document.querySelector('#modal-root .overlay')) return;
+
+    const esTeclaAgendar = e.key === 'a' || e.key === 'A' || e.key === 'Insert';
+    const esEnterEnFila = e.key === 'Enter' && !e.target.closest('button, a');
+
+    if (esTeclaAgendar || esEnterEnFila) {
+      const activa = document.querySelector('.fila-agenda-tabla.row-activa');
+      if (activa) {
+        const btn = activa.querySelector('.btn-agendar-tabla, [data-accion="agendar"]');
+        if (btn) {
+          e.preventDefault();
+          btn.click();
+          return;
+        }
+      }
+
+      if (esTeclaAgendar) {
+        const primerBtn = document.querySelector('#d-body .btn-agendar-tabla, #a-grid .btn-agendar-tabla');
+        if (primerBtn) {
+          e.preventDefault();
+          primerBtn.click();
+        }
+      }
     }
   });
-});
-
-// Atajo de teclado para agendar: tecla 'A' o 'Enter' sobre una fila seleccionada o libre
-document.addEventListener('keydown', (e) => {
-  if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
-  if (document.querySelector('#modal-root .overlay')) return;
-
-  const esTeclaAgendar = e.key === 'a' || e.key === 'A' || e.key === 'Insert';
-  const esEnterEnFila = e.key === 'Enter' && !e.target.closest('button, a');
-
-  if (esTeclaAgendar || esEnterEnFila) {
-    const activa = document.querySelector('.fila-agenda-tabla.row-activa');
-    if (activa) {
-      const btn = activa.querySelector('.btn-agendar-tabla, [data-accion="agendar"]');
-      if (btn) {
-        e.preventDefault();
-        btn.click();
-        return;
-      }
-    }
-
-    if (esTeclaAgendar) {
-      const primerBtn = document.querySelector('#d-body .btn-agendar-tabla, #a-grid .btn-agendar-tabla');
-      if (primerBtn) {
-        e.preventDefault();
-        primerBtn.click();
-      }
-    }
-  }
-});
+}

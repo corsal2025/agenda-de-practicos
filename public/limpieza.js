@@ -50,7 +50,8 @@ const Limpieza = (() => {
     const recargar = () => render(cont);
     let datos;
     try { datos = await api('/limpieza'); } catch (e) { cont.innerHTML = `<div class="panel"><p class="muted">${esc(e.message)}</p></div>`; return; }
-    const filasValidas = (datos.filas || []).filter((f) => !f.bloqueado && (typeof pareceMarcador !== 'function' || (!pareceMarcador(f.rut) && !pareceMarcador(f.nombre))));
+    const hoyStr = typeof hoy === 'function' ? hoy() : new Date().toISOString().slice(0, 10);
+    const filasValidas = (datos.filas || []).filter((f) => (!f.fecha || f.fecha >= hoyStr) && !f.bloqueado && (typeof pareceMarcador !== 'function' || (!pareceMarcador(f.rut) && !pareceMarcador(f.nombre))));
     const conteo = {};
     filasValidas.forEach((f) => f.problemas.forEach((p) => { conteo[p] = (conteo[p] || 0) + 1; }));
     const visibles = filasValidas.filter((f) => !filtro || f.problemas.includes(filtro));

@@ -42,7 +42,6 @@ function plantilla({ titulo, intro, bloque, links }) {
     ['RUT', bloque.rut || 'No indicado'],
     ['Fecha del Examen', fFecha(bloque.fecha)],
     ['Hora citada', bloque.hora],
-    ['Examinador/a asignado/a', bloque.examinador || 'Por confirmar'],
     ['Clase de Licencia', bloque.clase || 'B'],
   ];
   const filasHtml = filas.map(([k, v]) => `<tr><td style="padding:6px 12px 6px 0;color:#64748b;font-size:13px">${esc(k)}</td><td style="padding:6px 0;font-weight:700;color:#0f172a;font-size:14px">${esc(v)}</td></tr>`).join('');

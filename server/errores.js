@@ -1,14 +1,15 @@
 'use strict';
 const { db } = require('./db');
 const { HORA_D_A5, CLASES_PESADAS } = require('./config');
-const { hoyISO, esHabil, sumarDias } = require('./fechas');
+const { hoyISO, esHabil } = require('./fechas');
 const feriados = require('./feriados');
 const rut = require('./rut');
 const telefono = require('./telefono');
 const pesada = require('./pesada');
 const { HORAS } = require('./config');
+const { CORREO_FORMATO } = require('./validar');
 
-const CORREO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CORREO_RE = CORREO_FORMATO;
 // Bloques que ocupa una clase pesada agendada a las 12:30 (13:00 y 13:30).
 const HORAS_TRAS_PESADA = HORAS.slice(HORAS.indexOf(HORA_D_A5) + 1);
 
@@ -19,15 +20,18 @@ const HORAS_TRAS_PESADA = HORAS.slice(HORAS.indexOf(HORA_D_A5) + 1);
 // Google Sheets y no pudo leerse programaticamente. Estas reglas reconstruyen las 3 familias
 // visibles en los mensajes ("Cita Incompleta", "CONFLICTO TERRENO", "DUPLICADO FUTURO") y
 // agregan validaciones utiles (RUT modulo 11, clase en bloque, sin contacto, en feriado).
-function reporte() {
+// Regla de negocio: solo citas desde el día actual en adelante (a.fecha >= hoy).
+// Las inconsistencias y errores de fechas pasadas quedan estrictamente excluidos.
+function reporte(fechaDesde) {
   const hoy = hoyISO();
-  const hace30 = sumarDias(hoy, -30);
+  const desde = fechaDesde || hoy;
   const fset = feriados.set();
   const filas = db.prepare(`
     SELECT a.*, e.nombre AS examinador
     FROM agenda a JOIN examinadores e ON e.id = a.examinador_id
-    WHERE a.rut IS NOT NULL OR a.nombre IS NOT NULL OR a.bloqueado = 1
-  `).all();
+    WHERE (a.rut IS NOT NULL OR a.nombre IS NOT NULL OR a.bloqueado = 1)
+      AND a.fecha >= ?
+  `).all(desde);
 
   const esTerreno = (f) => f.tipo_cita === 'TRASLADO EN TERRENO'
     || (f.bloqueado && /TERRENO|TRASLADO/i.test(f.bloqueo_motivo || ''));
@@ -53,6 +57,7 @@ function reporte() {
   const terrenoPorDia = new Map();
 
   for (const f of filas) {
+    if (f.fecha < desde) continue;
     const esMarcador = rut.pareceMarcador(f.rut) || rut.pareceMarcador(f.nombre);
     const ocupada = Boolean(f.rut || f.nombre) && !f.bloqueado && !esMarcador;
 
@@ -77,12 +82,6 @@ function reporte() {
     if (ocupada && clasesF.some((cl) => CLASES_PESADAS.includes(cl)) && f.hora !== HORA_D_A5) {
       hallazgos.push({ ...base(f), tipo: 'CLASE_BLOQUE', severidad: 'warning',
         mensaje: `Clase ${f.clase} agendada ${f.hora}; solo se permite en el bloque ${HORA_D_A5}` });
-    }
-
-    // 4) Cita pasada reciente sin resultado (ultimos 30 dias; mas atras se asume cerrada)
-    if (ocupada && f.fecha < hoy && f.fecha >= hace30 && !f.resultado && f.confirmo_asistencia !== 0) {
-      hallazgos.push({ ...base(f), tipo: 'SIN_RESULTADO', severidad: 'info',
-        mensaje: 'Cita ya realizada sin resultado registrado' });
     }
 
     // 5) Cita futura sin ningun medio de contacto
@@ -190,17 +189,18 @@ function reporte() {
   }
 
   const orden = { error: 0, warning: 1, info: 2 };
-  hallazgos.sort((a, b) =>
+  const hallazgosVigentes = hallazgos.filter((h) => !h.fecha || h.fecha >= desde);
+  hallazgosVigentes.sort((a, b) =>
     orden[a.severidad] - orden[b.severidad] ||
     (a.fecha || '').localeCompare(b.fecha || '') ||
     (a.hora || '').localeCompare(b.hora || ''));
 
-  const resumen = hallazgos.reduce((acc, h) => {
+  const resumen = hallazgosVigentes.reduce((acc, h) => {
     acc[h.tipo] = (acc[h.tipo] || 0) + 1;
     return acc;
   }, {});
 
-  return { total: hallazgos.length, resumen, hallazgos };
+  return { total: hallazgosVigentes.length, resumen, hallazgos: hallazgosVigentes };
 }
 
 module.exports = { reporte };

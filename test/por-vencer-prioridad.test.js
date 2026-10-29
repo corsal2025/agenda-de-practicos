@@ -134,3 +134,9 @@ test('renderVencimientos ya no contiene la cadena "abrirSlotPorId"', () => {
   const codigo = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'analitica.js'), 'utf8');
   assert.ok(!codigo.includes('abrirSlotPorId'));
 });
+
+test('renderVencimientos contiene boton data-eliminar y llamada a liberar cupo', () => {
+  const codigo = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'analitica.js'), 'utf8');
+  assert.ok(codigo.includes('data-eliminar'));
+  assert.ok(codigo.includes('/liberar'));
+});

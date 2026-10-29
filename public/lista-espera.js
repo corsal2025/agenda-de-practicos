@@ -167,13 +167,13 @@ const ListaEspera = (() => {
     } catch (e) { toast(e.message, 'err'); return; }
     const filas = cupos.map((c, i) => `<tr><td class="num c">${esc(fFecha(c.fecha))}</td><td class="num c">${esc(c.hora)}</td>
       <td>${esc(c.examinador || '—')}</td><td class="c"><button class="btn chico" data-i="${i}">Asignar</button></td></tr>`).join('');
-    const cuerpo = `<p style="margin-top:0"><b>${esc(nom(p.nombre))}</b> · ${esc(p.rut || '')} · Clase ${esc(p.clase || '—')}</p>
-      <p class="muted" style="font-size:.82rem">Cupos libres de los próximos 30 días compatibles (regla D/A5 y sin repetir día)${p.origen === 'lista_espera' ? ', anteriores a su cita actual' : ''}.</p>
-      ${p.correo ? '' : `<div class="campo" style="margin-bottom:.6rem"><label for="le-correo">Correo del postulante (obligatorio para dar la hora)</label>
-        <input id="le-correo" type="email" placeholder="nombre@correo.cl" autocomplete="off"></div>`}
-      <div class="tabla-scroll"><table><thead><tr><th class="c">Fecha</th><th class="c">Hora</th><th>Examinador</th><th></th></tr></thead>
-      <tbody>${filas || '<tr><td colspan="4" class="muted">No hay cupos compatibles.</td></tr>'}</tbody></table></div>`;
-    const ov = modal('Buscar cupo', cuerpo, '<button class="btn sec" id="le-cerrar">Cerrar</button>');
+    const cuerpo = `<p style="margin:0 0 .3rem;font-size:14px"><b>${esc(nom(p.nombre))}</b> · ${esc(p.rut || '')} · Clase ${esc(p.clase || '—')}</p>
+      <p class="muted" style="font-size:.82rem;margin:0 0 .5rem">Cupos libres de los próximos 30 días compatibles (regla D/A5 y sin repetir día)${p.origen === 'lista_espera' ? ', anteriores a su cita actual' : ''}.</p>
+      ${p.correo ? '' : `<div class="campo" style="margin-bottom:.5rem"><label for="le-correo" style="font-size:12px;font-weight:700">Correo del postulante (obligatorio para dar la hora)</label>
+        <input id="le-correo" type="email" placeholder="nombre@correo.cl" autocomplete="off" style="padding:.4rem .6rem"></div>`}
+      <div class="tabla-scroll modal-cupos-scroll"><table class="tabla-modal-cupos"><thead><tr><th class="c col-fecha">Fecha</th><th class="c col-hora">Hora</th><th class="col-exam">Examinador</th><th class="c col-accion">Acción</th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="4" class="muted c" style="padding:1rem">No hay cupos compatibles.</td></tr>'}</tbody></table></div>`;
+    const ov = modal('Buscar cupo', cuerpo, '<button class="btn sec" id="le-cerrar">Cerrar</button>', 'modal-asignar-cupo');
     $('#le-cerrar').onclick = cerrarModal;
     ov.querySelectorAll('button[data-i]').forEach((btn) => {
       btn.onclick = async () => {

@@ -68,3 +68,13 @@ test('una entrada en formato antiguo (sin esas claves en el JSON) se restaura si
   assert.equal(restaurado.tipo_reagendamiento, null);
   assert.equal(restaurado.nombre, 'VIEJA');
 });
+
+test('limpiarAntigua elimina entradas con mas de N dias y conserva las recientes', () => {
+  db.prepare("INSERT INTO papelera (agenda_id, datos, motivo, actor, ts) VALUES (101, '{}', 'test', 'admin', datetime('now', '-40 days', 'localtime'))").run();
+  db.prepare("INSERT INTO papelera (agenda_id, datos, motivo, actor, ts) VALUES (102, '{}', 'test', 'admin', datetime('now', '-5 days', 'localtime'))").run();
+  const n = papelera.limpiarAntigua(30);
+  assert.equal(n >= 1, true);
+  const restantes = db.prepare('SELECT agenda_id FROM papelera WHERE agenda_id IN (101, 102)').all();
+  assert.equal(restantes.some((r) => r.agenda_id === 101), false);
+  assert.equal(restantes.some((r) => r.agenda_id === 102), true);
+});

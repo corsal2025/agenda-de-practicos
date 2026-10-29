@@ -7,12 +7,12 @@ const express = require('express');
 const multer = require('multer');
 
 const { db, tx, upsertFuncionario, upsertExaminador, log } = require('./db');
-const { PUERTO, HOST, RAIZ, HORAS, HORA_D_A5, CLASES_PESADAS, CATALOGOS } = require('./config');
+const { PUERTO, HOST, RAIZ, DB_PATH, HORAS, HORA_D_A5, CLASES_PESADAS, CATALOGOS, DESDE_SIN_0830 } = require('./config');
 const { generar } = require('./slots');
 const { reporte } = require('./errores');
 const { resumen } = require('./analitica');
 const { vigenciaTramite } = require('./tramite');
-const { generarXlsx, generarXlsxOriginal } = require('./export');
+const { generarXlsx, generarXlsxOriginal, generarXlsxCompleto } = require('./export');
 const { importar } = require('./migrate');
 const backupMod = require('./backup');
 const { hoyISO, sumarDias, ahoraTS } = require('./fechas');
@@ -369,7 +369,7 @@ app.get('/api/meta', wrap((req, res) => {
     hora_d_a5: HORA_D_A5,
     clases_pesadas: CLASES_PESADAS,
     hoy: hoyISO(),
-    examinadores: db.prepare('SELECT id, nombre, activo FROM examinadores ORDER BY nombre').all(),
+    examinadores: db.prepare('SELECT id, nombre, activo FROM examinadores WHERE (eliminado = 0 OR eliminado IS NULL) ORDER BY nombre').all(),
     funcionarios: db.prepare('SELECT id, nombre, activo FROM funcionarios ORDER BY nombre').all(),
     catalogos: {
       clase: catalogo('clase'),
@@ -426,6 +426,8 @@ app.get('/api/agenda', wrap((req, res) => {
   const { fecha, desde, hasta, examinador_id, estado, clase } = req.query;
   const cond = [];
   const p = [];
+  cond.push("NOT (a.fecha >= ? AND a.hora = '08:30')");
+  p.push(DESDE_SIN_0830);
   if (fecha) { cond.push('a.fecha = ?'); p.push(fecha); }
   if (desde) { cond.push('a.fecha >= ?'); p.push(desde); }
   if (hasta) { cond.push('a.fecha <= ?'); p.push(hasta); }
@@ -435,7 +437,7 @@ app.get('/api/agenda', wrap((req, res) => {
     const token = `%,${String(clase).toUpperCase().replace(/\s/g, '')},%`;
     const enClase = "(',' || REPLACE(COALESCE(a.clase, ''), ' ', '') || ',') LIKE ?";
     if (CLASES_PESADAS.includes(String(clase).toUpperCase())) {
-      cond.push(`(${enClase} OR ((a.rut IS NULL AND a.nombre IS NULL AND a.bloqueado = 0) AND a.hora = ?))`);
+      cond.push(`(${enClase} OR ((a.rut IS NULL AND a.nombre IS NULL AND a.bloqueado = 0) AND a.hora >= ?))`);
       p.push(token, HORA_D_A5);
     } else {
       cond.push(`(${enClase} OR (a.rut IS NULL AND a.nombre IS NULL AND a.bloqueado = 0))`);
@@ -484,8 +486,8 @@ function validarBloque(body, bloque) {
   if (!catalogoSiCambia('intento', 'intento')) throw bad(`Intento no valido: ${body.intento}`);
   if (!catalogoSiCambia('lista_espera', 'lista_espera')) throw bad(`Lista de espera no valida: ${body.lista_espera}`);
 
-  if (tienePesada && bloque.hora !== HORA_D_A5 && !body.forzar) {
-    throw bad(`Las clases D/A5 solo se agendan en el bloque ${HORA_D_A5}. Elige ese horario o marca "forzar".`);
+  if (tienePesada && bloque.hora < '12:30') {
+    throw bad('Las licencias Clase D y A5 solo pueden ser agendadas en bloques de las 12:30 en adelante.', 400);
   }
   if (tienePesada && bloque.hora === HORA_D_A5 && !body.forzar) {
     const ocupados = pesada.ocupadosDependientes(bloque.fecha, bloque.examinador_id);
@@ -529,6 +531,32 @@ function verificarTercerIntento(body, bloque, rutFmt, clase) {
     throw bad(`El motivo de la autorización debe tener al menos ${intentos.MOTIVO_MINIMO} caracteres.`);
   }
   return { clase: b.clase, reprobados: b.reprobados, motivo };
+}
+
+// Regla: no se permite la misma persona (RUT) con dos examinadores distintos para la misma licencia en la misma fecha
+function verificarConflictoExaminador({ rut: rutParam, clase, fecha, examinador_id, excluirId }) {
+  const rLimpio = rut.limpiar(rutParam);
+  if (!rLimpio) return;
+  const filas = db.prepare(`
+    SELECT a.id, a.fecha, a.hora, a.clase, e.nombre AS examinador
+    FROM agenda a
+    JOIN examinadores e ON e.id = a.examinador_id
+    WHERE a.fecha = ?
+      AND a.examinador_id != ?
+      AND a.id != ?
+      AND a.bloqueado = 0
+      AND a.rut IS NOT NULL
+      AND UPPER(REPLACE(REPLACE(REPLACE(a.rut,'.',''),'-',''),' ','')) = ?
+  `).all(fecha, Number(examinador_id), Number(excluirId) || -1, rLimpio);
+
+  for (const f of filas) {
+    if (intentos.compartenClase(f.clase, clase)) {
+      throw bad(
+        `Conflicto de examinador: esta persona (${rutParam}) ya tiene una cita agendada el ${fecha} a las ${f.hora} con el examinador "${f.examinador}" para la clase ${f.clase || 'indicada'}. No se permite la misma persona con dos examinadores distintos para la misma licencia.`,
+        409
+      );
+    }
+  }
 }
 
 app.put('/api/agenda/:id', wrap(async (req, res) => {
@@ -579,6 +607,15 @@ app.put('/api/agenda/:id', wrap(async (req, res) => {
 
   // Regla de 3er intento: solo al ocupar el bloque o cambiar RUT/clase (editar otros campos no bloquea).
   const autorizacion = verificarTercerIntento(body, bloque, rutFmt, clase);
+  if (rutFmt && clase) {
+    verificarConflictoExaminador({
+      rut: rutFmt,
+      clase,
+      fecha: bloque.fecha,
+      examinador_id: bloque.examinador_id,
+      excluirId: bloque.id,
+    });
+  }
 
   const tel = telefono.normalizar(body.contacto);
   // Solo se revalida si el telefono cambia: un telefono antiguo fuera de formato no bloquea otras ediciones
@@ -693,15 +730,24 @@ app.put('/api/agenda/:id', wrap(async (req, res) => {
   }
 
   const bloqueFinal = traer(id);
-  // Cita nueva o de otra persona: se ESPERA el resultado del correo (puede tardar hasta ~40-60 s)
-  // para mostrarle a quien agenda lo que realmente pasó.
+  // Cita nueva o de otra persona: envío asíncrono en segundo plano para no bloquear
+  // la respuesta HTTP (debe responder en <50ms en vez de varios segundos).
   let resultadoCorreo = null;
   if (quedaOcupada && cambiaPersona) {
-    if (bloqueFinal.correo && !bloqueFinal.token_confirmacion) {
-      bloqueFinal.token_confirmacion = crypto.randomBytes(16).toString('hex');
-      db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').run(bloqueFinal.token_confirmacion, id);
+    if (!bloqueFinal.correo) {
+      resultadoCorreo = { estado: 'sin_correo' };
+    } else if (!correo.habilitado) {
+      resultadoCorreo = { estado: 'deshabilitado' };
+    } else {
+      resultadoCorreo = { estado: 'enviando' };
+      if (!bloqueFinal.token_confirmacion) {
+        bloqueFinal.token_confirmacion = crypto.randomBytes(16).toString('hex');
+        db.prepare('UPDATE agenda SET token_confirmacion = ? WHERE id = ?').run(bloqueFinal.token_confirmacion, id);
+      }
+      asistencia.enviarConfirmacionNueva(bloqueFinal).catch((err) => {
+        console.error('Error enviando correo de confirmación nueva en segundo plano:', err && err.message);
+      });
     }
-    resultadoCorreo = await asistencia.enviarConfirmacionNueva(bloqueFinal);
   }
 
   res.json({ ok: true, avisos, bloque: traer(id), correo: resultadoCorreo });
@@ -892,12 +938,30 @@ app.post('/api/cola-reagendar/:id/asignar', wrap((req, res) => {
     .some((cl) => CLASES_PESADAS.includes(cl));
   if (tienePesada && destino.hora !== HORA_D_A5) throw bad(`La clase ${item.clase} solo se agenda en el bloque ${HORA_D_A5}.`);
 
+  if (tienePesada && destino.hora === HORA_D_A5) {
+    const ocupados = pesada.ocupadosDependientes(destino.fecha, destino.examinador_id);
+    if (ocupados.length) {
+      const detalle = ocupados.map((o) => `${o.hora} (${o.nombre || o.rut})`).join(' y ');
+      throw bad(`No se puede asignar cita pesada a las ${HORA_D_A5}: el examinador ya tiene cita en ${detalle}.`, 409);
+    }
+  }
+
+  if (item.rut && item.clase) {
+    verificarConflictoExaminador({
+      rut: item.rut,
+      clase: item.clase,
+      fecha: destino.fecha,
+      examinador_id: destino.examinador_id,
+      excluirId: destino.id,
+    });
+  }
+
   const ts = ahoraTS();
   const motivo = (req.body && req.body.motivo) || `Reagendado por: ${item.motivo || 'Examinador no disponible'}`;
   const comentarios = [item.comentarios, `Reagendada desde ${item.origen_fecha} ${item.origen_hora} (${item.motivo || ''})`].filter(Boolean).join(' | ');
 
   tx(() => {
-    db.prepare(`
+    const resAgenda = db.prepare(`
       UPDATE agenda SET rut=?, nombre=?, clase=?, contacto=?, correo=?, tipo_cita='REAGENDADO',
         motivo_reagendamiento=?, lista_espera=?, intento=?, funcionario_id=?, fecha_inicio_tramite=?,
         confirmo_asistencia=NULL, resultado=NULL, avisado_por=NULL, pendiente_reagendar=0, pendiente_nota=NULL,
@@ -906,6 +970,10 @@ app.post('/api/cola-reagendar/:id/asignar', wrap((req, res) => {
       WHERE id=? AND (rut IS NULL OR rut='') AND (nombre IS NULL OR nombre='') AND bloqueado = 0
     `).run(item.rut, item.nombre, item.clase, item.contacto, correoFinal, motivo, item.lista_espera,
       item.intento, item.funcionario_id, item.fecha_inicio_tramite, comentarios, ts, destino.id);
+
+    if (resAgenda.changes === 0) {
+      throw bad('El bloque de destino ya no está disponible o fue ocupado por otro funcionario.', 409);
+    }
 
     db.prepare(`UPDATE cola_reagendar SET estado='reagendado', destino_agenda_id=?, correo=?, resuelto_en=? WHERE id=?`)
       .run(destino.id, correoFinal, ts, item.id);
@@ -1059,14 +1127,20 @@ app.post('/api/correo/confirmacion-masiva', wrap(async (req, res) => {
   res.json({ ok: true, habilitado: true, enviados, sin_correo: sinCorreo, fallidos });
 }));
 
-app.post('/api/agenda/:id/confirmar', wrap(async (req, res) => {
+app.post('/api/agenda/:id/confirmar', wrap((req, res) => {
   const id = Number(req.params.id);
   const { valor } = req.body || {};
   const bloque = traer(id);
   if (!bloque) throw bad('Bloque no encontrado', 404);
   const confirmo = valor === 1 || valor === true ? 1 : (valor === 0 || valor === false ? 0 : null);
   if (!asistencia.registrarAsistencia(id, confirmo, actorDe(req))) throw bad('El bloque no tiene una cita.', 404);
-  const correoEnviado = confirmo === 1 ? await asistencia.enviarConfirmacionSiFalta(id) : false;
+  const tieneCorreo = Boolean(bloque.correo && !bloque.correo_confirmacion_enviado);
+  const correoEnviado = confirmo === 1 && tieneCorreo;
+  if (correoEnviado) {
+    asistencia.enviarConfirmacionSiFalta(id).catch((err) => {
+      console.error('Error enviando correo de confirmación si falta en segundo plano:', err && err.message);
+    });
+  }
 
   res.json({ ok: true, confirmo_asistencia: confirmo, correo_enviado: correoEnviado });
 }));
@@ -1076,11 +1150,15 @@ app.get('/api/respuestas-correo', wrap((req, res) => {
   const estado = ['revisar', 'aplicada', 'ignorada'].includes(req.query.estado) ? req.query.estado : null;
   res.json({ items: respuestasCorreo.listar({ estado }), resumen: respuestasCorreo.resumen() });
 }));
-app.post('/api/respuestas-correo/:id/resolver', wrap(async (req, res) => {
+app.post('/api/respuestas-correo/:id/resolver', wrap((req, res) => {
   const { accion, agenda_id } = req.body || {};
   const r = respuestasCorreo.resolver(Number(req.params.id), { accion, agenda_id }, actorDe(req));
-  const correoEnviado = r.confirmar ? await asistencia.enviarConfirmacionSiFalta(r.agenda_id) : false;
-  res.json({ ok: true, estado: r.estado, agenda_id: r.agenda_id, correo_enviado: correoEnviado });
+  if (r.confirmar) {
+    asistencia.enviarConfirmacionSiFalta(r.agenda_id).catch((err) => {
+      console.error('Error enviando correo resolver en segundo plano:', err && err.message);
+    });
+  }
+  res.json({ ok: true, estado: r.estado, agenda_id: r.agenda_id, correo_enviado: Boolean(r.confirmar) });
 }));
 
 app.post('/api/agenda/:id/resultado', wrap((req, res) => {
@@ -1094,6 +1172,21 @@ app.post('/api/agenda/:id/resultado', wrap((req, res) => {
   logReq(req, id, 'editar', `resultado = ${resultado || '(borrado)'}`);
   res.json({ ok: true });
 }));
+
+// ---------- TIPO DE CITA ----------
+const actualizarTipoCita = (req, res) => {
+  const id = Number(req.params.id);
+  const tipoCita = (req.body && req.body.tipo_cita) || null;
+  const cats = catalogo('tipo_cita');
+  if (tipoCita && !cats.includes(tipoCita)) throw bad(`Tipo de cita no válido: ${tipoCita}`);
+  const r = db.prepare(`UPDATE agenda SET tipo_cita = ?, actualizado_en = datetime('now','localtime')
+    WHERE id = ? AND (rut IS NOT NULL OR nombre IS NOT NULL) AND bloqueado = 0`).run(tipoCita, id);
+  if (!r.changes) throw bad('El bloque no tiene una cita.', 404);
+  logReq(req, id, 'editar', `tipo_cita = ${tipoCita || '(borrado)'}`);
+  res.json({ ok: true, tipo_cita: tipoCita });
+};
+app.post('/api/agenda/:id/tipo-cita', wrap(actualizarTipoCita));
+app.patch('/api/agenda/:id/tipo-cita', wrap(actualizarTipoCita));
 
 // ---------- AVISOS AL POSTULANTE ----------
 const MEDIOS_AVISO = ['telefono', 'whatsapp', 'correo'];
@@ -1138,8 +1231,8 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
   origen.correo = exigirCorreo((req.body && req.body.correo) || origen.correo);
   const origenTienePesada = String(origen.clase || '').toUpperCase().split(',').map((s) => s.trim())
     .some((cl) => CLASES_PESADAS.includes(cl));
-  if (origenTienePesada && destino.hora !== HORA_D_A5) {
-    throw bad(`La clase ${origen.clase} solo se agenda en el bloque ${HORA_D_A5}.`);
+  if (origenTienePesada && destino.hora < '12:30') {
+    throw bad('Las licencias Clase D y A5 solo pueden ser agendadas en bloques de las 12:30 en adelante.', 400);
   }
   if (origenTienePesada && destino.hora === HORA_D_A5 && !forzar) {
     const ocupados = pesada.ocupadosDependientes(destino.fecha, destino.examinador_id);
@@ -1150,6 +1243,16 @@ app.post('/api/agenda/:id/reagendar', wrap((req, res) => {
         + 'Libera esas horas primero o marca "forzar" para reagendar igual.'
       );
     }
+  }
+
+  if (origen.rut && origen.clase) {
+    verificarConflictoExaminador({
+      rut: origen.rut,
+      clase: origen.clase,
+      fecha: destino.fecha,
+      examinador_id: destino.examinador_id,
+      excluirId: origen.id,
+    });
   }
 
   tx(() => {
@@ -1283,18 +1386,27 @@ app.post('/api/desbloquear-dia', wrap((req, res) => {
 app.get('/api/disponibles', wrap((req, res) => {
   limpiarSobrecuposVacios();
   const { desde, hasta, clase, examinador_id } = req.query;
-  const cond = ['a.rut IS NULL', 'a.nombre IS NULL', 'a.bloqueado = 0', 'a.fecha NOT IN (SELECT fecha FROM feriados)'];
-  const p = [];
+  const cond = [
+    'a.rut IS NULL',
+    'a.nombre IS NULL',
+    'a.bloqueado = 0',
+    'a.fecha NOT IN (SELECT fecha FROM feriados)',
+    "NOT (a.fecha >= ? AND a.hora = '08:30')",
+  ];
+  const p = [DESDE_SIN_0830];
   if (desde) { cond.push('a.fecha >= ?'); p.push(desde); }
   if (hasta) { cond.push('a.fecha <= ?'); p.push(hasta); }
   if (examinador_id) { cond.push('a.examinador_id = ?'); p.push(Number(examinador_id)); }
-  if (clase && CLASES_PESADAS.includes(String(clase).toUpperCase())) { cond.push('a.hora = ?'); p.push(HORA_D_A5); }
+  if (clase && CLASES_PESADAS.includes(String(clase).toUpperCase())) { cond.push('a.hora >= ?'); p.push(HORA_D_A5); }
   const rows = db.prepare(`${SELECT_BLOQUE} WHERE ${cond.join(' AND ')} ORDER BY a.fecha, a.hora, e.nombre LIMIT 3000`).all(...p);
-  res.json(rows.map((r) => ({
-    ...r,
-    apto_pesada: r.hora === HORA_D_A5,
-    regla: r.hora === HORA_D_A5 ? 'IDEAL para D y A5 (tambien B, C, profesionales)' : 'B, C, A1-A4 (PROHIBIDO D y A5)',
-  })));
+  res.json(rows.map((r) => {
+    const esAptoPesada = r.hora >= HORA_D_A5;
+    return {
+      ...r,
+      apto_pesada: esAptoPesada,
+      regla: esAptoPesada ? 'IDEAL para D y A5 (tambien B, C, profesionales)' : 'B, C, A1-A4 (PROHIBIDO D y A5)',
+    };
+  }));
 }));
 
 // ---------- HISTORIAL ----------
@@ -1312,7 +1424,7 @@ app.get('/api/historial', wrap((req, res) => {
 // ---------- DIA / IMPRESION ----------
 app.get('/api/dia', wrap((req, res) => {
   const fecha = req.query.fecha || hoyISO();
-  const rows = db.prepare(`${SELECT_BLOQUE} WHERE a.fecha = ? ORDER BY e.nombre, a.hora, a.cupo`).all(fecha);
+  const rows = db.prepare(`${SELECT_BLOQUE} WHERE a.fecha = ? AND NOT (a.fecha >= ? AND a.hora = '08:30') ORDER BY e.nombre, a.hora, a.cupo`).all(fecha, DESDE_SIN_0830);
   const porExaminador = {};
   for (const r of rows) (porExaminador[r.examinador] ||= []).push(r);
   res.json({ fecha, examinadores: porExaminador });
@@ -1396,6 +1508,36 @@ app.put('/api/examinadores/:id', wrap((req, res) => {
     res.status(400).json({ error: 'El examinador ya existe' });
   }
 }));
+app.delete('/api/examinadores/:id', wrap((req, res) => {
+  const id = Number(req.params.id);
+  const ex = db.prepare('SELECT * FROM examinadores WHERE id = ?').get(id);
+  if (!ex) throw bad('Examinador no encontrado', 404);
+
+  const actor = actorDe(req);
+  const citasConPersona = db.prepare(
+    "SELECT COUNT(*) AS total FROM agenda WHERE examinador_id = ? AND ((rut IS NOT NULL AND TRIM(rut) != '') OR (nombre IS NOT NULL AND TRIM(nombre) != ''))"
+  ).get(id).total;
+
+  if (citasConPersona > 0) {
+    db.prepare('UPDATE examinadores SET activo = 0, eliminado = 1 WHERE id = ?').run(id);
+    log('examinador', 'eliminar', actor, `Examinador ${ex.nombre} eliminado (marcado inactivo/eliminado con ${citasConPersona} citas históricas protegidas)`);
+    return res.json({
+      ok: true,
+      eliminado: true,
+      desactivado: true,
+      citas: citasConPersona,
+      mensaje: `Examinador ${ex.nombre} eliminado exitosamente de la lista.`
+    });
+  }
+
+  tx(() => {
+    db.prepare('DELETE FROM agenda WHERE examinador_id = ?').run(id);
+    db.prepare('DELETE FROM examinadores WHERE id = ?').run(id);
+    log('examinador', 'eliminar', actor, `Examinador ${ex.nombre} eliminado`);
+  });
+
+  res.json({ ok: true, eliminado: true, mensaje: `Examinador ${ex.nombre} eliminado exitosamente.` });
+}));
 app.post('/api/funcionarios', wrap((req, res) => {
   try {
     const id = upsertFuncionario(String((req.body || {}).nombre || '').trim().toUpperCase());
@@ -1436,6 +1578,76 @@ app.post('/api/papelera/vaciar', wrap((req, res) => {
   res.json({ ok: true, eliminadas: n });
 }));
 
+// ---------- ADMIN & MANTENIMIENTO ----------
+app.get('/api/admin/estado', wrap((req, res) => {
+  const totalCitas = db.prepare('SELECT COUNT(*) AS n FROM agenda WHERE (rut IS NOT NULL OR nombre IS NOT NULL) AND bloqueado = 0').get().n;
+  const totalBloques = db.prepare('SELECT COUNT(*) AS n FROM agenda').get().n;
+  const papeleraCount = db.prepare('SELECT COUNT(*) AS n FROM papelera').get().n;
+  const papeleraAntigua = db.prepare("SELECT COUNT(*) AS n FROM papelera WHERE ts < datetime('now', '-30 days', 'localtime')").get().n;
+  let checkOk = 'ok';
+  try {
+    const chk = db.prepare('PRAGMA quick_check').get();
+    checkOk = chk ? (chk.quick_check || Object.values(chk)[0]) : 'ok';
+  } catch (e) {
+    checkOk = e.message;
+  }
+  let dbSize = 0;
+  try {
+    if (fs.existsSync(DB_PATH)) dbSize = fs.statSync(DB_PATH).size;
+  } catch (_) {}
+  let ultimoBackup = null;
+  try {
+    if (fs.existsSync(backupMod.DIR)) {
+      const bks = fs.readdirSync(backupMod.DIR)
+        .filter((f) => /^agenda-\d{4}-\d{2}-\d{2}T.*\.db$/.test(f))
+        .map((f) => ({ archivo: f, mtime: fs.statSync(path.join(backupMod.DIR, f)).mtime }))
+        .sort((a, b) => b.mtime - a.mtime);
+      if (bks.length) ultimoBackup = { archivo: bks[0].archivo, fecha: bks[0].mtime };
+    }
+  } catch (_) {}
+  res.json({
+    ok: true,
+    rol: 'Administrador del Sistema',
+    metricas: {
+      total_citas: totalCitas,
+      total_bloques: totalBloques,
+      papelera_count: papeleraCount,
+      papelera_antigua: papeleraAntigua,
+      bd_integridad: checkOk,
+      bd_tamano_bytes: dbSize,
+      bd_tamano_formato: dbSize > 1048576 ? (dbSize / 1048576).toFixed(2) + ' MB' : (dbSize / 1024).toFixed(1) + ' KB',
+      ultimo_backup: ultimoBackup,
+      modo_correo: correo.modo(),
+    },
+  });
+}));
+
+app.post('/api/admin/optimizar', wrap((req, res) => {
+  try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch (_) {}
+  db.exec('VACUUM');
+  db.exec('ANALYZE');
+  let check = 'ok';
+  try {
+    const chk = db.prepare('PRAGMA quick_check').get();
+    check = chk ? (chk.quick_check || Object.values(chk)[0]) : 'ok';
+  } catch (e) {
+    check = e.message;
+  }
+  logReq(req, null, 'admin_optimizar', 'Mantenimiento preventivo: VACUUM y ANALYZE');
+  res.json({
+    ok: true,
+    mensaje: 'Base de datos optimizada con éxito (VACUUM & ANALYZE completados).',
+    integridad: check,
+  });
+}));
+
+app.post('/api/admin/limpiar-papelera', wrap((req, res) => {
+  const dias = Math.max(1, Number(req.body && req.body.dias) || 30);
+  const n = papelera.limpiarAntigua(dias);
+  logReq(req, null, 'limpiar_papelera', `Eliminadas ${n} entradas de papelera (> ${dias} días)`);
+  res.json({ ok: true, eliminadas: n, dias });
+}));
+
 // ---------- IMPORT / EXPORT / BACKUP ----------
 app.post('/api/import', subir.single('archivo'), wrap((req, res) => {
   const limpiar = String(req.body && req.body.limpiar) === 'true' || (req.body && req.body.limpiar === true) || (req.body && req.body.limpiar === '1');
@@ -1466,9 +1678,26 @@ app.post('/api/import', subir.single('archivo'), wrap((req, res) => {
 }));
 
 app.get('/api/export', wrap((req, res) => {
-  const original = req.query.formato === 'original';
-  const buf = original ? generarXlsxOriginal() : generarXlsx();
-  res.setHeader('Content-Disposition', `attachment; filename="agenda-practicos${original ? '-formato-excel' : ''}-${hoyISO()}.xlsx"`);
+  const formato = req.query.formato;
+  let buf;
+  let sufijo = '';
+  if (formato === 'completo') {
+    buf = generarXlsxCompleto();
+    sufijo = '-completo';
+  } else if (formato === 'original') {
+    buf = generarXlsxOriginal();
+    sufijo = '-formato-excel';
+  } else {
+    buf = generarXlsx();
+  }
+  res.setHeader('Content-Disposition', `attachment; filename="agenda-practicos${sufijo}-${hoyISO()}.xlsx"`);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.send(buf);
+}));
+
+app.get('/api/exportar/completo', wrap((req, res) => {
+  const buf = generarXlsxCompleto();
+  res.setHeader('Content-Disposition', `attachment; filename="agenda-practicos-completo-${hoyISO()}.xlsx"`);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.send(buf);
 }));
@@ -1482,15 +1711,17 @@ const FILTROS_VENCIMIENTO = {
   vencidos: (d) => d <= 0,
   todos: () => true,
 };
-const DIAS_PASADOS_SIN_RESULTADO = 30;
 app.get('/api/tramites-por-vencer', wrap((req, res) => {
   const filtro = FILTROS_VENCIMIENTO[req.query.filtro || 'todos'];
   if (!filtro) throw bad('Filtro inválido');
   const hoy = hoyISO();
+  // Regla de negocio: solo citas desde el día actual en adelante (a.fecha >= hoy).
+  // Citas pasadas pierden la hora y deben reagendar presencialmente, por lo que se excluyen.
+  // El vencimiento legal del trámite se calcula estrictamente sumando 6 meses a fecha_inicio_tramite.
   const rows = db.prepare(`${SELECT_BLOQUE}
     WHERE a.bloqueado = 0 AND a.fecha_inicio_tramite IS NOT NULL AND (a.rut IS NOT NULL OR a.nombre IS NOT NULL)
-      AND (a.fecha >= ? OR (a.fecha >= ? AND (a.resultado IS NULL OR a.resultado = '')))`)
-    .all(hoy, sumarDias(hoy, -DIAS_PASADOS_SIN_RESULTADO));
+      AND a.fecha >= ?`)
+    .all(hoy);
   const lista = rows.map(conAlertas)
     .filter((r) => r.dias_restantes_tramite !== null && filtro(r.dias_restantes_tramite))
     .sort((a, b) => a.dias_restantes_tramite - b.dias_restantes_tramite || a.fecha.localeCompare(b.fecha));

@@ -34,6 +34,63 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const view = $('#view');
 let META = null;
 
+// Retención de scroll en todo el sistema: captura y restaura posición exacta
+function memorizarScroll(root = document) {
+  const cajas = [];
+  try {
+    const contenedor = root || document;
+    contenedor.querySelectorAll('.tabla-scroll, .tabla-agenda-scroll, .tabla-agenda-wrap, .panel-scroll, .tabla-agenda-card').forEach((el) => {
+      cajas.push({
+        el,
+        scrollTop: el.scrollTop,
+        scrollLeft: el.scrollLeft,
+        id: el.id || null,
+        clase: el.className || null,
+      });
+    });
+  } catch (_) {}
+  const act = document.activeElement;
+  const tr = act && act.closest ? act.closest('tr[data-id]') : null;
+  return {
+    windowY: window.scrollY || (document.documentElement ? document.documentElement.scrollTop : 0) || (document.body ? document.body.scrollTop : 0),
+    windowX: window.scrollX || (document.documentElement ? document.documentElement.scrollLeft : 0) || (document.body ? document.body.scrollLeft : 0),
+    cajas,
+    trId: tr ? tr.dataset.id : null,
+  };
+}
+
+function reponerScroll(est, root = document) {
+  if (!est) return;
+  const aplicar = () => {
+    try {
+      if (typeof est.windowY === 'number') {
+        window.scrollTo({ top: est.windowY, left: est.windowX || 0, behavior: 'instant' });
+      }
+      if (Array.isArray(est.cajas)) {
+        const contenedor = root || document;
+        est.cajas.forEach((c) => {
+          let el = c.el;
+          if (!el || !document.contains(el)) {
+            if (c.id) el = contenedor.querySelector(`#${c.id}`);
+            else if (c.clase) el = contenedor.querySelector(`.${c.clase.split(' ').filter(Boolean).join('.')}`);
+            if (!el) el = contenedor.querySelector('.tabla-agenda-scroll') || contenedor.querySelector('.tabla-scroll');
+          }
+          if (el) {
+            el.scrollTop = c.scrollTop;
+            el.scrollLeft = c.scrollLeft;
+          }
+        });
+      }
+    } catch (_) {}
+  };
+  aplicar();
+  requestAnimationFrame(aplicar);
+  setTimeout(aplicar, 10);
+  setTimeout(aplicar, 50);
+}
+window.memorizarScroll = memorizarScroll;
+window.reponerScroll = reponerScroll;
+
 // Cache de lecturas (GET): ultima respuesta (texto JSON) por ruta. Permite dibujar
 // al instante una vista ya visitada mientras se pide la version fresca, y que el
 // badge y la vista compartan una misma respuesta. Cualquier escritura (POST/PUT/
@@ -101,11 +158,17 @@ async function cargarVista(slot, path, pintar) {
   const gv = genVista;
   const vigente = () => turnoVista[slot] === turno && gv === genVista;
   const previo = cacheGet.get(path)?.txt;
-  if (previo !== undefined) pintar(previo ? JSON.parse(previo) : null);
+  if (previo !== undefined) {
+    const sc = memorizarScroll();
+    pintar(previo ? JSON.parse(previo) : null);
+    reponerScroll(sc);
+  }
   const fresco = await api(path);
   if (!vigente()) return;
   if (previo !== undefined && cacheGet.get(path)?.txt === previo) return; // sin cambios
+  const sc = memorizarScroll();
   pintar(fresco);
+  reponerScroll(sc);
 }
 
 function toast(msg, tipo = 'ok') {

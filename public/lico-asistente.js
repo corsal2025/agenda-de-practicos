@@ -175,7 +175,7 @@
       fechaManana: manana,
       porconfirmar: Array.isArray(r[0]) ? r[0].filter(function (x) { return x.fecha >= hoy && x.fecha <= hasta7; }).length : null,
       reagendar: Array.isArray(r[1]) || Array.isArray(r[2]) ? (r[1] || []).length + (r[2] || []).length : null,
-      errores: r[3] && Array.isArray(r[3].hallazgos) ? r[3].hallazgos.filter(function (h) { return h.severidad !== 'info'; }).length : null,
+      errores: r[3] && Array.isArray(r[3].hallazgos) ? r[3].hallazgos.filter(function (h) { return (!h.fecha || h.fecha >= hoy) && h.severidad !== 'info'; }).length : null,
       porVencer: Array.isArray(r[4]) ? r[4].filter(function (x) { return x.dias_restantes_tramite <= DIAS_POR_VENCER; }).length : null,
       examenesHoy: ocupadasHoy ? ocupadasHoy.length : null,
       sinTramiteHoy: ocupadasHoy ? ocupadasHoy.filter(function (b) { return !b.fecha_inicio_tramite; }).length : null,

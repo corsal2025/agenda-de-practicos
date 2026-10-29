@@ -75,7 +75,7 @@ async function renderPorConfirmar() {
       <div class="pc-toolbar">
         <span class="pastilla" id="pc-sel-info">0 seleccionados</span>
         <button class="btn chico" id="pc-mail-sel" title="Envía el correo con los enlaces para confirmar, rechazar o reagendar">✉ Enviar correo de confirmación</button>
-        <button class="btn chico sec" id="pc-wa-sel" title="Abre una cola para escribir por WhatsApp uno a uno">💬 WhatsApp a seleccionados</button>
+        <button class="btn chico sec" id="pc-wa-sel" title="Abre una cola para enviar mensaje SMS uno a uno">💬 SMS a seleccionados</button>
       </div>
       <div class="tabla-scroll">
         <table class="tabla-porconfirmar thead-fijo">
@@ -119,11 +119,12 @@ async function renderPorConfirmar() {
     const n = seleccion.size;
     $('#pc-sel-info').textContent = `${n} ${n === 1 ? 'seleccionado' : 'seleccionados'}`;
     $('#pc-mail-sel').textContent = n ? '✉ Enviar correo de confirmación' : `✉ Enviar correo de confirmación a todos (${visibles.length})`;
-    $('#pc-wa-sel').textContent = n ? '💬 WhatsApp a seleccionados' : `💬 WhatsApp a todos (${visibles.length})`;
+    $('#pc-wa-sel').textContent = n ? '💬 SMS a seleccionados' : `💬 SMS a todos (${visibles.length})`;
     $('#pc-mail-sel').disabled = $('#pc-wa-sel').disabled = !visibles.length;
   };
 
   const pintarLista = () => {
+    const sc = typeof memorizarScroll === 'function' ? memorizarScroll() : null;
     const q = ($('#pc-q').value || '').trim().toLowerCase();
     const filtradas = citasCargadas.filter((r) => {
       if (!q) return true;
@@ -145,6 +146,7 @@ async function renderPorConfirmar() {
         : licoVacioFila(9, 'celebra', '¡Todo al día!', 'No hay citas pendientes de confirmación en este rango. Lico aprueba esta gestión.');
       if (!q && pcTeniaPendientes) licoConfeti($('#pc-tbody'));
       pcTeniaPendientes = false;
+      if (sc && typeof reponerScroll === 'function') reponerScroll(sc);
       return;
     }
 
@@ -215,9 +217,11 @@ async function renderPorConfirmar() {
         }
       };
     });
+    if (sc && typeof reponerScroll === 'function') reponerScroll(sc);
   };
 
   const marcarAsistencia = async (id, val) => {
+    const sc = typeof memorizarScroll === 'function' ? memorizarScroll() : null;
     try {
       await api(`/agenda/${id}/confirmar`, {
         method: 'POST',
@@ -226,6 +230,7 @@ async function renderPorConfirmar() {
       const cita = citasCargadas.find((c) => c.id === id);
       citasCargadas = citasCargadas.filter((c) => c.id !== id);
       pintarLista();
+      if (sc && typeof reponerScroll === 'function') reponerScroll(sc);
       actualizarBadgePorConfirmar();
       toast(val ? 'Asistencia confirmada exitosamente' : 'Registrado: postulante no asiste', val ? 'ok' : 'alerta');
       if (!val && cita) await ofrecerLiberarCupo(cita);
@@ -352,28 +357,28 @@ window.PorConfirmar = {
   },
 };
 
-// Cola de WhatsApp: una ventana por clic del usuario (asi no la bloquea el navegador).
+// Cola de SMS: una ventana por clic del usuario (asi no la bloquea el navegador).
 function colaWhatsApp(filas) {
   const items = filas.map((r) => ({ r, tel: telWaDe(r.contacto), enviado: false }));
   const conTel = items.filter((x) => x.tel);
   const sinTel = items.filter((x) => !x.tel);
-  const urlDe = (x) => `https://wa.me/${x.tel}?text=${encodeURIComponent(mensajeWaCita(x.r, x.r.examinador, 'Por favor confírmanos tu asistencia respondiendo a este mensaje.'))}`;
+  const urlDe = (x) => `sms:+${x.tel}?body=${encodeURIComponent(mensajeSmsCita(x.r, x.r.examinador, 'Por favor confírmanos si podrás asistir o si necesitas reagendar tu hora.'))}`;
   const cuerpo = `
-    <p class="muted" style="margin-top:0">Cada botón abre WhatsApp en una pestaña nueva con el mensaje listo. Envíalo y vuelve aquí para continuar con el siguiente.</p>
+    <p class="muted" style="margin-top:0">Cada botón abre tu aplicación de SMS con el mensaje listo. Envíalo y vuelve aquí para continuar con el siguiente.</p>
     <div class="tabla-scroll" style="max-height:50vh;overflow-y:auto"><table class="tabla-porconfirmar"><thead><tr>
       <th>Postulante</th><th class="c">Cita</th><th class="c">Teléfono</th><th class="c"></th></tr></thead><tbody>
       ${conTel.map((x, i) => `<tr>
         <td class="pc-nombre">${esc(nom(x.r.nombre) || '(Sin nombre)')}</td>
         <td class="c nw">${esc(fFecha(x.r.fecha))} ${esc(x.r.hora || '')}</td>
         <td class="c num nw">${esc(fTel(x.r.contacto))}</td>
-        <td class="c nw"><button class="btn chico" data-i="${i}">Abrir WhatsApp</button><span class="wa-ok" data-ok="${i}" hidden>enviado ✓</span></td>
+        <td class="c nw"><button class="btn chico" data-i="${i}">Abrir SMS</button><span class="wa-ok" data-ok="${i}" hidden>enviado ✓</span></td>
       </tr>`).join('') || '<tr><td colspan="4" class="c muted">Nadie con teléfono válido.</td></tr>'}
     </tbody></table></div>
     ${sinTel.length ? `<p class="muted" style="margin-bottom:0"><b>Sin teléfono (${sinTel.length}):</b> ${sinTel.map((x) => esc(nom(x.r.nombre) || x.r.rut || '(Sin nombre)')).join(', ')}</p>` : ''}`;
   const pie = `<span class="muted" id="wa-progreso" style="margin-right:auto"></span>
     <button class="btn sec" id="wa-cerrar">Cerrar</button>
     <button class="btn" id="wa-siguiente">Siguiente ▶</button>`;
-  const ov = modal('Cola de WhatsApp', cuerpo, pie);
+  const ov = modal('Cola de SMS', cuerpo, pie);
   const pintar = () => {
     const hechos = conTel.filter((x) => x.enviado).length;
     ov.querySelector('#wa-progreso').textContent = `${hechos} de ${conTel.length} enviados`;
@@ -394,6 +399,7 @@ function colaWhatsApp(filas) {
   ov.querySelector('#wa-cerrar').onclick = cerrarModal;
   pintar();
 }
+const colaSms = colaWhatsApp;
 
 /* ---- Respuestas por correo (leídas automáticamente de Outlook) ---- */
 const RESP_ACCIONES = [

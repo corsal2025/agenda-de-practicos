@@ -139,7 +139,7 @@ async function renderPasoTour(esPrimerRender = false) {
     btnNext.style.fontWeight = '';
   }
 
-  // Indicador compacto: sección actual y avance dentro de ella (en lugar de un punto por paso)
+  // Indicador compacto: sección actual y avance dentro de ella
   const delaSeccion = PASOS_TOUR.filter((p) => p.seccion === paso.seccion);
   const enSeccion = delaSeccion.indexOf(paso) + 1;
   $('#tour-dots').innerHTML = `<span class="tour-seccion" title="${esc(paso.seccion)}">${esc(paso.seccion)} <small>${enSeccion}/${delaSeccion.length}</small></span>`;
@@ -154,33 +154,102 @@ async function renderPasoTour(esPrimerRender = false) {
   await tourEsperar(paso, token);
   if (token !== tourToken || !$('#tour-card')) return;
 
-  const target = tourQuery(paso.target) || tourQuery(paso.fallback) || tourQuery('.panel-fijo') || view;
+  // Desplegar automáticamente paneles de filtros plegados si el elemento a resaltar está dentro de ellos
+  const desocultarPaneles = () => {
+    const aCampos = document.getElementById('a-campos');
+    if (aCampos && aCampos.hidden && paso.target && (paso.target.includes('a-fecha') || paso.target.includes('a-exam') || paso.target.includes('a-campos'))) {
+      aCampos.hidden = false;
+      const b = document.getElementById('a-plegar');
+      if (b) b.setAttribute('aria-expanded', 'true');
+      const f = document.getElementById('a-plegar-flecha');
+      if (f) f.textContent = '▾';
+      const rEl = document.getElementById('a-resumen');
+      if (rEl) rEl.hidden = true;
+    }
+    const dCampos = document.getElementById('d-campos');
+    if (dCampos && dCampos.hidden && paso.target && (paso.target.includes('d-desde') || paso.target.includes('d-hasta') || paso.target.includes('d-campos') || paso.target.includes('d-buscar'))) {
+      dCampos.hidden = false;
+      const b = document.getElementById('d-plegar');
+      if (b) b.setAttribute('aria-expanded', 'true');
+      const f = b ? b.querySelector('span') : null;
+      if (f) f.textContent = '▾';
+      const rEl = document.getElementById('d-resumen');
+      if (rEl) rEl.hidden = true;
+    }
+  };
+  desocultarPaneles();
+
+  let target = tourQuery(paso.target) || tourQuery(paso.fallback) || tourQuery('.panel-fijo') || view;
   if (!target) return;
+
+  // Si el target está dentro de una tabla o contenedor con scroll horizontal, desplazar para centrarlo
+  const scrollHoriz = target.closest ? target.closest('.tabla-agenda-scroll, .tabla-scroll, .panel-scroll') : null;
+  if (scrollHoriz) {
+    try {
+      target.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'instant' });
+    } catch (_) {}
+    try {
+      const sRect = scrollHoriz.getBoundingClientRect();
+      const tRect = target.getBoundingClientRect();
+      if (tRect.right > sRect.right - 12) {
+        scrollHoriz.scrollLeft += Math.round(tRect.right - sRect.right + 48);
+      } else if (tRect.left < sRect.left + 12) {
+        scrollHoriz.scrollLeft -= Math.round(sRect.left - tRect.left + 48);
+      }
+    } catch (_) {}
+  } else if (target !== view && !target.closest('header.top, #sidebar-modulos')) {
+    try {
+      target.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'instant' });
+    } catch (_) {}
+  }
 
   const posicionar = () => {
     if (token !== tourToken) return;
     // Con letra agrandada (zoom en body) las coordenadas del viewport se pasan a unidades locales.
     const Z = parseFloat(getComputedStyle(document.body).zoom) || 1;
-    const r0 = target.getBoundingClientRect();
+    let r0 = target.getBoundingClientRect();
+    if (r0.width === 0 && r0.height === 0 && paso.fallback) {
+      const alt = tourQuery(paso.fallback);
+      if (alt) { target = alt; r0 = target.getBoundingClientRect(); }
+    }
     const r = { left: r0.left / Z, top: r0.top / Z, right: r0.right / Z, bottom: r0.bottom / Z, width: r0.width / Z, height: r0.height / Z };
     const flecha = $('#tour-flecha');
     if (!spot || !card) return;
 
     const vw = window.innerWidth / Z;
     const vh = window.innerHeight / Z;
+    // Forzar reflow para medir dimensiones exactas con el contenido recién renderizado
+    void card.offsetHeight;
     const cardW = card.offsetWidth || Math.min(520, vw - 32);
     const cardH = card.offsetHeight || 290;
     const pad = 6;
-    const esGrilla = target.id === 'a-grid' || target === view || r.height > vh * 0.55;
 
-    // Al iniciar el tour (paso 1), desactivar temporalmente transiciones para evitar
-    // el salto visible ("pestañeo") desde (0,0) hacia la posición calculada.
+    // Detectar si el elemento es la grilla masiva o está anclado al menú lateral izquierdo
+    const esLateralIzquierda = target.id === 'nav' || !!target.closest('#sidebar-modulos') || (r.left < 80 && r.right < vw * 0.35 && r.height > 120);
+    const esGrilla = !esLateralIzquierda && (target.id === 'a-grid' || target === view) && (r.height > vh * 0.5);
+
     if (esPrimerRender) {
       spot.style.transition = 'none';
       card.style.transition = 'none';
     }
 
-    if (esGrilla) {
+    if (esLateralIzquierda) {
+      // Elementos laterales como el menú de navegación: spotlight sobre el elemento y tarjeta a su derecha
+      spot.style.left = `${Math.max(0, Math.round(r.left - pad))}px`;
+      spot.style.top = `${Math.max(0, Math.round(r.top - pad))}px`;
+      spot.style.width = `${Math.round(r.width + pad * 2)}px`;
+      spot.style.height = `${Math.min(vh - Math.max(0, r.top) - 16, Math.round(r.height + pad * 2))}px`;
+
+      let cardLeft = Math.round(r.right + 20);
+      if (cardLeft + cardW > vw - 16) cardLeft = vw - cardW - 16;
+      let cardTop = Math.round(r.top + 24);
+      if (cardTop + cardH > vh - 20) cardTop = vh - cardH - 20;
+      if (cardTop < 20) cardTop = 20;
+
+      card.style.left = `${cardLeft}px`;
+      card.style.top = `${cardTop}px`;
+      flecha.style.display = 'none';
+    } else if (esGrilla) {
       const spotTop = Math.max(12, Math.round(r.top));
       const spotH = Math.min(Math.round(r.height), vh - spotTop - 24);
       spot.style.left = `${Math.max(10, Math.round(r.left - pad))}px`;
@@ -192,44 +261,75 @@ async function renderPasoTour(esPrimerRender = false) {
       card.style.top = `${Math.round(Math.max(16, (vh - cardH) / 2))}px`;
       flecha.style.display = 'none';
     } else {
-      flecha.style.display = 'block';
-
-      // Spotlight regular
+      // Spotlight regular sobre el elemento
       spot.style.left = `${Math.max(0, Math.round(r.left - pad))}px`;
       spot.style.top = `${Math.max(0, Math.round(r.top - pad))}px`;
       spot.style.width = `${Math.round(r.width + pad * 2)}px`;
       spot.style.height = `${Math.round(r.height + pad * 2)}px`;
 
-      // Posicionar tarjeta
-      let cardLeft = Math.round(r.left + (r.width / 2) - (cardW / 2));
-      if (cardLeft + cardW > vw - 16) cardLeft = vw - cardW - 16;
-      if (cardLeft < 16) cardLeft = 16;
+      // Posicionamiento lateral a la izquierda: si el paso lo pide explícitamente o si el target
+      // está en el extremo derecho de la pantalla y cabe la tarjeta a la izquierda sin taparlo
+      const pideIzquierda = paso.lado === 'izquierda' || paso.posicion === 'izquierda';
+      const espacioIzq = r.left;
+      const cabeAIzquierda = espacioIzq >= cardW + 20;
+      const usarIzquierda = (pideIzquierda && cabeAIzquierda) || (!pideIzquierda && r.left > vw * 0.65 && cabeAIzquierda && r.height < 140);
 
-      let cardTop = Math.round(r.bottom + 14);
-      let flechaArriba = true;
+      if (usarIzquierda) {
+        let cardLeft = Math.round(r.left - cardW - 14);
+        if (cardLeft < 16) cardLeft = 16;
 
-      // Si se sale por abajo, poner arriba del elemento
-      if (cardTop + cardH > vh - 16) {
-        cardTop = Math.round(r.top - cardH - 14);
-        flechaArriba = false;
+        let cardTop = Math.round(r.top + (r.height / 2) - (cardH / 2));
+        if (cardTop < 16) cardTop = 16;
+        if (cardTop + cardH > vh - 16) cardTop = Math.max(16, vh - cardH - 16);
+
+        card.style.left = `${cardLeft}px`;
+        card.style.top = `${cardTop}px`;
+
+        flecha.className = 'tour-flecha flecha-derecha';
+        const flechaY = Math.max(16, Math.min(cardH - 24, (r.top + r.height / 2) - cardTop - 7));
+        flecha.style.top = `${Math.round(flechaY)}px`;
+        flecha.style.bottom = '';
+        flecha.style.left = '';
+        flecha.style.right = '-7px';
+        flecha.style.display = 'block';
+      } else {
+        // Posicionar tarjeta centrada sobre el elemento horizontalmente
+        let cardLeft = Math.round(r.left + (r.width / 2) - (cardW / 2));
+        if (cardLeft + cardW > vw - 16) cardLeft = vw - cardW - 16;
+        if (cardLeft < 16) cardLeft = 16;
+
+        let cardTop = Math.round(r.bottom + 14);
+        let flechaArriba = true;
+
+        // Si no cabe abajo, intentar colocar arriba del elemento
+        if (cardTop + cardH > vh - 16) {
+          cardTop = Math.round(r.top - cardH - 14);
+          flechaArriba = false;
+        }
+
+        // Si tampoco cabe arriba, ubicar en la zona vertical disponible más despejada
+        if (cardTop < 16) {
+          cardTop = Math.round(Math.max(16, (vh - cardH) / 2));
+        }
+
+        card.style.left = `${cardLeft}px`;
+        card.style.top = `${cardTop}px`;
+
+        // Si la tarjeta quedó solapando el elemento (no cupo ni arriba ni abajo con holgura), ocultar flecha
+        const solapa = cardTop < r.bottom + 4 && cardTop + cardH > r.top - 4;
+        flecha.style.display = solapa ? 'none' : 'block';
+        if (!solapa) {
+          flecha.className = `tour-flecha ${flechaArriba ? 'flecha-arriba' : 'flecha-abajo'}`;
+          const flechaX = Math.max(24, Math.min(cardW - 36, (r.left + r.width / 2) - cardLeft));
+          flecha.style.left = `${Math.round(flechaX)}px`;
+          flecha.style.right = '';
+          flecha.style.top = flechaArriba ? '-7px' : '';
+          flecha.style.bottom = flechaArriba ? '' : '-7px';
+        }
       }
-
-      if (cardTop + cardH > vh - 16) cardTop = vh - cardH - 16;
-      if (cardTop < 16) cardTop = 16;
-
-      card.style.left = `${cardLeft}px`;
-      card.style.top = `${cardTop}px`;
-
-      // Si la tarjeta quedó encima del elemento (no cabe ni arriba ni abajo), sin flecha
-      const solapa = cardTop < r.bottom + 4 && cardTop + cardH > r.top - 4;
-      flecha.style.display = solapa ? 'none' : 'block';
-      flecha.className = `tour-flecha ${flechaArriba ? 'flecha-arriba' : 'flecha-abajo'}`;
-      const flechaX = Math.max(24, Math.min(cardW - 36, (r.left + r.width / 2) - cardLeft));
-      flecha.style.left = `${Math.round(flechaX)}px`;
     }
 
     if (esPrimerRender) {
-      // Forzar reflow para que el navegador aplique left/top antes de habilitar transición y opacidad
       void card.offsetHeight;
       spot.style.transition = '';
       card.style.transition = '';
@@ -240,7 +340,6 @@ async function renderPasoTour(esPrimerRender = false) {
   };
 
   // Zona realmente visible: el encabezado y el panel fijo son sticky y tapan lo que quede debajo.
-  // Un elemento "dentro del viewport" pero bajo esas barras no se ve, así que se desplaza igual.
   const enBarraFija = !!target.closest('header.top, .panel-fijo, .g-head');
   let topVisible = 0;
   if (!enBarraFija) {
@@ -255,7 +354,7 @@ async function renderPasoTour(esPrimerRender = false) {
   if (yaVisible) {
     posicionar();
   } else {
-    // Centrar en la zona visible (bajo las barras fijas), no en todo el viewport
+    // Centrar en la zona visible (bajo las barras fijas)
     const grande = rect.height > (window.innerHeight - topVisible) * 0.7;
     const destino = grande
       ? rect.top - topVisible

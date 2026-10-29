@@ -13,6 +13,7 @@ const XLSX = require('xlsx');
 const { importar } = require('../server/migrate');
 const { db } = require('../server/db');
 const { reporte } = require('../server/errores');
+const { hoyISO } = require('../server/fechas');
 
 function limpiarTmp() {
   for (const s of ['', '-shm', '-wal']) { try { fs.unlinkSync(tmpDb + s); } catch (_) {} }
@@ -57,8 +58,9 @@ test('importa citas, bloqueos y normaliza', () => {
 });
 
 test('el reporte de errores detecta clase pesada fuera de bloque y RUT invalido', () => {
+  const fechaHoy = hoyISO();
   const xlsx = libro([
-    ['2026-08-04', '08:30', '5.000.000-2', 'MARIA D', 'D', '', '', 'NORMAL', '', '', '', '', '', '', 'LUIS FERNANDEZ', '', ''],
+    [fechaHoy, '08:30', '5.000.000-2', 'MARIA D', 'D', '', '', 'NORMAL', '', '', '', '', '', '', 'LUIS FERNANDEZ', '', ''],
   ]);
   importar(xlsx, { limpiar: true });
   fs.unlinkSync(xlsx);

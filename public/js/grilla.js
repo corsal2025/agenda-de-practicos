@@ -6,6 +6,25 @@ function problemaDatos(b) {
   if (b.contacto && b.contacto.replace(/\D/g, '').length !== 9) return 'Teléfono incompleto';
   return null;
 }
+
+function normalizarTipoCita(val) {
+  if (!val) return 'NORMAL';
+  const v = String(val).trim().toUpperCase();
+  if (v === 'REAGENDAMIENTO POR NOSOTROS' || v.includes('NOSOTROS')) return 'REAGENDAMIENTO POR NOSOTROS';
+  if (v === 'REAGENDAMIENTO LLAMADA' || v.includes('LLAMAD')) return 'REAGENDAMIENTO LLAMADA';
+  if (v === 'REAGENDAMIENTO CORREO' || v.includes('CORREO')) return 'REAGENDAMIENTO CORREO';
+  if (v === 'REAGENDAMIENTO PRESENCIAL' || v.includes('PRESENCIAL') || v === 'REAGENDADO') return 'REAGENDAMIENTO PRESENCIAL';
+  if (v === 'NORMAL') return 'NORMAL';
+  const opciones = [
+    'NORMAL',
+    'REAGENDAMIENTO PRESENCIAL',
+    'REAGENDAMIENTO LLAMADA',
+    'REAGENDAMIENTO CORREO',
+    'REAGENDAMIENTO POR NOSOTROS',
+  ];
+  if (opciones.includes(v)) return v;
+  return 'NORMAL';
+}
 // CSS de la ficha imprimible; estadisticas.js la reutiliza para su propia impresion.
 const FICHA_CSS = `@page{size:A4;margin:16mm 15mm 18mm}
 *{box-sizing:border-box}body{font:10.5pt/1.4 "Segoe UI",Arial,Helvetica,sans-serif;color:#000;background:#fff;margin:0}
@@ -46,7 +65,8 @@ function clasesTagsHtml(clase) {
   return lista.map((cl) => `<span class="clase-tag ${claseFamilia(cl)}">${esc(cl)}</span>`).join(' ');
 }
 
-function pintarGrilla(cont, filas, fecha) {
+function pintarGrilla(cont, filasOriginales, fecha) {
+  const filas = (filasOriginales || []).filter((f) => !(f.fecha >= '2026-11-09' && f.hora === '08:30'));
   let exs = estadoAgenda.examinador_id
     ? META.examinadores.filter((e) => String(e.id) === String(estadoAgenda.examinador_id))
     : META.examinadores.filter((e) => e.activo);
@@ -120,6 +140,13 @@ function alPresionarTeclaNube(e) {
 
 async function guardarClaseEnNube(b, valor) {
   if (valor === (b.clase || '')) return;
+  const clasesPesadas = ['D', 'A5'];
+  const marcadas = (valor || '').toUpperCase().split(',').map((c) => c.trim()).filter(Boolean);
+  const tienePesada = marcadas.some((c) => clasesPesadas.includes(c));
+  if (tienePesada && b.hora && b.hora < '12:30') {
+    toast('Las licencias Clase D y A5 solo pueden agendarse en bloques de las 12:30 en adelante.', 'err');
+    return;
+  }
   try {
     if (!(await guardarCampoCita(b, 'clase', valor))) return;
     toast('Dato actualizado en la planilla', 'ok');
@@ -139,7 +166,10 @@ function abrirNubeClases(ancla, b) {
   el.setAttribute('role', 'group');
   el.setAttribute('aria-label', 'Tipos de licencia');
   el.innerHTML = `${clasesDisponibles(b.clase)
-    .map((c) => `<button type="button" class="nube-clase" aria-pressed="${marcadas.has(c)}" data-clase="${esc(c)}">${esc(c)}</button>`)
+    .map((c) => {
+      const bloqPesada = b.hora && b.hora < '12:30' && (c === 'D' || c === 'A5');
+      return `<button type="button" class="nube-clase" aria-pressed="${marcadas.has(c)}" data-clase="${esc(c)}" ${bloqPesada ? 'disabled title="D y A5 solo desde las 12:30"' : ''}>${esc(c)}</button>`;
+    })
     .join('')}<button type="button" class="nube-ok">OK</button>`;
   document.body.appendChild(el);
 
@@ -256,7 +286,8 @@ function crearBarraLateralTabla(scrollEl) {
   return null;
 }
 
-function pintarTablaAgenda(cont, filas, fecha, exs) {
+function pintarTablaAgenda(cont, filasOriginales, fecha, exs) {
+  const filas = (filasOriginales || []).filter((f) => !(f.fecha >= '2026-11-09' && f.hora === '08:30'));
   cont.className = 'tabla-agenda-wrap';
   cont.style.gridTemplateColumns = '';
 
@@ -281,6 +312,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
               <th class="th-clase">CLASE *</th>
               <th class="th-contacto">CONTACTO</th>
               <th class="th-correo">CORREO</th>
+              <th class="th-tipo-cita">TIPO DE CITA</th>
               <th class="th-avisos">AVISADO</th>
               <th class="th-confirmar">CONFIRMAR</th>
               <th class="th-resultado">RESULTADO</th>
@@ -336,6 +368,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           <td class="td-clase text-muted">—</td>
           <td class="td-contacto text-muted">—</td>
           <td class="td-correo text-muted">—</td>
+          <td class="td-tipo-cita text-muted">—</td>
           <td class="td-avisos text-muted">—</td>
           <td class="td-confirmar text-muted">—</td>
           <td class="td-resultado"><span class="badge-bloq-tag">No disponible</span></td>
@@ -359,6 +392,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           <td class="td-clase">${pesada ? '<span class="badge dpesada">D y A5</span>' : '<span class="text-muted">—</span>'}</td>
           <td class="td-contacto text-muted">—</td>
           <td class="td-correo text-muted">—</td>
+          <td class="td-tipo-cita text-muted">—</td>
           <td class="td-avisos text-muted">—</td>
           <td class="td-confirmar text-muted">—</td>
           <td class="td-resultado">
@@ -387,6 +421,8 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
       // RUT o telefono con formato incorrecto: se marcan en rojo hasta corregirlos
       const errRut = errorDato('rut', b.rut);
       const errTel = errorDato('contacto', b.contacto);
+      const tipoSel = normalizarTipoCita(b.tipo_cita);
+      const esPrioridad = tipoSel === 'REAGENDAMIENTO POR NOSOTROS';
 
       html += `
         <tr class="fila-agenda-tabla fila-ocupada ${resCls}${claseDia}${claseHora}" data-id="${b.id}" data-tipo="ocupada" data-examinador="${b.examinador_id}" data-fecha="${esc(b.fecha)}">${celdaFecha}
@@ -399,7 +435,6 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           <td class="td-nombre">
             <div class="nombre-cell-box">
               <div class="nombre-cell-top">
-                ${problema ? `<span class="alerta-dato" title="${esc(problema)}">⚠</span>` : ''}
                 <span class="nombre-contribuyente" data-valor="nombre">${esc(nom(b.nombre) || '(SIN NOMBRE)')}</span>
               </div>
               <div class="nombre-cell-sub">
@@ -429,6 +464,15 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
             ${b.correo
               ? `<span class="correo-txt" data-valor="correo" title="Clic para editar el correo">${esc(b.correo)}</span>`
               : '<span class="sin-correo" data-valor="correo" title="Clic para ingresar el correo">+ Agregar correo</span>'}
+          </td>
+          <td class="td-tipo-cita">
+            <select class="select-tipo-cita ${esPrioridad ? 'prioridad-alta' : ''}" data-id="${b.id}" data-prev="${esc(tipoSel)}" onclick="event.stopPropagation()">
+              <option value="NORMAL" ${tipoSel === 'NORMAL' ? 'selected' : ''}>NORMAL</option>
+              <option value="REAGENDAMIENTO PRESENCIAL" ${tipoSel === 'REAGENDAMIENTO PRESENCIAL' ? 'selected' : ''}>REAGENDAMIENTO PRESENCIAL</option>
+              <option value="REAGENDAMIENTO LLAMADA" ${tipoSel === 'REAGENDAMIENTO LLAMADA' ? 'selected' : ''}>REAGENDAMIENTO LLAMADA</option>
+              <option value="REAGENDAMIENTO CORREO" ${tipoSel === 'REAGENDAMIENTO CORREO' ? 'selected' : ''}>REAGENDAMIENTO CORREO</option>
+              <option value="REAGENDAMIENTO POR NOSOTROS" ${tipoSel === 'REAGENDAMIENTO POR NOSOTROS' ? 'selected' : ''}>REAGENDAMIENTO POR NOSOTROS</option>
+            </select>
           </td>
           <td class="td-avisos">
             <div class="slot-avisos-tabla" data-id="${b.id}" onclick="event.stopPropagation()">
@@ -489,14 +533,100 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     </div>
   `;
 
+  // Capturar posición de scroll antes de actualizar el DOM para evitar saltos
+  const scrollElPrev = cont.querySelector('.tabla-agenda-scroll');
+  const prevScrollTop = scrollElPrev ? scrollElPrev.scrollTop : (cont._ultimoScrollTop || 0);
+  const prevScrollLeft = scrollElPrev ? scrollElPrev.scrollLeft : (cont._ultimoScrollLeft || 0);
+  const prevWindowY = window.scrollY || (document.documentElement ? document.documentElement.scrollTop : 0) || 0;
+  const prevWindowX = window.scrollX || (document.documentElement ? document.documentElement.scrollLeft : 0) || 0;
+
   cont.innerHTML = html;
 
   const scrollEl = cont.querySelector('.tabla-agenda-scroll');
-  if (scrollEl) scrollEl.scrollLeft = 0;
+  if (scrollEl) {
+    scrollEl.scrollTop = prevScrollTop;
+    scrollEl.scrollLeft = prevScrollLeft;
+    scrollEl.addEventListener('scroll', () => {
+      cont._ultimoScrollTop = scrollEl.scrollTop;
+      cont._ultimoScrollLeft = scrollEl.scrollLeft;
+    }, { passive: true });
+  }
+  if (typeof prevWindowY === 'number' && typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+    window.scrollTo({ top: prevWindowY, left: prevWindowX, behavior: 'instant' });
+  }
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => {
+      if (scrollEl) {
+        scrollEl.scrollTop = prevScrollTop;
+        scrollEl.scrollLeft = prevScrollLeft;
+      }
+      if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+        window.scrollTo({ top: prevWindowY, left: prevWindowX, behavior: 'instant' });
+      }
+    });
+  }
+  if (typeof setTimeout === 'function') {
+    setTimeout(() => {
+      if (scrollEl) {
+        scrollEl.scrollTop = prevScrollTop;
+        scrollEl.scrollLeft = prevScrollLeft;
+      }
+      if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+        window.scrollTo({ top: prevWindowY, left: prevWindowX, behavior: 'instant' });
+      }
+    }, 10);
+  }
   cont._barraLateral?.observer.disconnect();
   cont._barraLateral = scrollEl ? crearBarraLateralTabla(scrollEl) : null;
 
   const mapaSlots = new Map(ordenadas.map((item) => [item.id, item]));
+
+  function actualizarCeldaEnDom(tr, b, campo, valor, celdaEl) {
+    if (!tr || !celdaEl) return;
+    if (campo === 'nombre') {
+      celdaEl.textContent = nom(valor) || '(SIN NOMBRE)';
+    } else if (campo === 'rut') {
+      const rutFmt = valor ? esc(valor).replace(/-/g, '‑') : 'sin RUT';
+      celdaEl.innerHTML = rutFmt;
+      const err = errorDato('rut', valor);
+      celdaEl.className = `rut-txt num ${err ? 'dato-invalido' : ''}`;
+      celdaEl.title = err || '';
+    } else if (campo === 'contacto') {
+      const telFmt = valor ? esc(fTel(valor)).replace(/ /g, '&nbsp;') : '';
+      celdaEl.innerHTML = telFmt || '—';
+      const err = errorDato('contacto', valor);
+      celdaEl.className = valor ? `tel-txt num ${err ? 'dato-invalido' : ''}` : 'sin-tel text-muted';
+      celdaEl.title = err || '';
+      const wrap = tr.querySelector('.contacto-col-wrap');
+      if (wrap) {
+        const examObj = META.examinadores.find((e) => e.id === b.examinador_id);
+        const examNombre = b.examinador || (examObj ? examObj.nombre : 'AV. ARGENTINA');
+        const telWa = telWaDe(valor);
+        const smsA = wrap.querySelector('.btn-sms-tabla');
+        if (telWa) {
+          const mensajeSms = mensajeSmsCita(b, examNombre);
+          if (smsA) {
+            smsA.href = `sms:+${telWa}?body=${encodeURIComponent(mensajeSms)}`;
+          } else {
+            const nuevoSms = document.createElement('a');
+            nuevoSms.href = `sms:+${telWa}?body=${encodeURIComponent(mensajeSms)}`;
+            nuevoSms.className = 'btn-sms-tabla';
+            nuevoSms.onclick = (e) => e.stopPropagation();
+            nuevoSms.title = 'Enviar mensaje de texto (SMS) a este postulante';
+            nuevoSms.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="vertical-align:middle;margin-right:3px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Mensaje de texto';
+            wrap.appendChild(nuevoSms);
+          }
+        } else if (smsA) {
+          smsA.remove();
+        }
+      }
+    } else if (campo === 'correo') {
+      celdaEl.textContent = valor || '+ Agregar correo';
+      celdaEl.className = valor ? 'correo-txt' : 'sin-correo';
+    } else if (campo === 'clase') {
+      celdaEl.textContent = valor || '—';
+    }
+  }
 
   function iniciarEdicionCelda(tr, campo) {
     const b = mapaSlots.get(Number(tr.dataset.id));
@@ -566,7 +696,20 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
           return;
         }
         toast('Dato actualizado en la planilla', 'ok');
-        if (window.renderAgenda) renderAgenda();
+
+        // Actualizar el DOM de la celda de inmediato para eliminar cualquier salto o parpadeo
+        b[campo] = valor;
+        actualizarCeldaEnDom(tr, b, campo, valor, original);
+        editor.replaceWith(original);
+
+        // Si renderAgenda existe, refrescar manteniendo estrictamente la posición de scroll
+        if (typeof renderAgenda === 'function' || window.renderAgenda) {
+          const fnRender = window.renderAgenda || renderAgenda;
+          const sc = typeof memorizarScroll === 'function' ? memorizarScroll() : null;
+          Promise.resolve(fnRender()).then(() => {
+            if (sc && typeof reponerScroll === 'function') reponerScroll(sc);
+          }).catch(() => {});
+        }
       } catch (e) {
         guardando = false;
         inp.disabled = false;
@@ -611,15 +754,41 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
   // 1. Filtro rápido de búsqueda en tiempo real
   const inpBusc = document.querySelector('#tabla-busc-input');
   if (inpBusc) {
-    const filtrarBuscador = () => {
-      const q = inpBusc.value.toLowerCase().trim();
+    const filtrarBuscador = (e) => {
+      let rawVal = inpBusc.value;
+      if (e && e.inputType && !e.inputType.startsWith('delete')) {
+        const limpia = rawVal.trim();
+        if (/^[0-9kK.\-\s]+$/.test(limpia) && limpia.replace(/[^0-9kK]/g, '').length >= 2) {
+          const fnFmt = (typeof formatoRutProgresivo === 'function') ? formatoRutProgresivo : (typeof window !== 'undefined' ? window.formatoRutProgresivo : null);
+          if (fnFmt) {
+            const formateado = fnFmt(limpia);
+            if (formateado !== rawVal) {
+              inpBusc.value = formateado;
+              rawVal = formateado;
+            }
+          }
+        }
+      }
+
+      const q = rawVal.toLowerCase().trim();
+      const qLimpio = q.replace(/[^0-9k]/g, '');
+      const esBusquedaRut = qLimpio.length >= 2 && /^[0-9k.\-\s]+$/.test(q);
+
       cont.querySelectorAll('.fila-agenda-tabla').forEach((tr) => {
         if (!q) {
           tr.style.display = '';
           return;
         }
         const str = (tr.textContent || '').toLowerCase();
-        tr.style.display = str.includes(q) ? '' : 'none';
+        let coincide = str.includes(q);
+        if (!coincide && esBusquedaRut) {
+          const celdaRut = tr.querySelector('.td-rut');
+          if (celdaRut) {
+            const rutTr = celdaRut.textContent.toLowerCase().replace(/[^0-9k]/g, '');
+            if (rutTr && rutTr.includes(qLimpio)) coincide = true;
+          }
+        }
+        tr.style.display = coincide ? '' : 'none';
       });
       reubicarFechas(cont);
     };
@@ -630,7 +799,7 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
   // Filas: se seleccionan y cada dato se edita con su propio lápiz
   cont.querySelectorAll('.fila-agenda-tabla').forEach((tr) => {
     tr.onclick = (e) => {
-      if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.sr') || e.target.closest('input') || e.target.closest('label')) return;
+      if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.sr') || e.target.closest('input') || e.target.closest('label') || e.target.closest('select')) return;
       if (tr.classList.contains('fila-bloqueada')) {
         dialogoDesbloquearDia();
         return;
@@ -710,11 +879,13 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     btn.onclick = async (ev) => {
       ev.stopPropagation();
       const id = Number(btn.dataset.id);
+      const sc = typeof memorizarScroll === 'function' ? memorizarScroll() : null;
       try {
         await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: 1 } });
         toast('Hora confirmada exitosamente', 'ok');
         actualizarBadgePorConfirmar();
-        renderAgenda();
+        await renderAgenda();
+        if (sc && typeof reponerScroll === 'function') reponerScroll(sc);
       } catch (e) { toast(e.message, 'err'); }
     };
   });
@@ -723,11 +894,13 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
     btn.onclick = async (ev) => {
       ev.stopPropagation();
       const id = Number(btn.dataset.id);
+      const sc = typeof memorizarScroll === 'function' ? memorizarScroll() : null;
       try {
         await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: 0 } });
         toast('Cita marcada: Sin confirmación', 'alerta');
         actualizarBadgePorConfirmar();
-        renderAgenda();
+        await renderAgenda();
+        if (sc && typeof reponerScroll === 'function') reponerScroll(sc);
       } catch (e) { toast(e.message, 'err'); }
     };
   });
@@ -737,11 +910,13 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
       ev.stopPropagation();
       const id = Number(btn.dataset.id);
       if (!confirm('Esta cita figura como "Confirma hora".\n\n¿Deseas volver a mostrar las opciones para cambiar su estado?')) return;
+      const sc = typeof memorizarScroll === 'function' ? memorizarScroll() : null;
       try {
         await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: null } });
         toast('Opciones de confirmación restauradas', 'ok');
         actualizarBadgePorConfirmar();
-        renderAgenda();
+        await renderAgenda();
+        if (sc && typeof reponerScroll === 'function') reponerScroll(sc);
       } catch (e) { toast(e.message, 'err'); }
     };
   });
@@ -777,11 +952,13 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
       }
 
       if (confirm(`¿Deseas volver a mostrar las opciones Confirmado / Sin confirmación para ${nombre}?`)) {
+        const sc = typeof memorizarScroll === 'function' ? memorizarScroll() : null;
         try {
           await api(`/agenda/${id}/confirmar`, { method: 'POST', body: { valor: null } });
           toast('Opciones de confirmación restauradas', 'ok');
           actualizarBadgePorConfirmar();
-          renderAgenda();
+          await renderAgenda();
+          if (sc && typeof reponerScroll === 'function') reponerScroll(sc);
         } catch (e) { toast(e.message, 'err'); }
       }
     };
@@ -822,6 +999,38 @@ function pintarTablaAgenda(cont, filas, fecha, exs) {
         actualizarBadgeEspera();
         irA('espera');
       } catch (e) { toast(e.message, 'err'); }
+    };
+  });
+
+  // 8. Selector de tipo de cita interactivo
+  cont.querySelectorAll('.select-tipo-cita').forEach((sel) => {
+    sel.onchange = async (ev) => {
+      ev.stopPropagation();
+      const id = Number(sel.dataset.id);
+      const nuevoTipo = sel.value;
+      const anterior = sel.getAttribute('data-prev') || 'NORMAL';
+
+      if (nuevoTipo === 'REAGENDAMIENTO POR NOSOTROS') {
+        sel.classList.add('prioridad-alta');
+      } else {
+        sel.classList.remove('prioridad-alta');
+      }
+
+      try {
+        await api(`/agenda/${id}/tipo-cita`, { method: 'POST', body: { tipo_cita: nuevoTipo } });
+        sel.setAttribute('data-prev', nuevoTipo);
+        const b = (typeof mapaSlots !== 'undefined' && mapaSlots) ? mapaSlots.get(id) : null;
+        if (b) b.tipo_cita = nuevoTipo;
+        toast(`Tipo de cita actualizado: ${nuevoTipo}`, 'ok');
+      } catch (e) {
+        sel.value = anterior;
+        if (anterior === 'REAGENDAMIENTO POR NOSOTROS') {
+          sel.classList.add('prioridad-alta');
+        } else {
+          sel.classList.remove('prioridad-alta');
+        }
+        toast(e.message || 'Error al actualizar tipo de cita', 'err');
+      }
     };
   });
 }

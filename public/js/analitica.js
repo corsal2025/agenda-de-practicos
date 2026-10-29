@@ -165,7 +165,7 @@ async function renderVencimientos() {
             <option value="todos" selected>Todos</option>
           </select></div>
       </div>
-      <p class="muted">Citas de todas las clases desde hoy (y pasadas de los últimos 30 días sin resultado). El trámite vence 6 meses después de su inicio.</p>
+      <p class="muted">Citas de todas las clases desde hoy en adelante. El trámite vence 6 meses después de su inicio.</p>
       <div class="tabla-scroll"><table class="tabla-vencimientos thead-fijo"><thead><tr>
         <th class="c">Días restantes</th><th>Nombre</th><th>RUT</th><th class="c">Clase</th><th>Teléfono</th>
         <th class="c">Fecha cita</th><th>Examinador</th><th class="c">Vence</th><th class="c">Acción</th>
@@ -176,19 +176,45 @@ async function renderVencimientos() {
   const pintar = (rows) => {
     const body = $('#ven-body');
     if (!body) return;
-    body.innerHTML = (rows || []).length ? rows.map((r) => {
+    const citasValidas = (rows || []).filter((r) => r && r.fecha >= hoy());
+    body.innerHTML = citasValidas.length ? citasValidas.map((r) => {
       const estado = estadoPrioridadVencer(r, hoy());
+      const puedeEliminar = (r.dias_restantes_tramite != null && r.dias_restantes_tramite <= 0);
       return `<tr data-id="${r.id}">
       <td class="c">${cuentaRegresivaHtml(r.dias_restantes_tramite, r.fecha_vencimiento_tramite)}</td>
       <td>${esc(nom(r.nombre) || '—')}</td><td class="num">${esc(r.rut || '—')}</td><td class="c">${esc(r.clase || '—')}</td>
       <td class="num">${esc(fTel(r.contacto) || '—')}</td><td class="num c">${esc(fFecha(r.fecha))} · ${esc(r.hora)}</td>
       <td>${esc(r.examinador || '—')}</td><td class="num c">${esc(fFecha(r.fecha_vencimiento_tramite))}</td>
-      <td class="c"><button class="btn chico" data-prioridad="${r.id}" ${estado.habilitado ? '' : 'disabled'}>${esc(estado.texto)}</button></td></tr>`;
+      <td class="c">
+        <div style="display:inline-flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap">
+          <button class="btn chico" data-prioridad="${r.id}" ${estado.habilitado ? '' : 'disabled'}>${esc(estado.texto)}</button>
+          ${puedeEliminar ? `<button class="btn chico peligro sec" data-eliminar="${r.id}" title="Liberar cupo / Eliminar cita">🗑️ Eliminar</button>` : ''}
+        </div>
+      </td></tr>`;
     }).join('')
       : licoVacioFila(9, 'explica', 'Nada por vencer', 'No hay trámites D/A5 en este filtro.');
+    body.querySelectorAll('button[data-eliminar]').forEach((btn) => {
+      const r = citasValidas.find((x) => x.id === Number(btn.dataset.eliminar));
+      if (!r) return;
+      btn.onclick = async () => {
+        const quien = nom(r.nombre) || r.rut || 'esta persona';
+        const motivo = 'Trámite vencido (Trámites por vencer)';
+        if (!confirm(`¿Eliminar la cita de ${quien} (${fFecha(r.fecha)} ${r.hora || ''}) y liberar el cupo?\n\nLa cita quedará archivada en la papelera.`)) return;
+        btn.disabled = true;
+        try {
+          await api(`/agenda/${r.id}/liberar`, { method: 'POST', body: { motivo } });
+          toast('Cita eliminada y cupo liberado', 'ok');
+          actualizarBadgePorConfirmar();
+          cargar();
+        } catch (e) {
+          toast(e.message, 'err');
+          btn.disabled = false;
+        }
+      };
+    });
     body.querySelectorAll('button[data-prioridad]').forEach((btn) => {
       if (btn.disabled) return;
-      const r = (rows || []).find((x) => x.id === Number(btn.dataset.prioridad));
+      const r = citasValidas.find((x) => x.id === Number(btn.dataset.prioridad));
       btn.onclick = async () => {
         const vence = fFecha(r.fecha_vencimiento_tramite);
         if (!confirm(`¿Dar prioridad en Lista de espera a ${nom(r.nombre) || r.rut || 'esta persona'} (RUT ${r.rut || '—'})?\n\nSu trámite vence el ${vence}.`)) return;
@@ -244,9 +270,12 @@ async function actualizarBadgePapelera() {
   catch (_) { pintarBadge('badge-papelera', 0); }
 }
 // Cuenta solo error+warning (los que valen la pena mirar); "info" queda fuera
-// para no saturar el numerito con avisos de rutina (ej. citas sin resultado).
+// para no saturar el numerito con avisos de rutina.
+// Regla de negocio: solo citas vigentes y futuras (fecha >= hoy), eliminando errores historicos.
 const pintarBadgeErrores = (rep) => {
-  const n = rep.hallazgos.filter((h) => h.severidad !== 'info').length;
+  const hoyStr = typeof hoy === 'function' ? hoy() : new Date().toISOString().slice(0, 10);
+  const n = (rep && rep.hallazgos ? rep.hallazgos : [])
+    .filter((h) => (!h.fecha || h.fecha >= hoyStr) && h.severidad !== 'info').length;
   pintarBadge('badge-errores', n);
   if (window.LicoAsistente) window.LicoAsistente.notar('errores', n);
 };

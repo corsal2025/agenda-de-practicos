@@ -65,6 +65,10 @@ test('al cambiar de ocupante se resetean token/correo/pendiente; al re-importar 
   assert.equal(x.correo_recordatorio_enviado, 0);
   assert.equal(x.pendiente_reagendar, 0);
   assert.equal(x.pendiente_nota, null);
+
+  const papeleraItem = db.prepare("SELECT * FROM papelera WHERE agenda_id = ? AND motivo = 'sobrescribir-importacion'").get(id);
+  assert.ok(papeleraItem, 'debe respaldar en papelera al sobreescribir ocupante por planilla');
+  assert.match(papeleraItem.datos, /OCUPANTE UNO/);
 });
 
 test('columnas extendidas: sin esas columnas, el valor existente se conserva si el ocupante no cambia', () => {
@@ -92,23 +96,54 @@ test('columnas extendidas: sin esas columnas, pasa a NULL si el ocupante SI camb
   assert.deepEqual({ ...x }, { escuela_conductores: null, tipo_reagendamiento: null, avisado_por: null, pendiente_reagendar: 0, pendiente_nota: null });
 });
 
-test('dos personas distintas en la misma hora/cupo: error 400 claro, antes de escribir nada (incluso con limpiar=true)', () => {
+test('doble carga en el Excel: dos o mas personas distintas en la misma hora se integran como sobrecupos (cupo 1, 2, 3...)', () => {
   const fecha = '2029-01-07';
   db.exec('DELETE FROM agenda');
-  const previo = db.prepare('SELECT COUNT(*) n FROM agenda').get().n;
   const datos = hojas(CAB_BASE, [
     fila(fecha, '11:00', '88.888.888-8', 'PERSONA UNO', 'DANIEL LAGOS'),
     fila(fecha, '11:00', '99.999.999-9', 'PERSONA DOS', 'DANIEL LAGOS'),
+    fila(fecha, '11:00', '77.777.777-7', 'PERSONA TRES', 'DANIEL LAGOS'),
   ]);
-  assert.throws(() => importar(datos, { limpiar: true }), (e) => {
-    assert.equal(e.status, 400);
-    assert.match(e.message, /PERSONA UNO/);
-    assert.match(e.message, /PERSONA DOS/);
-    assert.match(e.message, /fila/i);
-    return true;
-  });
-  // No se borro nada: limpiar=true no se aplico porque el archivo era invalido.
-  assert.equal(db.prepare('SELECT COUNT(*) n FROM agenda').get().n, previo);
+
+  const r = importar(datos, { limpiar: true });
+  assert.equal(r.ocupadas, 3, 'debe registrar las 3 personas ocupadas');
+
+  const filas = db.prepare(`
+    SELECT cupo, nombre, rut FROM agenda
+    WHERE fecha = ? AND hora = '11:00' AND nombre IS NOT NULL
+    ORDER BY cupo ASC
+  `).all(fecha).map((f) => ({ cupo: f.cupo, nombre: f.nombre, rut: f.rut }));
+
+  assert.equal(filas.length, 3, 'deben existir 3 bloques ocupados en la base de datos para ese horario');
+  assert.deepEqual(filas, [
+    { cupo: 1, nombre: 'PERSONA UNO', rut: '88.888.888-8' },
+    { cupo: 2, nombre: 'PERSONA DOS', rut: '99.999.999-9' },
+    { cupo: 3, nombre: 'PERSONA TRES', rut: '77.777.777-7' },
+  ]);
+});
+
+test('doble carga en el Excel: la misma persona duplicada actualiza datos sin crear sobrecupo redundante', () => {
+  const fecha = '2029-01-08';
+  db.exec('DELETE FROM agenda');
+  const datos = hojas(CAB_BASE, [
+    [fecha, '11:30', '12.345.678-5', 'JUAN DUPLICADO', 'B', '911111111', 'v1@x.cl', 'NORMAL', '', '', '', '', '', '', 'DANIEL LAGOS', '', ''],
+    [fecha, '11:30', '12.345.678-5', 'JUAN DUPLICADO', 'B', '922222222', 'v2@x.cl', 'NORMAL', '', '', '', '', '', '', 'DANIEL LAGOS', '', ''],
+  ]);
+
+  const r = importar(datos, { limpiar: true });
+  assert.equal(r.ocupadas, 1, 'solo debe haber 1 ocupante real');
+
+  const filas = db.prepare(`
+    SELECT cupo, nombre, rut, contacto, correo FROM agenda
+    WHERE fecha = ? AND hora = '11:30' AND nombre IS NOT NULL
+    ORDER BY cupo ASC
+  `).all(fecha).map((f) => ({ cupo: f.cupo, nombre: f.nombre, rut: f.rut, contacto: f.contacto, correo: f.correo }));
+
+  assert.equal(filas.length, 1, 'no debe crear cupo extra para la misma persona');
+  assert.equal(filas[0].cupo, 1);
+  assert.equal(filas[0].nombre, 'JUAN DUPLICADO');
+  assert.equal(filas[0].contacto, '+56922222222');
+  assert.equal(filas[0].correo, 'v2@x.cl');
 });
 
 test('limpiar ya no borra el historial de movimientos', () => {

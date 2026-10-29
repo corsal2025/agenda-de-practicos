@@ -37,16 +37,19 @@ function problemas(f) {
   return p;
 }
 
-function listar() {
+function listar(fechaDesde) {
+  const hoy = hoyISO();
+  const desde = fechaDesde || hoy;
   const filas = db.prepare(`
     SELECT a.id, a.fecha, a.hora, a.rut, a.nombre, a.correo, a.contacto, a.actualizado_en,
            a.correo_recordatorio_enviado, a.bloqueado, a.bloqueo_motivo, e.nombre AS examinador
     FROM agenda a LEFT JOIN examinadores e ON e.id = a.examinador_id
     WHERE ((a.rut IS NOT NULL AND a.rut != '') OR (a.nombre IS NOT NULL AND a.nombre != ''))
       AND (a.bloqueado IS NULL OR a.bloqueado = 0)
+      AND a.fecha >= ?
     ORDER BY a.fecha DESC, a.hora
-  `).all()
-    .filter((f) => !esBloqueoOMarcador(f))
+  `).all(desde)
+    .filter((f) => !esBloqueoOMarcador(f) && (!f.fecha || f.fecha >= desde))
     .map((f) => ({ ...f, problemas: problemas(f) }))
     .filter((f) => f.problemas.length);
   return { total: filas.length, filas: filas.slice(0, MAX_FILAS) };

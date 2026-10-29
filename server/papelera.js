@@ -68,4 +68,10 @@ function vaciar() {
   return Number(r.changes);
 }
 
-module.exports = { guardar, listar, restaurar, eliminar, vaciar };
+// Limpia entradas antiguas de la papelera (por defecto mas de N dias).
+function limpiarAntigua(dias = 30) {
+  const r = db.prepare("DELETE FROM papelera WHERE ts < datetime('now', '-' || ? || ' days', 'localtime')").run(Number(dias));
+  return Number(r.changes);
+}
+
+module.exports = { guardar, listar, restaurar, eliminar, vaciar, limpiarAntigua };

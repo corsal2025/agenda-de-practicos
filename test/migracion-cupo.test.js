@@ -105,8 +105,8 @@ test('la migracion agrega cupo y deja todas las filas con cupo 1 y sus datos', (
 });
 
 test('el UNIQUE nuevo permite cupo 2 en la misma hora y sigue rechazando cupo duplicado', () => {
-  db.prepare('INSERT INTO agenda (fecha, hora, examinador_id, cupo) VALUES (?, ?, ?, ?)')
-    .run('2030-05-06', '08:30', 1, 2);
+  db.prepare('INSERT INTO agenda (fecha, hora, examinador_id, cupo, nombre) VALUES (?, ?, ?, ?, ?)')
+    .run('2030-05-06', '08:30', 1, 2, 'SOBRECUPO');
   assert.equal(db.prepare('SELECT COUNT(*) n FROM agenda WHERE fecha = ? AND hora = ?').get('2030-05-06', '08:30').n, 2);
 
   assert.throws(() => db.prepare('INSERT INTO agenda (fecha, hora, examinador_id, cupo) VALUES (?, ?, ?, ?)')

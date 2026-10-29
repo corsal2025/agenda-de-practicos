@@ -4,9 +4,10 @@ PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS examinadores (
-  id     INTEGER PRIMARY KEY,
-  nombre TEXT NOT NULL UNIQUE,
-  activo INTEGER NOT NULL DEFAULT 1
+  id        INTEGER PRIMARY KEY,
+  nombre    TEXT NOT NULL UNIQUE,
+  activo    INTEGER NOT NULL DEFAULT 1,
+  eliminado INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS funcionarios (

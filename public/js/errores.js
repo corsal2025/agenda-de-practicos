@@ -38,24 +38,33 @@ async function renderErrores() {
 
   let ultimoReporte = null;
   const cargar = () => cargarVista('errores', '/errores', (rep) => {
-    ultimoReporte = rep;
-    pintarBadgeErrores(rep);
-    $('#e-chips').innerHTML = [`<button class="chip ${!filtErr.tipo ? 'activo' : ''}" data-t="">Todos (${rep.total})</button>`]
-      .concat(Object.entries(rep.resumen).sort((a, b) => b[1] - a[1])
+    const hoyStr = typeof hoy === 'function' ? hoy() : new Date().toISOString().slice(0, 10);
+    const hallazgosVigentes = (rep.hallazgos || []).filter((x) => !x.fecha || x.fecha >= hoyStr);
+    const resumen = hallazgosVigentes.reduce((acc, h) => {
+      acc[h.tipo] = (acc[h.tipo] || 0) + 1;
+      return acc;
+    }, {});
+    const repVigente = { ...rep, total: hallazgosVigentes.length, resumen, hallazgos: hallazgosVigentes };
+    ultimoReporte = repVigente;
+    pintarBadgeErrores(repVigente);
+    $('#e-chips').innerHTML = [`<button class="chip ${!filtErr.tipo ? 'activo' : ''}" data-t="">Todos (${repVigente.total})</button>`]
+      .concat(Object.entries(repVigente.resumen).sort((a, b) => b[1] - a[1])
         .map(([t, n]) => `<button class="chip ${filtErr.tipo === t ? 'activo' : ''}" data-t="${t}">${esc(ETIQUETA[t] || t)} (${n})</button>`)).join('');
     $('#e-chips').querySelectorAll('button').forEach((el) => {
       el.onclick = () => {
         filtErr.tipo = el.dataset.t;
         $('#e-chips').querySelectorAll('button').forEach((b) => b.classList.toggle('activo', b.dataset.t === filtErr.tipo));
-        pintar(rep);
+        pintar(repVigente);
       };
     });
-    pintar(rep);
+    pintar(repVigente);
   });
 
   const pintar = (rep) => {
+    const hoyStr = typeof hoy === 'function' ? hoy() : new Date().toISOString().slice(0, 10);
     const busq = (filtErr.q || '').trim().toLowerCase();
-    const rows = rep.hallazgos.filter((x) => {
+    const rows = (rep.hallazgos || []).filter((x) => {
+      if (x.fecha && x.fecha < hoyStr) return false;
       if (filtErr.tipo && x.tipo !== filtErr.tipo) return false;
       if (busq) {
         const texto = [x.rut, x.nombre, x.examinador, x.mensaje, x.fecha, x.hora, ETIQUETA[x.tipo] || x.tipo].join(' ').toLowerCase();

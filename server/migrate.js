@@ -5,7 +5,9 @@ const XLSX = require('xlsx');
 const { db, tx, upsertExaminador, upsertFuncionario, log } = require('./db');
 const { generar } = require('./slots');
 const pesada = require('./pesada');
+const papelera = require('./papelera');
 const { reservarCupoLibre } = require('./cupos');
+const { compartenClase } = require('./intentos');
 const N = require('./normalizar');
 const rut = require('./rut');
 const { aISO, aHora } = require('./fechas');
@@ -240,10 +242,12 @@ function importar(fuente, { limpiar = false } = {}) {
     throw new Error('Fuente de importación inválida');
   }
 
-  // 1) Reunir bloques de las hojas maestras, deduplicando por (fecha,hora,examinador,cupo).
-  //    Todo esto es lectura pura (sin tocar la base): si el archivo tiene un conflicto, se
-  //    detecta y se avisa ANTES de borrar o escribir nada (ni siquiera con limpiar=true).
-  const porSlot = new Map();
+  // 1) Reunir bloques de las hojas maestras. Si en el archivo Excel vienen dos o más
+  //    citas ocupadas en la misma fecha, hora y examinador (un sobrecupo anotado manualmente
+  //    o doble carga de hora), se asigna la primera a cupo principal (cupo = 1) y las siguientes
+  //    como sobrecupo (cupo = 2, 3...) para que ambas personas queden integradas en la grilla.
+  const porHorario = new Map();
+  const citasPorRutFecha = new Map();
   let leidas = 0;
   let saltadas = 0;
   let fueraDeRango = 0;
@@ -260,19 +264,109 @@ function importar(fuente, { limpiar = false } = {}) {
       if (!b) { if (filas[i] && filas[i].some((c) => c != null && c !== '')) saltadas++; continue; }
       if (b.fecha < FECHA_MINIMA) { fueraDeRango++; continue; }
       leidas++;
-      const key = `${b.fecha}|${b.hora}|${b.examinadorNom}|${b.cupo}`;
-      const prev = porSlot.get(key);
-      if (prev && ocupado(prev) && ocupado(b) && !mismaPersona(prev, b)) {
-        throw errorImport(
-          `Dos personas distintas para la misma hora y cupo: "${prev.nombre || prev.rut}" `
-          + `(hoja "${prev._hoja}", fila ${prev._fila}) y "${b.nombre || b.rut}" (hoja "${hoja}", fila ${i + 1}) `
-          + `coinciden en ${b.fecha} ${b.hora}, examinador "${b.examinadorNom}", cupo ${b.cupo}.`
-        );
+
+      // Regla: no se permite la misma persona (RUT) con dos examinadores distintos para la misma licencia
+      if (ocupado(b)) {
+        const rLimpio = rut.limpiar(b.rut);
+        if (rLimpio) {
+          const rfKey = `${rLimpio}|${b.fecha}`;
+          let previas = citasPorRutFecha.get(rfKey);
+          if (!previas) {
+            previas = [];
+            citasPorRutFecha.set(rfKey, previas);
+          }
+          for (const prev of previas) {
+            if (prev.examinadorNom !== b.examinadorNom && compartenClase(prev.clase, b.clase)) {
+              throw errorImport(
+                `Conflicto de examinador: la persona "${b.nombre || b.rut}" (RUT ${b.rut}) ya está asignada el ${b.fecha} `
+                + `con el examinador "${prev.examinadorNom}" (hoja "${prev._hoja}", fila ${prev._fila}) para la clase `
+                + `"${b.clase || 'indicada'}", y aparece con el examinador distinto "${b.examinadorNom}" (hoja "${hoja}", fila ${i + 1}). `
+                + `No se permite la misma persona con dos examinadores distintos para la misma licencia.`
+              );
+            }
+          }
+          previas.push({ ...b, _hoja: hoja, _fila: i + 1 });
+
+          if (!limpiar) {
+            const enDb = db.prepare(`
+              SELECT a.hora, a.clase, e.nombre AS examinadorNom
+              FROM agenda a
+              JOIN examinadores e ON e.id = a.examinador_id
+              WHERE a.fecha = ?
+                AND a.rut IS NOT NULL
+                AND a.bloqueado = 0
+                AND UPPER(REPLACE(REPLACE(REPLACE(a.rut,'.',''),'-',''),' ','')) = ?
+            `).all(b.fecha, rLimpio);
+            for (const fDb of enDb) {
+              if (fDb.examinadorNom !== b.examinadorNom && compartenClase(fDb.clase, b.clase)) {
+                throw errorImport(
+                  `Conflicto de examinador: la persona "${b.nombre || b.rut}" (RUT ${b.rut}) ya tiene una cita agendada en el sistema `
+                  + `el ${b.fecha} a las ${fDb.hora} con el examinador "${fDb.examinadorNom}" para la clase "${fDb.clase || 'indicada'}". `
+                  + `No se permite la misma persona con dos examinadores distintos para la misma licencia.`
+                );
+              }
+            }
+          }
+        }
       }
+
+      const baseKey = `${b.fecha}|${b.hora}|${b.examinadorNom}`;
+      let cupos = porHorario.get(baseKey);
+      if (!cupos) {
+        cupos = new Map();
+        porHorario.set(baseKey, cupos);
+      }
+
       const conten = (x) => Boolean(x.rut || x.nombre || x.bloqueado);
-      if (!prev || ocupado(b) || (conten(b) && !conten(prev))) {
-        porSlot.set(key, { ...b, _hoja: hoja, _fila: i + 1 });
+
+      if (ocupado(b)) {
+        // Cita ocupada (trae RUT o nombre)
+        let cupoMismaPersona = null;
+        for (const [c, prev] of cupos.entries()) {
+          if (ocupado(prev) && mismaPersona(prev, b)) {
+            cupoMismaPersona = c;
+            break;
+          }
+        }
+
+        if (cupoMismaPersona !== null) {
+          // Reaparicion o actualizacion de la misma persona en este horario
+          b.cupo = cupoMismaPersona;
+          cupos.set(cupoMismaPersona, { ...b, _hoja: hoja, _fila: i + 1 });
+        } else {
+          // Persona distinta en este horario.
+          // Si el cupo sugerido (b.cupo) no esta ocupado por otra persona (esta vacio o no ocupado):
+          const prevEnCupo = cupos.get(b.cupo);
+          if (!prevEnCupo || !ocupado(prevEnCupo)) {
+            cupos.set(b.cupo, { ...b, _hoja: hoja, _fila: i + 1 });
+          } else {
+            // Doble carga / sobrecupo en el Excel: b.cupo ya esta ocupado por otra persona.
+            // Asigna el siguiente cupo disponible para esta hora (cupo = 2, 3...)
+            let siguienteCupo = 1;
+            while (cupos.has(siguienteCupo) && ocupado(cupos.get(siguienteCupo))) {
+              siguienteCupo++;
+            }
+            b.cupo = siguienteCupo;
+            cupos.set(siguienteCupo, { ...b, _hoja: hoja, _fila: i + 1 });
+          }
+        }
+      } else {
+        // Bloque no ocupado (bloqueo o vacio).
+        // Solo aplica si el horario no tiene ya una persona ocupada en cupo 1
+        const prev1 = cupos.get(1);
+        if (!prev1 || (!ocupado(prev1) && (conten(b) || !conten(prev1)))) {
+          b.cupo = 1;
+          cupos.set(1, { ...b, _hoja: hoja, _fila: i + 1 });
+        }
       }
+    }
+  }
+
+  const porSlot = new Map();
+  for (const cupos of porHorario.values()) {
+    for (const b of cupos.values()) {
+      const key = `${b.fecha}|${b.hora}|${b.examinadorNom}|${b.cupo}`;
+      porSlot.set(key, b);
     }
   }
 
@@ -284,7 +378,7 @@ function importar(fuente, { limpiar = false } = {}) {
   // 3) Limpiar (si se pidio), generar la grilla y hacer el upsert: todo en una sola transaccion,
   //    ya validado el archivo arriba. limpiar ya NO borra movimientos (ver server/historial.js).
   const stmt = db.prepare(UPSERT);
-  const existente = db.prepare('SELECT rut, nombre FROM agenda WHERE fecha=? AND hora=? AND examinador_id=? AND cupo=?');
+  const existente = db.prepare('SELECT * FROM agenda WHERE fecha=? AND hora=? AND examinador_id=? AND cupo=?');
   let ocupadas = 0;
   const gen = tx(() => {
     if (limpiar) db.exec('DELETE FROM agenda; DELETE FROM cola_reagendar; DELETE FROM papelera;');
@@ -294,6 +388,9 @@ function importar(fuente, { limpiar = false } = {}) {
       const funcionario_id = upsertFuncionario(b.funcionarioNom);
       const previo = existente.get(b.fecha, b.hora, examinador_id, b.cupo);
       const resetear = previo && !mismaPersona(previo, b) ? 1 : 0;
+      if (resetear === 1 && previo && (previo.rut || previo.nombre)) {
+        papelera.guardar(previo, 'sobrescribir-importacion', 'importacion');
+      }
       stmt.run({
         fecha: b.fecha, hora: b.hora, examinador_id,
         rut: b.rut, nombre: b.nombre, clase: b.clase, contacto: b.contacto, correo: b.correo,

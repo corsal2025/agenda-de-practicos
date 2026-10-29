@@ -71,3 +71,27 @@ test('renderPasoTour navega con tourNavegar y no con irA directo', () => {
   assert.ok(!src.includes('irA(paso.tab)'));
   assert.ok(src.includes('tourVigilarPestana()'), 'iniciarGuiaInteractiva activa la vigilancia');
 });
+
+test('paso 15 de la guia interactiva apunta exclusivamente al boton de imprimir y no al contenedor de maximizar', () => {
+  const { ctx } = entorno();
+  const pasos = vm.runInContext('PASOS_TOUR', ctx);
+  const paso15 = pasos[14]; // 0-indexed paso 15
+  assert.ok(paso15, 'existe el paso 15');
+  assert.equal(paso15.titulo, 'Imprimir el día');
+  assert.equal(paso15.target, '#a-imprimir', 'el selector debe apuntar directamente a #a-imprimir');
+  assert.notEqual(paso15.target, '#a-acciones-dia', 'no debe apuntar al contenedor padre #a-acciones-dia');
+  for (const p of pasos) {
+    assert.notEqual(p.target, '#a-acciones-dia', `ningun paso debe apuntar a #a-acciones-dia (falló ${p.titulo})`);
+  }
+});
+
+test('paso 11 de la guia interactiva senaliza las acciones con selector quirurgico y ubicacion izquierda', () => {
+  const { ctx } = entorno();
+  const pasos = vm.runInContext('PASOS_TOUR', ctx);
+  const paso11 = pasos[10]; // 0-indexed paso 11
+  assert.ok(paso11, 'existe el paso 11');
+  assert.equal(paso11.titulo, 'Acciones de cita y sobrecupos automáticos');
+  assert.ok(paso11.target.includes('.accion-celda-wrap'), 'apunta al contenedor de botones de accion');
+  assert.ok(paso11.target.includes('th.th-accion'), 'incluye fallback al encabezado de columna accion');
+  assert.equal(paso11.lado, 'izquierda', 'la tarjeta debe ubicarse a la izquierda para no tapar los botones');
+});

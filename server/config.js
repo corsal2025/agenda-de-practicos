@@ -35,7 +35,13 @@ const FUNCIONARIOS = ['CAROLINA CUADRA', 'JARED LOPEZ', 'SUSANA CAMPANA', 'MATIA
 
 const CATALOGOS = {
   clase:        ['B', 'C', 'D', 'A1', 'A2', 'A3', 'A4', 'A5', 'E'],
-  tipo_cita:    ['NORMAL', 'REAGENDADO', 'TRASLADO EN TERRENO'],
+  tipo_cita: [
+    'NORMAL',
+    'REAGENDAMIENTO PRESENCIAL',
+    'REAGENDAMIENTO LLAMADA',
+    'REAGENDAMIENTO CORREO',
+    'REAGENDAMIENTO POR NOSOTROS',
+  ],
   resultado:    ['APROBADO', 'REPROBADO', 'REPROBADO INASISTENCIA', 'NO ASISTIO'],
   intento:      ['1° VEZ', '2° VEZ'],
   lista_espera: ['SI', 'NO'],

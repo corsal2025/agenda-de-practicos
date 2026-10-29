@@ -43,8 +43,10 @@
     const btn = contenedor._btnMax;
     const activar = !contenedor.classList.contains(CLASE_TABLA);
     contenedor.classList.toggle(CLASE_TABLA, activar);
-    btn.classList.toggle('tabla-btn-fija', activar);
-    btn.textContent = activar ? TEXTO.on : TEXTO.off;
+    if (btn) {
+      btn.classList.toggle('tabla-btn-fija', activar);
+      btn.textContent = activar ? TEXTO.on : TEXTO.off;
+    }
     document.body.classList.toggle('tabla-max-activa', activar);
     ponerTitulo(activar);
     claveMax = activar ? claveDe(contenedor) : null;
@@ -118,12 +120,24 @@
   }
 
   function agregarBotones(view) {
+    // Limpiar botones huerfanos si su contenedor ya no esta en el DOM
+    document.querySelectorAll('.btn-max-tabla').forEach((btn) => {
+      if (btn._tablaContenedor && !btn._tablaContenedor.isConnected) {
+        btn.remove();
+      }
+    });
+
     view.querySelectorAll('.tabla-scroll, .tabla-agenda-card').forEach((c) => {
-      if (c._btnMax || !c.querySelector('table') || !c.parentNode) return;
+      if (c._btnMax && c._btnMax.isConnected) return;
+      if (!c.querySelector('table') || !c.parentNode) return;
       const btn = crearBoton(c);
       c._btnMax = btn;
+      btn._tablaContenedor = c;
       const fila = filaDeCabecera(c);
       if (fila) {
+        // Si la fila ya tenia un boton de maximizar previo (p. ej. de un re-render de la grilla),
+        // eliminarlo para garantizar que quede exactamente UN boton.
+        fila.querySelectorAll('.btn-max-tabla').forEach((b) => b.remove());
         btn.classList.add('tabla-btn-en-fila');
         fila.appendChild(btn);
         return;
@@ -133,6 +147,7 @@
       // Solo si la fila del buscador queda pegada a la tabla; si hay otros bloques entre ambos, va la barra
       if (hijo && hijo.parentElement.nextElementSibling === c && hijo.previousElementSibling) {
         // Hay filtros antes del buscador (p. ej. prioridad y clase): boton y buscador siguen en su misma linea
+        if (hijo.parentElement) hijo.parentElement.querySelectorAll('.btn-max-tabla').forEach((b) => b.remove());
         buscador._btnMax = btn;
         btn.classList.add('tabla-btn-en-fila');
         hijo.parentNode.insertBefore(btn, hijo);
@@ -140,6 +155,7 @@
       }
       if (hijo && hijo.parentElement.nextElementSibling === c) {
         // Buscador y boton en su propia linea: el boton queda a la izquierda del buscador
+        if (hijo.parentElement) hijo.parentElement.querySelectorAll('.btn-max-tabla').forEach((b) => b.remove());
         const linea = document.createElement('div');
         linea.style.cssText = 'display:flex;align-items:center;gap:8px;flex:1 1 100%;min-width:0';
         buscador._btnMax = btn;
@@ -149,6 +165,9 @@
         return;
       }
       // Sin barra previa ni buscador: barra propia pegada a la tabla, con el boton a la derecha
+      if (c.previousElementSibling && c.previousElementSibling.classList.contains(CLASE_BARRA)) {
+        c.previousElementSibling.remove();
+      }
       const barra = document.createElement('div');
       barra.className = CLASE_BARRA;
       barra.appendChild(btn);
@@ -196,7 +215,7 @@
   }
   function ajustarAlturas(view) {
     view.querySelectorAll('.tabla-scroll, .tabla-agenda-card').forEach(ajustarAltura);
-    view.querySelectorAll('.tabla-scroll').forEach(ajustarCabecera);
+    view.querySelectorAll('.tabla-scroll, .tabla-agenda-scroll').forEach(ajustarCabecera);
   }
 
   // Sin requestAnimationFrame: en pestanas en segundo plano no se ejecuta y el boton no aparece.

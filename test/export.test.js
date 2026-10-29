@@ -11,7 +11,7 @@ process.env.AGENDA_DB = tmpDb;
 
 const XLSX = require('xlsx');
 const { db } = require('../server/db');
-const { generarXlsx, generarXlsxOriginal } = require('../server/export');
+const { generarXlsx, generarXlsxOriginal, generarXlsxCompleto } = require('../server/export');
 
 test.after(() => { for (const s of ['', '-shm', '-wal']) { try { fs.unlinkSync(tmpDb + s); } catch (_) {} } });
 
@@ -65,4 +65,23 @@ test('generarXlsxOriginal: deriva el/los año(s) de las fechas reales, no un añ
   const wb = XLSX.read(generarXlsxOriginal(), { type: 'buffer' });
   const nombres = wb.SheetNames.filter((n) => n !== 'REPORTE DE ERRORES');
   assert.deepEqual(nombres, ['ENE-JUN 2028', 'JUL-DIC 2028', 'ENE-JUN 2031']);
+});
+
+test('generarXlsxCompleto: genera hoja AGENDA COMPLETA con todas las columnas y filas de agenda', () => {
+  db.exec('DELETE FROM agenda');
+  cita('2028-05-10', '10:00', { cupo: 1, escuela_conductores: 'ESCUELA NORTE', tipo_reagendamiento: 'SMS', rut: '22.222.222-2', nombre: 'CARLOS' });
+  const wb = XLSX.read(generarXlsxCompleto(), { type: 'buffer' });
+  assert.ok(wb.SheetNames.includes('AGENDA COMPLETA'));
+  const filas = XLSX.utils.sheet_to_json(wb.Sheets['AGENDA COMPLETA'], { header: 1, raw: true, defval: null });
+  const cab = filas[0];
+  for (const c of ['id', 'fecha', 'hora', 'examinador', 'rut', 'nombre', 'clase', 'telefono', 'correo', 'tipo_cita', 'escuela_conductores']) {
+    assert.ok(cab.includes(c), `debe incluir ${c}`);
+  }
+  assert.equal(filas.length, 2);
+  const fila = filas[1];
+  assert.equal(fila[cab.indexOf('nombre')], 'CARLOS');
+  assert.equal(fila[cab.indexOf('rut')], '22.222.222-2');
+  const ws = wb.Sheets['AGENDA COMPLETA'];
+  assert.ok(ws['!autofilter'], 'debe tener autofilter habilitado');
+  assert.match(ws['!autofilter'].ref, /^A1:/, 'el rango de autofilter debe iniciar en A1');
 });

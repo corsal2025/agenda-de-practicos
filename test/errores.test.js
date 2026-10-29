@@ -35,10 +35,12 @@ test('audita telefono, correo y clase', () => {
   cita('09:00', { correo: null, rut: '22.222.222-2', nombre: 'B' });
   cita('09:30', { correo: 'sin-arroba', rut: '33.333.333-3', nombre: 'C' });
   cita('10:00', { clase: null, rut: '44.444.444-4', nombre: 'D' });
+  cita('10:30', { correo: 'mal@dominio', rut: '55.555.555-5', nombre: 'E' });
   assert.ok(tipos('08:30').includes('FALTA_TELEFONO'));
   assert.ok(tipos('09:00').includes('FALTA_CORREO'));
   assert.ok(tipos('09:30').includes('CORREO_INVALIDO'));
   assert.ok(tipos('10:00').includes('FALTA_CLASE'));
+  assert.ok(tipos('10:30').includes('CORREO_INVALIDO'));
 });
 
 test('conflicto: cita 13:00 con examinador en D/A5 a las 12:30', () => {
@@ -52,4 +54,31 @@ test('bloqueos y notas tipo VACACIONES no generan RUT_INVALIDO', () => {
   cita('11:00', { bloqueado: 1, bloqueo_motivo: 'LICENCIA MEDICA', rut: 'LICENCIA MEDICA' });
   assert.ok(!tipos('10:30').includes('RUT_INVALIDO'));
   assert.ok(!tipos('11:00').includes('RUT_INVALIDO'));
+});
+
+test('reporte de errores excluye citas e inconsistencias pasadas (< hoy)', () => {
+  const pasadaAyer = sumarDias(hoyISO(), -1);
+  const pasadaMes = sumarDias(hoyISO(), -30);
+  db.prepare(`INSERT OR REPLACE INTO agenda (fecha, hora, examinador_id, rut, nombre, clase, contacto, correo)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(pasadaAyer, '09:00', exam, '5.000.000-2', null, 'D', null, null);
+  db.prepare(`INSERT OR REPLACE INTO agenda (fecha, hora, examinador_id, rut, nombre, clase, contacto, correo)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(pasadaMes, '10:00', exam, '11.111.111-1', 'PASADO', 'B', null, null);
+
+  const rep = reporte();
+  const hallazgosPasados = rep.hallazgos.filter((h) => h.fecha === pasadaAyer || h.fecha === pasadaMes);
+  assert.equal(hallazgosPasados.length, 0, 'no debe haber hallazgos de fechas pasadas');
+  assert.equal(rep.total, 0, 'el total debe ser 0 sin errores vigentes');
+});
+
+test('reporte de errores incluye citas de hoy y fechas futuras (>= hoy)', () => {
+  const hoy = hoyISO();
+  db.prepare(`INSERT OR REPLACE INTO agenda (fecha, hora, examinador_id, rut, nombre, clase, contacto, correo)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(hoy, '09:00', exam, '5.000.000-2', 'HOY CON ERROR', 'B', '+56912345678', 'a@b.cl');
+  cita('10:00', { rut: '5.000.000-2' }); // en dia futuro
+
+  const rep = reporte();
+  const fechasReportadas = rep.hallazgos.map((h) => h.fecha);
+  assert.ok(fechasReportadas.includes(hoy), 'debe incluir errores del dia de hoy');
+  assert.ok(fechasReportadas.includes(dia), 'debe incluir errores de fechas futuras');
+  assert.ok(rep.hallazgos.every((h) => !h.fecha || h.fecha >= hoy), 'todos los hallazgos deben ser >= hoy');
 });

@@ -114,7 +114,7 @@ async function renderDisponibles() {
       const rows = await apiReciente(`/disponibles?${qDisp}`, 15e3);
       if (Array.isArray(rows)) {
         const pesada = META.clases_pesadas.includes(clase);
-        const reglaPesada = pesada ? `Clase ${clase}: solo bloques de las ${META.hora_d_a5}.` : '';
+        const reglaPesada = pesada ? `Clase ${clase}: solo bloques de las ${META.hora_d_a5 || '12:30'} en adelante.` : '';
         const reglaEl = $('#d-regla');
         if (reglaEl) {
           reglaEl.textContent = rows.length
@@ -133,14 +133,15 @@ async function renderDisponibles() {
       examinador_id: $('#d-exam').value,
     };
     const pesada = META.clases_pesadas.includes(filtDisp.clase);
-    const reglaPesada = pesada ? `Clase ${filtDisp.clase}: solo bloques de las ${META.hora_d_a5}.` : '';
+    const reglaPesada = pesada ? `Clase ${filtDisp.clase}: solo bloques de las ${META.hora_d_a5 || '12:30'} en adelante.` : '';
     const q = new URLSearchParams(Object.fromEntries(Object.entries(filtDisp).filter(([, v]) => v)));
     total = null;
     resumen();
     await cargarVista('disponibles', `/disponibles?${q}`, (rows) => pintarDisp(rows, reglaPesada));
   };
 
-  const pintarDisp = (rows, base) => {
+  const pintarDisp = (rowsOriginales, base) => {
+    const rows = (rowsOriginales || []).filter((r) => !(r.fecha >= '2026-11-09' && r.hora === '08:30'));
     rows.sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (a.hora || '').localeCompare(b.hora || '') || (a.examinador || '').localeCompare(b.examinador || ''));
     total = rows.length;
     resumen();
@@ -170,7 +171,7 @@ async function renderDisponibles() {
       let fechaAnterior = null;
       let horaAnterior = null;
       for (const r of rows) {
-        const pesada = r.hora === META.hora_d_a5 || r.apto_pesada;
+        const pesada = r.hora >= (META.hora_d_a5 || '12:30') || r.apto_pesada;
         // Primera fila de cada dia: separador visible respecto al dia anterior
         const primeraDelDia = r.fecha !== fechaAnterior;
         const primeraDeHora = primeraDelDia || r.hora !== horaAnterior;

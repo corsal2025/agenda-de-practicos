@@ -62,7 +62,13 @@ function hojaErrores() {
 function generarXlsx() {
   const wb = XLSX.utils.book_new();
   const aoa = [CABECERAS, ...filas().map(aFila)];
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'AGENDA');
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  if (ws['!ref']) {
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    ws['!autofilter'] = { ref: XLSX.utils.encode_range(range) };
+  }
+  ws['!cols'] = CABECERAS.map((c) => ({ wch: Math.max(c.length + 3, 12) }));
+  XLSX.utils.book_append_sheet(wb, ws, 'AGENDA');
   XLSX.utils.book_append_sheet(wb, hojaErrores(), 'REPORTE DE ERRORES');
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
@@ -93,10 +99,81 @@ function generarXlsxOriginal() {
   const nombres = grupos.size ? [...grupos.keys()].sort(compararNombresHoja) : [nombreHojaOriginal(hoyISO())];
   for (const nombre of nombres) {
     const aoa = [CABECERAS_ORIG, ...(grupos.get(nombre) || []).map(aFila)];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), nombre);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    if (ws['!ref']) {
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      ws['!autofilter'] = { ref: XLSX.utils.encode_range(range) };
+    }
+    ws['!cols'] = CABECERAS_ORIG.map((c) => ({ wch: Math.max(c.length + 3, 12) }));
+    XLSX.utils.book_append_sheet(wb, ws, nombre);
   }
   XLSX.utils.book_append_sheet(wb, hojaErrores(), 'REPORTE DE ERRORES');
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
-module.exports = { generarXlsx, generarXlsxOriginal };
+// Exportar el 100% de las columnas de la tabla agenda en un solo archivo Excel plano y completo.
+function generarXlsxCompleto() {
+  const wb = XLSX.utils.book_new();
+  const filasCompletas = db.prepare(`
+    SELECT a.id,
+           a.fecha,
+           a.hora,
+           e.nombre AS examinador,
+           a.rut,
+           CASE WHEN a.bloqueado = 1 THEN '[BLOQUEADO] ' || COALESCE(a.bloqueo_motivo, '') ELSE a.nombre END AS nombre,
+           a.clase,
+           a.contacto AS telefono,
+           a.correo,
+           a.tipo_cita,
+           a.motivo_reagendamiento,
+           a.lista_espera,
+           a.intento,
+           f.nombre AS funcionario,
+           a.fecha_inicio_tramite,
+           CASE WHEN a.confirmo_asistencia = 1 THEN 'SI' WHEN a.confirmo_asistencia = 0 THEN 'NO' ELSE '' END AS confirmo_asistencia,
+           a.resultado,
+           a.comentarios,
+           CASE WHEN a.bloqueado = 1 THEN 'SI' ELSE 'NO' END AS bloqueado,
+           a.bloqueo_motivo,
+           CASE WHEN a.pendiente_reagendar = 1 THEN 'SI' ELSE 'NO' END AS pendiente_reagendar,
+           a.pendiente_nota,
+           a.escuela_conductores,
+           a.tipo_reagendamiento,
+           a.avisado_por,
+           a.cupo,
+           a.correo_confirmacion_enviado,
+           a.correo_recordatorio_enviado,
+           a.agendado_en,
+           a.creado_en,
+           a.actualizado_en
+    FROM agenda a
+    LEFT JOIN examinadores e ON e.id = a.examinador_id
+    LEFT JOIN funcionarios f ON f.id = a.funcionario_id
+    ORDER BY a.fecha ASC, a.hora ASC, a.id ASC
+  `).all();
+
+  const ws = XLSX.utils.json_to_sheet(filasCompletas);
+  if (ws['!ref']) {
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    ws['!autofilter'] = { ref: XLSX.utils.encode_range(range) };
+  }
+  if (filasCompletas.length > 0) {
+    const keys = Object.keys(filasCompletas[0]);
+    ws['!cols'] = keys.map((k) => {
+      let maxLen = k.length;
+      for (let i = 0; i < Math.min(filasCompletas.length, 100); i++) {
+        const val = filasCompletas[i][k];
+        if (val != null) {
+          const strLen = String(val).length;
+          if (strLen > maxLen) maxLen = strLen;
+        }
+      }
+      return { wch: Math.min(Math.max(maxLen + 3, 10), 45) };
+    });
+  }
+  XLSX.utils.book_append_sheet(wb, ws, 'AGENDA COMPLETA');
+  XLSX.utils.book_append_sheet(wb, hojaErrores(), 'REPORTE DE ERRORES');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
+module.exports = { generarXlsx, generarXlsxOriginal, generarXlsxCompleto };
